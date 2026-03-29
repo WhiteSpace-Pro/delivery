@@ -1,19 +1,18 @@
 {
-  "name": "Apollo Pizzaria",
+  "name": "Apollo Entregas",
   "short_name": "Apollo",
-  "description": "Sistema de Delivery Apollo Pizzaria",
-  "start_url": "/(delivery)",
+  "start_url": "/delivery",
   "display": "standalone",
-  "background_color": "#0D0D0D",
+  "background_color": "#1A1A1A",
   "theme_color": "#E85D24",
   "icons": [
     {
-      "src": "/icon-192x192.png",
+      "src": "/icon-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/icon-512x512.png",
+      "src": "/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }
