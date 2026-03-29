@@ -1,0 +1,21 @@
+{
+  "name": "Apollo Pizzaria",
+  "short_name": "Apollo",
+  "description": "Sistema de Delivery Apollo Pizzaria",
+  "start_url": "/(delivery)",
+  "display": "standalone",
+  "background_color": "#0D0D0D",
+  "theme_color": "#E85D24",
+  "icons": [
+    {
+      "src": "/icon-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}
