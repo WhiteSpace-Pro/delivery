@@ -44,6 +44,7 @@ export async function middleware(request: NextRequest) {
   const isPublicRoute =
     pathname === '/' ||
     pathname === '/login' ||
+    pathname === '/cardapio' ||
     pathname.startsWith('/api/webhooks') ||
     pathname === '/manifest.json' ||
     pathname === '/favicon.ico' ||

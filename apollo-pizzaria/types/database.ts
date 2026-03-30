@@ -9,55 +9,6 @@ export type Json =
 export interface Database {
   public: {
     Tables: {
-      tenants: {
-        Row: {
-          id: string
-          name: string
-          slug: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          name: string
-          slug: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          name?: string
-          slug?: string
-          created_at?: string
-        }
-      }
-      profiles: {
-        Row: {
-          id: string
-          tenant_id: string
-          full_name: string | null
-          email: string | null
-          phone: string | null
-          role: 'customer' | 'admin' | 'kitchen' | 'delivery'
-          created_at: string
-        }
-        Insert: {
-          id: string
-          tenant_id: string
-          full_name?: string | null
-          email?: string | null
-          phone?: string | null
-          role?: 'customer' | 'admin' | 'kitchen' | 'delivery'
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          tenant_id?: string
-          full_name?: string | null
-          email?: string | null
-          phone?: string | null
-          role?: 'customer' | 'admin' | 'kitchen' | 'delivery'
-          created_at?: string
-        }
-      }
       categories: {
         Row: {
           id: string
@@ -94,11 +45,18 @@ export interface Database {
           category_id: string
           name: string
           description: string | null
-          price: number
+          type: 'pizza' | 'beverage' | 'combo'
+          price_m: number | null
+          price_g: number | null
+          price_gg: number | null
+          price_single: number | null
           image_url: string | null
-          is_pizza: boolean
-          active: boolean
+          allow_half: boolean
+          is_available: boolean
+          sort_order: number
+          tags: string[] | null
           created_at: string
+          updated_at: string
         }
         Insert: {
           id?: string
@@ -106,11 +64,18 @@ export interface Database {
           category_id: string
           name: string
           description?: string | null
-          price: number
+          type: 'pizza' | 'beverage' | 'combo'
+          price_m?: number | null
+          price_g?: number | null
+          price_gg?: number | null
+          price_single?: number | null
           image_url?: string | null
-          is_pizza?: boolean
-          active?: boolean
+          allow_half?: boolean
+          is_available?: boolean
+          sort_order?: number
+          tags?: string[] | null
           created_at?: string
+          updated_at?: string
         }
         Update: {
           id?: string
@@ -118,11 +83,18 @@ export interface Database {
           category_id?: string
           name?: string
           description?: string | null
-          price?: number
+          type?: 'pizza' | 'beverage' | 'combo'
+          price_m?: number | null
+          price_g?: number | null
+          price_gg?: number | null
+          price_single?: number | null
           image_url?: string | null
-          is_pizza?: boolean
-          active?: boolean
+          allow_half?: boolean
+          is_available?: boolean
+          sort_order?: number
+          tags?: string[] | null
           created_at?: string
+          updated_at?: string
         }
       }
       pizza_options: {
@@ -177,47 +149,32 @@ export interface Database {
           active?: boolean
         }
       }
-      addresses: {
+      profiles: {
         Row: {
           id: string
-          profile_id: string
           tenant_id: string
-          street: string
-          number: string
-          complement: string | null
-          neighborhood: string
-          city: string
-          state: string
-          zip_code: string
-          is_default: boolean
+          full_name: string | null
+          email: string | null
+          phone: string | null
+          role: 'customer' | 'admin' | 'kitchen' | 'delivery'
           created_at: string
         }
         Insert: {
-          id?: string
-          profile_id: string
+          id: string
           tenant_id: string
-          street: string
-          number: string
-          complement?: string | null
-          neighborhood: string
-          city: string
-          state: string
-          zip_code: string
-          is_default?: boolean
+          full_name?: string | null
+          email?: string | null
+          phone?: string | null
+          role?: 'customer' | 'admin' | 'kitchen' | 'delivery'
           created_at?: string
         }
         Update: {
           id?: string
-          profile_id?: string
           tenant_id?: string
-          street?: string
-          number?: string
-          complement?: string | null
-          neighborhood?: string
-          city?: string
-          state?: string
-          zip_code?: string
-          is_default?: boolean
+          full_name?: string | null
+          email?: string | null
+          phone?: string | null
+          role?: 'customer' | 'admin' | 'kitchen' | 'delivery'
           created_at?: string
         }
       }
@@ -285,39 +242,13 @@ export interface Database {
         Update: {
           id?: string
           order_id?: string
-          product_id?: string
+          product_id?: string | null
           quantity?: number
           unit_price?: number
           size?: 'M' | 'G' | 'GG' | null
           edge_option_id?: string | null
           half_product_id?: string | null
           observations?: string | null
-        }
-      }
-      delivery_tracking: {
-        Row: {
-          id: string
-          order_id: string
-          status: string
-          lat: number
-          lng: number
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          order_id: string
-          status: string
-          lat: number
-          lng: number
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          order_id?: string
-          status?: string
-          lat?: number
-          lng?: number
-          created_at?: string
         }
       }
       delivery_current_location: {
@@ -341,61 +272,6 @@ export interface Database {
           lat?: number
           lng?: number
           updated_at?: string
-        }
-      }
-      delivery_checkins: {
-        Row: {
-          id: string
-          profile_id: string
-          tenant_id: string
-          checked_in_at: string
-          checked_out_at: string | null
-        }
-        Insert: {
-          id?: string
-          profile_id: string
-          tenant_id: string
-          checked_in_at?: string
-          checked_out_at?: string | null
-        }
-        Update: {
-          id?: string
-          profile_id?: string
-          tenant_id?: string
-          checked_in_at?: string
-          checked_out_at?: string | null
-        }
-      }
-      notifications: {
-        Row: {
-          id: string
-          tenant_id: string
-          profile_id: string
-          title: string
-          message: string
-          read: boolean
-          type: string
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          tenant_id: string
-          profile_id: string
-          title: string
-          message: string
-          read?: boolean
-          type: string
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          tenant_id?: string
-          profile_id?: string
-          title?: string
-          message?: string
-          read?: boolean
-          type?: string
-          created_at?: string
         }
       }
     }
