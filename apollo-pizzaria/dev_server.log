@@ -145,3 +145,25 @@ Filtered Products count: undefined
  ✓ Compiled in 647ms (1555 modules)
 <w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/app/apollo-pizzaria/.next/cache/webpack/client-development/0.pack.gz_' -> '/app/apollo-pizzaria/.next/cache/webpack/client-development/0.pack.gz'
  ✓ Compiled in 944ms (1555 modules)
+ ✓ Compiled in 10.7s (1555 modules)
+ ⨯ ./components/client/PizzaModal.tsx
+Error:
+  [31mx[0m Expression expected
+    ,-[[36;1;4m/app/apollo-pizzaria/components/client/PizzaModal.tsx[0m:83:1]
+ [2m83[0m |       basePrice = Math.max(p1?.extra_price_gg || 0, isHalfAndHalf ? (p2?.extra_price_gg || 0) : 0);
+ [2m84[0m |     }
+ [2m85[0m |
+ [2m86[0m |     const edgePrice = edgeOptions.find(o => o.id === selectedEdgeId)??.extra_price || 0;
+    : [31;1m                                                                      ^[0m
+ [2m87[0m |     return basePrice + edgePrice;
+ [2m88[0m |   };
+    `----
+
+Caused by:
+    Syntax Error
+
+Import trace for requested module:
+./components/client/PizzaModal.tsx
+./app/(client)/ClientPageContent.tsx
+ ✓ Compiled in 1976ms (1555 modules)
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/app/apollo-pizzaria/.next/cache/webpack/client-development/1.pack.gz_' -> '/app/apollo-pizzaria/.next/cache/webpack/client-development/1.pack.gz'

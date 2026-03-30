@@ -1,13 +1,11 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { X, ChevronDown } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
 import { Product, PizzaOption } from "@/types";
 import { createClient } from "@/lib/supabase/client";
+import { motion, AnimatePresence } from "framer-motion";
+import { X, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-type PizzaSize = 'M' | 'G' | 'GG';
 
 interface PizzaModalProps {
   isOpen: boolean;
@@ -17,25 +15,23 @@ interface PizzaModalProps {
 }
 
 export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalProps) {
-  const [selectedSize, setSelectedSize] = useState<PizzaSize>('G');
+  const [selectedSize, setSelectedSize] = useState<'M' | 'G' | 'GG'>('G');
   const [isHalfAndHalf, setIsHalfAndHalf] = useState(false);
   const [firstFlavorId, setFirstFlavorId] = useState<string>("");
   const [secondFlavorId, setSecondFlavorId] = useState<string>("");
-  const [flavors, setFlavors] = useState<Product[]>([]);
-  const [edgeOptions, setEdgeOptions] = useState<PizzaOption[]>([]);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string>("");
   const [observations, setObservations] = useState("");
+  const [flavors, setFlavors] = useState<Product[]>([]);
+  const [edgeOptions, setEdgeOptions] = useState<PizzaOption[]>([]);
 
   const supabase = createClient();
 
   useEffect(() => {
-    if (product) {
-      setFirstFlavorId(product.id);
-    }
-  }, [product]);
+    if (isOpen && tenantId) {
+      if (product) {
+        setFirstFlavorId(product.id);
+      }
 
-  useEffect(() => {
-    if (isOpen) {
       const fetchFlavors = async () => {
         const { data } = await supabase
           .from('products')
@@ -51,7 +47,7 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
           .from('pizza_options')
           .select('*')
           .eq('tenant_id', tenantId)
-          .eq('active', true);
+          .eq('is_available', true);
         if (data) {
           const options = data as PizzaOption[];
           setEdgeOptions(options);
@@ -63,42 +59,51 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
       fetchFlavors();
       fetchEdges();
     }
-  }, [isOpen, tenantId, supabase]);
+  }, [isOpen, tenantId, product, supabase]);
 
-  if (!product) return null;
+  const firstFlavor = useMemo(() =>
+    flavors.find(f => f.id === firstFlavorId) || product,
+    [flavors, firstFlavorId, product]
+  );
 
-  const firstFlavor = flavors.find(f => f.id === firstFlavorId) || product;
-  const secondFlavor = flavors.find(f => f.id === secondFlavorId);
+  const secondFlavor = useMemo(() =>
+    flavors.find(f => f.id === secondFlavorId),
+    [flavors, secondFlavorId]
+  );
 
-  const calculateTotal = () => {
+  const total = useMemo(() => {
+    if (!firstFlavor) return 0;
+
     let basePrice = 0;
     const p1 = firstFlavor;
-    const p2 = isHalfAndHalf && secondFlavor ? secondFlavor : p1;
+    const p2 = secondFlavor;
 
     if (selectedSize === 'M') {
-      basePrice = Math.max(p1.price_m || 0, isHalfAndHalf ? (p2.price_m || 0) : 0);
+      basePrice = Math.max(p1.price_m || 0, isHalfAndHalf ? (p2?.price_m || 0) : 0);
     } else if (selectedSize === 'G') {
-      basePrice = Math.max(p1.price_g || 0, isHalfAndHalf ? (p2.price_g || 0) : 0);
-    } else {
-      basePrice = Math.max(p1.price_gg || 0, isHalfAndHalf ? (p2.price_gg || 0) : 0);
+      basePrice = Math.max(p1.price_g || 0, isHalfAndHalf ? (p2?.price_g || 0) : 0);
+    } else if (selectedSize === 'GG') {
+      basePrice = Math.max(p1.price_gg || 0, isHalfAndHalf ? (p2?.price_gg || 0) : 0);
     }
 
-    const edgePrice = edgeOptions.find(o => o.id === selectedEdgeId)?.price || 0;
+    const edge = edgeOptions.find(o => o.id === selectedEdgeId);
+    const edgePrice = edge?.extra_price || 0;
+
     return basePrice + edgePrice;
-  };
+  }, [selectedSize, isHalfAndHalf, firstFlavor, secondFlavor, edgeOptions, selectedEdgeId]);
 
-  const total = calculateTotal();
-
-  const sizes: { id: PizzaSize; label: string; price: number | null }[] = [
-    { id: 'M', label: 'Média', price: firstFlavor.price_m },
-    { id: 'G', label: 'Grande', price: firstFlavor.price_g },
-    { id: 'GG', label: 'Gigante', price: firstFlavor.price_gg }
+  const sizes = [
+    { id: 'M' as const, label: 'Média', price: firstFlavor?.price_m },
+    { id: 'G' as const, label: 'Grande', price: firstFlavor?.price_g },
+    { id: 'GG' as const, label: 'Gigante', price: firstFlavor?.price_gg }
   ];
+
+  if (!firstFlavor) return null;
 
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 sm:p-6">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -116,7 +121,7 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
           >
             {/* Header */}
             <div className="p-4 border-b border-white/5 flex items-center justify-between sticky top-0 bg-[#141414] z-10">
-              <h2 className="font-playfair text-xl text-[#F5F0E8]">{firstFlavor.name}</h2>
+              <h2 className="font-playfair text-xl text-[#F5F0E8]">Personalizar</h2>
               <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-[#8A8480] transition-colors">
                 <X size={20} />
               </button>
@@ -245,11 +250,11 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
                       </div>
                       <span className="text-sm font-medium text-[#F5F0E8]">
                         {option.name}
-                        {option.price > 0 && (
+                        {option.extra_price && option.extra_price > 0 ? (
                           <span className="text-[#E85D24] ml-1">
-                            (+R$ {option.price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
+                            (+R$ {option.extra_price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })})
                           </span>
-                        )}
+                        ) : null}
                       </span>
                     </label>
                   ))}
