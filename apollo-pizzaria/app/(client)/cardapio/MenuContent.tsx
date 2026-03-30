@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Product, Database } from "@/types";
 import { ProductCard } from "@/components/client/ProductCard";
 import { PizzaModal } from "@/components/client/PizzaModal";
@@ -15,10 +15,17 @@ interface MenuContentProps {
 }
 
 export default function MenuContent({ categories, products, tenantId }: MenuContentProps) {
-  const [activeCategory, setActiveCategory] = useState<string>(categories[0]?.id || "");
+  const [activeCategory, setActiveCategory] = useState<string>("");
   const [vegetarianOnly, setVegetarianOnly] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
+
+  // Initialize activeCategory with the first category ID once categories are available
+  useEffect(() => {
+    if (categories.length > 0 && !activeCategory) {
+      setActiveCategory(categories[0].id);
+    }
+  }, [categories, activeCategory]);
 
   const filteredProducts = products.filter(p => {
     const matchCategory = p.category_id === activeCategory;
@@ -34,6 +41,17 @@ export default function MenuContent({ categories, products, tenantId }: MenuCont
       console.log("Added direct:", product.name);
     }
   };
+
+  if (categories.length === 0) {
+    return (
+      <div className="text-center py-32 bg-[#141414] rounded-3xl border border-white/5">
+        <h2 className="text-2xl font-playfair text-[#F5F0E8] mb-4">Cardápio em Manutenção</h2>
+        <p className="text-[#8A8480] font-dm max-w-md mx-auto">
+          No momento não há categorias ativas. Por favor, tente novamente em instantes ou entre em contato com a pizzaria.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-col md:flex-row gap-10">

@@ -4,18 +4,14 @@ import MenuContent from "./MenuContent";
 export default async function CardapioPage() {
   const tenantId = process.env.NEXT_PUBLIC_TENANT_ID_APOLLO || '496c5a35-6843-4061-b3ab-159d15a0cbc6';
 
-  if (!process.env.NEXT_PUBLIC_TENANT_ID_APOLLO) {
-    console.warn("NEXT_PUBLIC_TENANT_ID_APOLLO is not defined in environment variables. Using fallback tenant ID.");
-  }
-
   const supabase = createClient();
 
   const { data: categories, error: catError } = await supabase
     .from('categories')
     .select('*')
     .eq('tenant_id', tenantId)
-    .eq('active', true)
-    .order('order', { ascending: true });
+    .eq('is_active', true)
+    .order('sort_order', { ascending: true });
 
   const { data: products, error: prodError } = await supabase
     .from('products')

@@ -37,6 +37,14 @@ export default function ClientPageContent({ initialProducts, tenantId }: ClientP
 
   const filters: FilterType[] = ['Todas', 'Vegetarianas', 'Promoções'];
 
+  if (initialProducts.length === 0) {
+    return (
+      <div className="container mx-auto px-4 py-20 text-center bg-[#141414] rounded-3xl border border-white/5">
+        <p className="text-[#8A8480] font-dm italic">O cardápio está temporariamente indisponível.</p>
+      </div>
+    );
+  }
+
   return (
     <section className="container mx-auto px-4 pb-20">
       {/* Filters */}
@@ -70,7 +78,7 @@ export default function ClientPageContent({ initialProducts, tenantId }: ClientP
 
       {filteredProducts.length === 0 && (
         <div className="text-center py-20">
-          <p className="text-[#8A8480] font-dm italic">Nenhum item encontrado nesta categoria.</p>
+          <p className="text-[#8A8480] font-dm italic">Nenhum item encontrado com este filtro.</p>
         </div>
       )}
 

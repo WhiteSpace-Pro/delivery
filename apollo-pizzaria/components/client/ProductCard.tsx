@@ -13,6 +13,7 @@ interface ProductCardProps {
 
 export function ProductCard({ product, onAdd }: ProductCardProps) {
   const [selectedSize, setSelectedSize] = useState<'M' | 'G' | 'GG'>('G');
+  const [imageError, setImageError] = useState(false);
 
   const isPizza = product.type === 'pizza';
 
@@ -27,13 +28,18 @@ export function ProductCard({ product, onAdd }: ProductCardProps) {
 
   const currentPrice = getPrice();
 
+  const placeholderUrl = "https://placehold.co/600x450/1C1C1C/F5F0E8?text=" + encodeURIComponent(product.name);
+  const src = (imageError || !product.image_url) ? placeholderUrl : product.image_url;
+
   return (
     <div className="group relative bg-[#1C1C1C] rounded-xl border border-white/5 hover:border-[#D4941A] transition-all duration-200 overflow-hidden flex flex-col h-full">
-      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-t-lg">
+      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-t-lg bg-[#141414]">
         <Image
-          src={product.image_url || "https://placehold.co/600x450/1C1C1C/F5F0E8?text=" + encodeURIComponent(product.name)}
+          src={src}
           alt={product.name}
           fill
+          unoptimized={src.startsWith('https://placehold.co')}
+          onError={() => setImageError(true)}
           className="object-cover transition-transform duration-500 group-hover:scale-105"
         />
       </div>
@@ -72,7 +78,7 @@ export function ProductCard({ product, onAdd }: ProductCardProps) {
 
           <div className="flex items-center justify-between">
             <span className="text-[#E85D24] font-bold text-lg">
-              {currentPrice ? `R${currentPrice.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '---'}
+              {currentPrice ? `R${Number(currentPrice).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '---'}
             </span>
 
             <button
