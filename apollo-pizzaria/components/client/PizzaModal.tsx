@@ -19,6 +19,7 @@ interface PizzaModalProps {
 export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalProps) {
   const [selectedSize, setSelectedSize] = useState<PizzaSize>('G');
   const [isHalfAndHalf, setIsHalfAndHalf] = useState(false);
+  const [firstFlavorId, setFirstFlavorId] = useState<string>("");
   const [secondFlavorId, setSecondFlavorId] = useState<string>("");
   const [flavors, setFlavors] = useState<Product[]>([]);
   const [edgeOptions, setEdgeOptions] = useState<PizzaOption[]>([]);
@@ -26,6 +27,12 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
   const [observations, setObservations] = useState("");
 
   const supabase = createClient();
+
+  useEffect(() => {
+    if (product) {
+      setFirstFlavorId(product.id);
+    }
+  }, [product]);
 
   useEffect(() => {
     if (isOpen) {
@@ -60,12 +67,13 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
 
   if (!product) return null;
 
+  const firstFlavor = flavors.find(f => f.id === firstFlavorId) || product;
   const secondFlavor = flavors.find(f => f.id === secondFlavorId);
 
   const calculateTotal = () => {
     let basePrice = 0;
-    const p1 = product;
-    const p2 = secondFlavor || product;
+    const p1 = firstFlavor;
+    const p2 = isHalfAndHalf && secondFlavor ? secondFlavor : p1;
 
     if (selectedSize === 'M') {
       basePrice = Math.max(p1.price_m || 0, isHalfAndHalf ? (p2.price_m || 0) : 0);
@@ -82,9 +90,9 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
   const total = calculateTotal();
 
   const sizes: { id: PizzaSize; label: string; price: number | null }[] = [
-    { id: 'M', label: 'Média', price: product.price_m },
-    { id: 'G', label: 'Grande', price: product.price_g },
-    { id: 'GG', label: 'Gigante', price: product.price_gg }
+    { id: 'M', label: 'Média', price: firstFlavor.price_m },
+    { id: 'G', label: 'Grande', price: firstFlavor.price_g },
+    { id: 'GG', label: 'Gigante', price: firstFlavor.price_gg }
   ];
 
   return (
@@ -108,7 +116,7 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
           >
             {/* Header */}
             <div className="p-4 border-b border-white/5 flex items-center justify-between sticky top-0 bg-[#141414] z-10">
-              <h2 className="font-playfair text-xl text-[#F5F0E8]">{product.name}</h2>
+              <h2 className="font-playfair text-xl text-[#F5F0E8]">{firstFlavor.name}</h2>
               <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-[#8A8480] transition-colors">
                 <X size={20} />
               </button>
@@ -166,26 +174,47 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
                     animate={{ height: "auto", opacity: 1 }}
                     className="space-y-4 overflow-hidden"
                   >
-                    <div className="relative">
-                      <select
-                        value={secondFlavorId}
-                        onChange={(e) => setSecondFlavorId(e.target.value)}
-                        className="w-full bg-[#1C1C1C] border border-white/10 rounded-xl p-4 text-[#F5F0E8] appearance-none focus:outline-none focus:border-[#E85D24] transition-colors"
-                      >
-                        <option value="">Escolha o 2º sabor</option>
-                        {flavors.filter(f => f.id !== product.id).map(flavor => (
-                          <option key={flavor.id} value={flavor.id}>{flavor.name}</option>
-                        ))}
-                      </select>
-                      <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8A8480] pointer-events-none" size={20} />
+                    <div className="grid grid-cols-1 gap-4">
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-[#8A8480] uppercase ml-1">1ª Metade</label>
+                        <div className="relative">
+                          <select
+                            value={firstFlavorId}
+                            onChange={(e) => setFirstFlavorId(e.target.value)}
+                            className="w-full bg-[#1C1C1C] border border-white/10 rounded-xl p-4 text-[#F5F0E8] appearance-none focus:outline-none focus:border-[#E85D24] transition-colors"
+                          >
+                            {flavors.map(flavor => (
+                              <option key={flavor.id} value={flavor.id}>{flavor.name}</option>
+                            ))}
+                          </select>
+                          <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8A8480] pointer-events-none" size={20} />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <label className="text-xs font-bold text-[#8A8480] uppercase ml-1">2ª Metade</label>
+                        <div className="relative">
+                          <select
+                            value={secondFlavorId}
+                            onChange={(e) => setSecondFlavorId(e.target.value)}
+                            className="w-full bg-[#1C1C1C] border border-white/10 rounded-xl p-4 text-[#F5F0E8] appearance-none focus:outline-none focus:border-[#E85D24] transition-colors"
+                          >
+                            <option value="">Escolha o 2º sabor</option>
+                            {flavors.filter(f => f.id !== firstFlavorId).map(flavor => (
+                              <option key={flavor.id} value={flavor.id}>{flavor.name}</option>
+                            ))}
+                          </select>
+                          <ChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-[#8A8480] pointer-events-none" size={20} />
+                        </div>
+                      </div>
                     </div>
 
                     <div className="flex justify-center py-4">
                       <div className="relative w-32 h-32 rounded-full overflow-hidden border-2 border-white/10 flex">
                         <div className="flex-1 bg-[#E85D24] flex items-center justify-center p-2 text-center text-[10px] font-bold leading-tight">
-                          {product.name}
+                          {firstFlavor.name}
                         </div>
-                        <div className="flex-1 bg-[#D4941A] flex items-center justify-center p-2 text-center text-[10px] font-bold leading-tight">
+                        <div className="flex-1 bg-[#D4941A] flex items-center justify-center p-2 text-center text-[10px] font-bold leading-tight border-l border-white/10">
                           {secondFlavor ? secondFlavor.name : "..."}
                         </div>
                       </div>

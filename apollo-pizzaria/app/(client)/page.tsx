@@ -3,14 +3,23 @@ import ClientPageContent from "./ClientPageContent";
 
 export default async function HomePage() {
   const tenantId = process.env.NEXT_PUBLIC_TENANT_ID_APOLLO || '496c5a35-6843-4061-b3ab-159d15a0cbc6';
+
+  if (!process.env.NEXT_PUBLIC_TENANT_ID_APOLLO) {
+    console.warn("NEXT_PUBLIC_TENANT_ID_APOLLO is not defined in environment variables. Using fallback tenant ID.");
+  }
+
   const supabase = createClient();
 
-  const { data: products } = await supabase
+  const { data: products, error } = await supabase
     .from('products')
     .select('*')
     .eq('tenant_id', tenantId)
     .eq('is_available', true)
     .order('sort_order', { ascending: true });
+
+  if (error) {
+    console.error("Error fetching products:", error);
+  }
 
   return (
     <div className="flex flex-col">
