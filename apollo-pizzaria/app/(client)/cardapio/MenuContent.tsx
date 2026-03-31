@@ -34,12 +34,8 @@ export default function MenuContent({ categories, products, tenantId }: MenuCont
   });
 
   const handleAddProduct = (product: Product) => {
-    if (product.type === 'pizza') {
-      setSelectedProduct(product);
-      setIsModalOpen(true);
-    } else {
-      console.log("Added direct:", product.name);
-    }
+    setSelectedProduct(product);
+    setIsModalOpen(true);
   };
 
   if (categories.length === 0) {

@@ -26,13 +26,8 @@ export default function ClientPageContent({ initialProducts, tenantId }: ClientP
   });
 
   const handleAddProduct = (product: Product) => {
-    if (product.type === 'pizza') {
-      setSelectedProduct(product);
-      setIsModalOpen(true);
-    } else {
-      // Direct add to cart logic will be in prompt 06
-      console.log("Added direct:", product.name);
-    }
+    setSelectedProduct(product);
+    setIsModalOpen(true);
   };
 
   const filters: FilterType[] = ['Todas', 'Vegetarianas', 'Promoções'];

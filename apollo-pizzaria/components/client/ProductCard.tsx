@@ -2,93 +2,85 @@
 
 import { useState } from "react";
 import Image from "next/image";
-import { Plus } from "lucide-react";
 import { Product } from "@/types";
+import { Playfair_Display } from "next/font/google";
 import { cn } from "@/lib/utils";
+
+const playfair = Playfair_Display({ subsets: ["latin"], weight: ["700"] });
 
 interface ProductCardProps {
   product: Product;
-  onAdd: (product: Product, size?: 'M' | 'G' | 'GG') => void;
+  onAdd: (product: Product) => void;
 }
 
 export function ProductCard({ product, onAdd }: ProductCardProps) {
-  const [selectedSize, setSelectedSize] = useState<'M' | 'G' | 'GG'>('G');
-  const [imageError, setImageError] = useState(false);
+  const [imgError, setImgError] = useState(false);
+
+  const formatPrice = (price: number | null) => {
+    if (price === null) return "—";
+    return price.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  };
 
   const isPizza = product.type === 'pizza';
 
-  const getPrice = () => {
-    if (isPizza) {
-      if (selectedSize === 'M') return product.price_m;
-      if (selectedSize === 'G') return product.price_g;
-      if (selectedSize === 'GG') return product.price_gg;
-    }
-    return product.price_single;
-  };
-
-  const currentPrice = getPrice();
-
-  const placeholderUrl = "https://placehold.co/600x450/1C1C1C/F5F0E8?text=" + encodeURIComponent(product.name);
-  const src = (imageError || !product.image_url) ? placeholderUrl : product.image_url;
-
   return (
-    <div className="group relative bg-[#1C1C1C] rounded-xl border border-white/5 hover:border-[#D4941A] transition-all duration-200 overflow-hidden flex flex-col h-full">
-      <div className="relative aspect-[4/3] w-full overflow-hidden rounded-t-lg bg-[#141414]">
-        <Image
-          src={src}
-          alt={product.name}
-          fill
-          unoptimized={src.startsWith('https://placehold.co')}
-          onError={() => setImageError(true)}
-          className="object-cover transition-transform duration-500 group-hover:scale-105"
-        />
+    <div
+      className="group bg-[#1C1C1C] border border-white/5 rounded-2xl p-4 transition-all duration-300 hover:border-[#D4941A] cursor-pointer h-full flex flex-col"
+      onClick={() => onAdd(product)}
+    >
+      {/* Image / Fallback Placeholder */}
+      <div className="relative aspect-[4/3] rounded-lg overflow-hidden mb-4 bg-zinc-800 flex items-center justify-center">
+        {!imgError && product.image_url ? (
+          <Image
+            src={product.image_url}
+            alt={product.name}
+            fill
+            className="object-cover transition-transform duration-500 group-hover:scale-110"
+            onError={() => setImgError(true)}
+          />
+        ) : (
+          <div className="text-4xl">🍕</div>
+        )}
       </div>
 
-      <div className="p-4 flex flex-col flex-grow">
-        <h3 className="font-playfair text-[17px] text-[#F5F0E8] mb-1">
+      {/* Content */}
+      <div className="flex flex-col flex-1">
+        <h3 className={cn(playfair.className, "text-[17px] text-[#F5F0E8] font-bold mb-2")}>
           {product.name}
         </h3>
-
-        <p className="font-dm text-[13px] text-[#8A8480] line-clamp-2 mb-4 h-9">
+        <p className="font-dm text-[13px] text-[#8A8480] line-clamp-2 mb-6">
           {product.description}
         </p>
 
-        <div className="mt-auto space-y-4">
-          {isPizza && (
+        <div className="mt-auto flex items-center justify-between">
+          {isPizza ? (
             <div className="flex gap-2">
-              {(['M', 'G', 'GG'] as const).map((size) => (
-                <button
-                  key={size}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSelectedSize(size);
-                  }}
-                  className={cn(
-                    "px-3 py-1 rounded-full text-[12px] font-bold transition-colors border",
-                    selectedSize === size
-                      ? "bg-[#E85D24] border-[#E85D24] text-white"
-                      : "bg-transparent border-[#E85D24] text-[#E85D24]"
-                  )}
-                >
-                  {size}
-                </button>
-              ))}
+              <span className="px-3 py-1 rounded-full text-[12px] font-bold transition-colors border border-[#E85D24] text-[#E85D24]">M</span>
+              <span className="px-3 py-1 rounded-full text-[12px] font-bold transition-colors border bg-[#E85D24] border-[#E85D24] text-white">G</span>
+              <span className="px-3 py-1 rounded-full text-[12px] font-bold transition-colors border border-[#E85D24] text-[#E85D24]">GG</span>
             </div>
+          ) : (
+            <span className="text-[#E85D24] font-bold">
+              {formatPrice(product.price_single)}
+            </span>
           )}
 
-          <div className="flex items-center justify-between">
-            <span className="text-[#E85D24] font-bold text-lg">
-              {currentPrice ? `R${Number(currentPrice).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '---'}
-            </span>
-
-            <button
-              onClick={() => onAdd(product, isPizza ? selectedSize : undefined)}
-              className="w-9 h-9 bg-[#E85D24] hover:bg-[#D15420] text-white rounded-full flex items-center justify-center transition-colors shadow-lg"
-            >
-              <Plus size={20} />
-            </button>
-          </div>
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onAdd(product);
+            }}
+            className="w-9 h-9 bg-[#E85D24] hover:bg-[#D15420] text-white rounded-full flex items-center justify-center transition-colors shadow-lg"
+          >
+            <span className="text-xl font-bold">+</span>
+          </button>
         </div>
+
+        {isPizza && (
+          <div className="mt-4 text-[#E85D24] font-bold text-sm">
+            A partir de {formatPrice(product.price_m)}
+          </div>
+        )}
       </div>
     </div>
   );

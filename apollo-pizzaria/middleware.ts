@@ -21,6 +21,17 @@ export async function middleware(request: NextRequest) {
     return response
   }
 
+  // Public routes (no auth required)
+  const isPublicRoute =
+    pathname === '/' ||
+    pathname === '/login' ||
+    pathname === '/cardapio' ||
+    pathname.startsWith('/api/webhooks')
+
+  if (isPublicRoute) {
+    return response
+  }
+
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -49,18 +60,6 @@ export async function middleware(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
-  // Public routes (no auth required)
-  const isPublicRoute =
-    pathname === '/' ||
-    pathname === '/login' ||
-    pathname === '/cardapio' ||
-    pathname.startsWith('/api/webhooks') ||
-    pathname.startsWith('/(client)')
-
-  if (isPublicRoute) {
-    return response
-  }
 
   // If not authenticated, redirect to /login
   if (!user) {

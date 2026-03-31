@@ -167,3 +167,16 @@ Import trace for requested module:
 ./app/(client)/ClientPageContent.tsx
  ✓ Compiled in 1976ms (1555 modules)
 <w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/app/apollo-pizzaria/.next/cache/webpack/client-development/1.pack.gz_' -> '/app/apollo-pizzaria/.next/cache/webpack/client-development/1.pack.gz'
+ ✓ Compiled in 9.6s (1555 modules)
+ ✓ Compiled in 1735ms (1563 modules)
+ ✓ Compiled in 1488ms (1556 modules)
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/app/apollo-pizzaria/.next/cache/webpack/server-development/0.pack.gz_' -> '/app/apollo-pizzaria/.next/cache/webpack/server-development/0.pack.gz'
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: invalid block type
+ ✓ Compiled in 372ms (124 modules)
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/app/apollo-pizzaria/.next/cache/webpack/edge-server-development/0.pack.gz_' -> '/app/apollo-pizzaria/.next/cache/webpack/edge-server-development/0.pack.gz'
+ ✓ Compiled in 2.4s (1556 modules)
+ ✓ Compiled in 1961ms (1556 modules)
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: invalid block type
+ ✓ Compiled in 2s (1556 modules)
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: invalid block type
+<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/app/apollo-pizzaria/.next/cache/webpack/server-development/2.pack.gz_' -> '/app/apollo-pizzaria/.next/cache/webpack/server-development/2.pack.gz'
