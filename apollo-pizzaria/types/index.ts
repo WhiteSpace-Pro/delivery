@@ -1,6 +1,7 @@
 import { Database } from './database';
 import { PizzaSize } from './enums';
 
+export type { Database };
 export type Product = Database['public']['Tables']['products']['Row'];
 export type PizzaOption = Database['public']['Tables']['pizza_options']['Row'];
 export type Profile = Database['public']['Tables']['profiles']['Row'];
