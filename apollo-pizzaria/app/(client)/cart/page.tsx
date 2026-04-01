@@ -6,7 +6,7 @@ import { CartItemRow } from "@/components/client/CartItemRow";
 import { handlePlaceOrder } from "@/lib/orders";
 import { useUser } from "@/hooks/useUser";
 import { useRouter } from "next/navigation";
-import { ArrowLeft, CreditCard, DollarSign, QrCode, MapPin, Clock, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, CreditCard, DollarSign, QrCode, MapPin, Clock } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
@@ -20,7 +20,6 @@ export default function CartPage() {
   const [changeFor, setChangeFor] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [showSuccessToast, setShowSuccessToast] = useState(false);
 
   const subtotal = items.reduce((sum, item) => sum + item.total_price, 0);
 
@@ -53,28 +52,13 @@ export default function CartPage() {
 
     if (result.success) {
       clearCart();
-      setShowSuccessToast(true);
-      setTimeout(() => {
-        router.push("/cardapio");
-      }, 3000);
+      // Redirect to order status page
+      router.push(`/order/${result.orderId}`);
     } else {
       setErrorMsg("Erro ao registrar. Tente novamente.");
       setIsLoading(false);
     }
   };
-
-  if (showSuccessToast) {
-    return (
-      <div className="min-h-[80vh] flex flex-col items-center justify-center p-4 text-center">
-        <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mb-6 animate-bounce">
-          <CheckCircle2 className="text-green-500" size={48} />
-        </div>
-        <h1 className="text-3xl font-playfair font-bold text-[#F5F0E8] mb-2">Pedido realizado! 🎉</h1>
-        <p className="text-[#8A8480] max-w-xs">Seu pedido foi enviado para a cozinha e em breve estará a caminho.</p>
-        <p className="text-[#E85D24] font-bold mt-8">Redirecionando para o cardápio...</p>
-      </div>
-    );
-  }
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
