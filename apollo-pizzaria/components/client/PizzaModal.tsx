@@ -21,9 +21,9 @@ function inferCombo(name: string) {
   else if (name.startsWith("1 ")) qty_pizzas = 1;
 
   let size: 'G' | 'GG' | null = null;
-  if (name.includes("GG") || name.includes("Gigante")) {
+  if (name.includes('GG') || name.toLowerCase().includes('gigante')) {
     size = 'GG';
-  } else if (name.includes(" G ") || name.includes("+ G") || name.endsWith("G")) {
+  } else if (name.includes(' G ') || name.includes('G +') || name.endsWith(' G')) {
     size = 'G';
   }
 
