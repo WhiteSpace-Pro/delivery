@@ -26,6 +26,11 @@ export function CartItemRow({
                 + {item.half_half}
               </span>
             )}
+            {item.combo_flavors && item.combo_flavors.length > 0 && (
+              <span className="text-[#8A8480] font-normal block text-xs mt-0.5">
+                Sabores: {item.combo_flavors.join(", ")}
+              </span>
+            )}
           </h4>
 
           <div className="flex flex-wrap gap-2 mt-1.5">
