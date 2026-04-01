@@ -23,7 +23,7 @@ export async function middleware(request: NextRequest) {
 
   // Public routes (no auth required)
   const isPublicRoute =
-    pathname === '/' ||
+    pathname === '/' || pathname === '/menu' || pathname.startsWith('/menu') || pathname.startsWith('/cart') || pathname.startsWith('/order') ||
     pathname === '/login' ||
     pathname === '/cardapio' ||
     pathname.startsWith('/api/webhooks')
