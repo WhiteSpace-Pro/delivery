@@ -29,7 +29,7 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus) {
     throw new Error('Failed to update order status')
   }
 
-  revalidatePath('/(admin)/dashboard', 'page')
+  revalidatePath('/admin', 'page')
 }
 
 export async function assignDriverAndSend(orderId: string, driverId: string | null) {
@@ -51,7 +51,7 @@ export async function assignDriverAndSend(orderId: string, driverId: string | nu
     throw new Error('Failed to assign driver')
   }
 
-  revalidatePath('/(admin)/dashboard', 'page')
+  revalidatePath('/admin', 'page')
 }
 
 export async function toggleStoreStatus(currentStatus: boolean) {
@@ -67,7 +67,7 @@ export async function toggleStoreStatus(currentStatus: boolean) {
     throw new Error('Failed to toggle store status')
   }
 
-  revalidatePath('/(admin)/dashboard', 'page')
+  revalidatePath('/admin', 'page')
 }
 
 export async function getReceiptSignedUrl(receiptPath: string) {
@@ -100,7 +100,7 @@ export async function markNotificationAsRead(orderId: string) {
     throw new Error('Failed to mark notification as read')
   }
 
-  revalidatePath('/(admin)/dashboard', 'page')
+  revalidatePath('/admin', 'page')
 }
 
 export async function cancelOrder(orderId: string) {
@@ -119,5 +119,5 @@ export async function cancelOrder(orderId: string) {
     throw new Error('Failed to cancel order')
   }
 
-  revalidatePath('/(admin)/dashboard', 'page')
+  revalidatePath('/admin', 'page')
 }
