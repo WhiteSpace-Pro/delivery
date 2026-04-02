@@ -1,105 +1,143 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { createClient } from '@/lib/supabase/server'
-import { redirect } from 'next/navigation'
-import Link from 'next/link'
-import { Package, ChevronRight } from 'lucide-react'
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
+import { useUser } from '@/hooks/useUser'
+import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
+import { ChevronRight, ShoppingBag, Loader2, ArrowLeft } from 'lucide-react'
+import Link from 'next/link'
 
 const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 
-const STATUS_CONFIG: Record<string, { label: string, color: string }> = {
-  pending: { label: 'Novo', color: 'bg-red-500' },
-  confirmed: { label: 'Confirmado', color: 'bg-blue-500' },
-  preparing: { label: 'Preparando', color: 'bg-yellow-500' },
-  ready: { label: 'Pronto', color: 'bg-green-400' },
-  out_for_delivery: { label: 'Saiu para entrega', color: 'bg-orange-500' },
-  delivered: { label: 'Entregue', color: 'bg-green-700' },
-  cancelled: { label: 'Cancelado', color: 'bg-zinc-600' }
-}
-
-export default async function MyOrdersPage() {
+export default function MyOrdersPage() {
+  const router = useRouter()
+  const { user, isLoading: userLoading } = useUser()
+  const [orders, setOrders] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
   const supabase = createClient()
-  const { data: { user } } = await supabase.auth.getUser()
 
-  if (!user) {
-    redirect('/')
+  useEffect(() => {
+    if (userLoading) return
+    if (!user) {
+      router.push('/')
+      return
+    }
+
+    async function fetchOrders() {
+      if (!user) return
+
+      const { data } = await supabase
+        .from('orders')
+        .select(`
+          *,
+          items:order_items(
+            *,
+            product:products(name)
+          )
+        `)
+        .eq('customer_id', user.id)
+        .eq('tenant_id', TENANT_ID)
+        .order('created_at', { ascending: false })
+
+      if (data) setOrders(data)
+      setLoading(false)
+    }
+
+    fetchOrders()
+  }, [user, userLoading, router, supabase])
+
+  if (userLoading || loading) {
+    return (
+      <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-center">
+        <Loader2 className="animate-spin text-apollo-orange" size={32} />
+      </div>
+    )
   }
 
-  const { data: orders } = await supabase
-    .from('orders')
-    .select(`
-      *,
-      order_items (
-        *,
-        product:products(name)
-      )
-    `)
-    .eq('customer_id', user.id)
-    .eq('tenant_id', TENANT_ID)
-    .order('created_at', { ascending: false })
-
   return (
-    <div className="min-h-screen bg-[#0D0D0D] text-white font-dm-sans pb-20 text-[#F5F0E8]">
+    <div className="min-h-screen bg-[#0D0D0D] text-white font-dm pb-20">
       <div className="max-w-2xl mx-auto p-4 md:p-8">
-        <header className="mb-8">
-          <h1 className="text-3xl font-playfair font-bold text-apollo-orange italic mb-2">Meus Pedidos</h1>
-          <p className="text-white/60">Acompanhe seu histórico e pedidos em andamento.</p>
+        <header className="mb-8 flex items-center justify-between">
+            <div>
+                <Link href="/cardapio" className="flex items-center gap-2 text-white/40 hover:text-white transition-colors mb-4 text-xs font-bold uppercase tracking-widest">
+                    <ArrowLeft size={14} />
+                    Cardápio
+                </Link>
+                <h1 className="text-3xl font-playfair font-bold italic text-apollo-orange">Meus Pedidos</h1>
+            </div>
+            <div className="bg-[#1C1C1C] p-2 rounded-full border border-white/5">
+                <ShoppingBag size={20} className="text-white/20" />
+            </div>
         </header>
 
-        {(!orders || orders.length === 0) ? (
-          <div className="bg-[#1C1C1C] rounded-2xl p-12 text-center border border-[#2A2A2A]">
-            <Package size={48} className="text-white/10 mx-auto mb-4" />
-            <p className="text-white/40 mb-6">Você ainda não realizou nenhum pedido.</p>
-            <Link href="/cardapio" className="bg-apollo-orange text-white px-8 py-3 rounded-xl font-bold inline-block">
-              Ver cardápio
+        {orders.length === 0 ? (
+          <div className="bg-[#1C1C1C] rounded-3xl p-12 text-center border border-[#2A2A2A] shadow-xl">
+            <ShoppingBag size={48} className="text-white/10 mx-auto mb-4" />
+            <p className="text-white/60 mb-6">Você ainda não fez nenhum pedido.</p>
+            <Link href="/cardapio" className="inline-block bg-apollo-orange px-8 py-3 rounded-xl font-bold hover:scale-105 transition-transform">
+              Ver Cardápio
             </Link>
           </div>
         ) : (
-          <div className="grid gap-4">
-            {orders.map((order: any) => {
-              const date = new Date(order.created_at)
-              const formattedDate = new Intl.DateTimeFormat('pt-BR', {
-                weekday: 'long',
+          <div className="space-y-4">
+            {orders.map((order) => {
+              const date = new Date(order.created_at).toLocaleDateString('pt-BR', {
+                weekday: 'short',
                 day: 'numeric',
-                month: 'long'
-              }).format(date)
-              const formattedTime = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+                month: 'short'
+              })
+              const time = new Date(order.created_at).toLocaleTimeString('pt-BR', {
+                hour: '2-digit',
+                minute: '2-digit'
+              })
 
-              const status = STATUS_CONFIG[order.status] || STATUS_CONFIG.pending
-              const itemsSummary = order.order_items
-                ?.map((item: any) => `${item.quantity}× ${item.product?.name || 'Item'}`)
+              const statusMap: Record<string, { label: string, color: string }> = {
+                pending: { label: 'Pendente', color: 'bg-white/10 text-white/60' },
+                confirmed: { label: 'Confirmado', color: 'bg-blue-500/20 text-blue-400' },
+                preparing: { label: 'Preparando', color: 'bg-amber-500/20 text-amber-400' },
+                ready: { label: 'Pronto', color: 'bg-green-500/20 text-green-400' },
+                out_for_delivery: { label: 'Saiu para entrega', color: 'bg-apollo-orange/20 text-apollo-orange' },
+                delivered: { label: 'Entregue', color: 'bg-[#22c55e]/20 text-[#22c55e]' },
+                cancelled: { label: 'Cancelado', color: 'bg-red-500/20 text-red-400' }
+              }
+
+              const status = statusMap[order.status] || statusMap.pending
+
+              const itemsSummary = order.items
+                .map((item: any) => `${item.quantity}× ${item.product?.name}`)
                 .join(', ')
 
               return (
                 <Link
                   key={order.id}
                   href={`/order/${order.id}`}
-                  className="bg-[#1C1C1C] rounded-2xl p-5 border border-[#2A2A2A] hover:border-apollo-orange/40 transition-all group"
+                  className="block bg-[#1C1C1C] border border-[#2A2A2A] rounded-2xl p-5 hover:border-apollo-orange/50 hover:bg-[#222] transition-all group"
                 >
                   <div className="flex justify-between items-start mb-4">
-                    <div>
-                      <h3 className="font-bold text-lg mb-1">#${order.id.slice(-4)}</h3>
-                      <p className="text-xs text-white/40 capitalize">{formattedDate} • {formattedTime}</p>
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-black/40 rounded-xl flex items-center justify-center border border-white/5">
+                        <span className="text-xs font-bold text-apollo-orange">#{order.id.slice(-4)}</span>
+                      </div>
+                      <div>
+                        <p className="text-xs font-bold text-white/40 uppercase tracking-widest">{date} • {time}</p>
+                        <p className={cn("text-[10px] font-bold px-2 py-0.5 rounded uppercase mt-1 inline-block", status.color)}>
+                          {status.label}
+                        </p>
+                      </div>
                     </div>
-                    <span className={cn(
-                      "px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider text-white",
-                      status.color
-                    )}>
-                      {status.label}
+                    <span className="font-bold text-lg text-apollo-orange">
+                      R$ {order.total_amount.toFixed(2).replace('.', ',')}
                     </span>
                   </div>
 
-                  <p className="text-sm text-white/60 line-clamp-1 mb-4">
-                    {itemsSummary}
-                  </p>
-
-                  <div className="flex justify-between items-center pt-4 border-t border-[#2A2A2A]">
-                    <span className="font-bold text-apollo-orange">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.total_amount)}
-                    </span>
-                    <div className="flex items-center gap-1 text-xs font-bold text-white/40 group-hover:text-apollo-orange transition-colors">
-                      Ver detalhes
-                      <ChevronRight size={14} />
+                  <div className="flex items-center justify-between gap-4">
+                    <p className="text-xs text-white/60 line-clamp-1 flex-1">
+                      {itemsSummary}
+                    </p>
+                    <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-apollo-orange group-hover:text-white transition-colors">
+                      <ChevronRight size={18} />
                     </div>
                   </div>
                 </Link>

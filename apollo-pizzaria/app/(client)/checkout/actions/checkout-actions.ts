@@ -51,15 +51,15 @@ export async function placeOrder(params: PlaceOrderParams) {
   const orderItems = params.items.map(item => ({
     tenant_id: TENANT_ID,
     order_id: order.id,
-    product_id: item.id,
+    product_id: item.id, // item.id is product_id from cart
     quantity: item.quantity,
     unit_price: item.unit_price,
     total_price: item.total_price,
-    size: item.size,
+    size: item.size || null,
     edge_option_id: item.border_id || null,
     is_half: !!item.half_half,
-    half_product_id: null,
-    observations: item.observations
+    half_product_id: item.half_half?.id || null,
+    observations: item.observations || null
   }))
 
   const { error: itemsError } = await supabase

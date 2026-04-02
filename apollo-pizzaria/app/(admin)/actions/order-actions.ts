@@ -4,19 +4,20 @@
 import { createClient } from '@/lib/supabase/server'
 import { OrderStatus } from '@/types/enums'
 import { revalidatePath } from 'next/cache'
-import { Database } from '@/types/database'
 
 const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
-
-type OrderUpdate = Database['public']['Tables']['orders']['Update']
 
 export async function updateOrderStatus(orderId: string, status: OrderStatus) {
   const supabase = createClient()
 
-  const updateData: OrderUpdate = { status }
-  if (status === 'delivered') {
-    updateData.delivered_at = new Date().toISOString()
-  }
+  const now = new Date().toISOString()
+  const updateData: any = { status }
+
+  if (status === 'confirmed') updateData.confirmed_at = now
+  if (status === 'preparing') updateData.preparing_at = now
+  if (status === 'ready') updateData.ready_at = now
+  if (status === 'out_for_delivery') updateData.dispatched_at = now
+  if (status === 'delivered') updateData.delivered_at = now
 
   const { error } = await supabase
     .from('orders')
@@ -35,9 +36,11 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus) {
 export async function assignDriverAndSend(orderId: string, driverId: string | null) {
   const supabase = createClient()
 
-  const updateData: OrderUpdate = {
+  const now = new Date().toISOString()
+  const updateData: any = {
     assigned_delivery_id: driverId,
-    status: 'out_for_delivery'
+    status: 'out_for_delivery',
+    dispatched_at: now
   }
 
   const { error } = await supabase
@@ -59,7 +62,7 @@ export async function toggleStoreStatus(currentStatus: boolean) {
 
   const { error } = await supabase
     .from('tenants')
-    .update({ is_active: !currentStatus })
+    .update({ is_active: !currentStatus } as any)
     .eq('id', TENANT_ID)
 
   if (error) {
@@ -106,7 +109,7 @@ export async function markNotificationAsRead(orderId: string) {
 export async function cancelOrder(orderId: string) {
   const supabase = createClient()
 
-  const updateData: OrderUpdate = { status: 'cancelled' }
+  const updateData: any = { status: 'cancelled' }
 
   const { error } = await supabase
     .from('orders')

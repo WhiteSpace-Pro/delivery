@@ -2,71 +2,66 @@
 'use client'
 
 import { useState } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
+import { Loader2, Mail, Lock, User, Phone, ArrowRight } from 'lucide-react'
 
 interface LoginModalProps {
   isOpen: boolean
   onClose: () => void
-  onSuccess: () => void
+  onSuccess?: () => void
 }
+
+const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 
 export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [fullName, setFullName] = useState('')
-  const [phone, setPhone] = useState('')
-
   const supabase = createClient()
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const [formData, setFormData] = useState({
+    email: '',
+    password: '',
+    fullName: '',
+    phone: ''
+  })
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     setError(null)
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({ email, password })
-      if (error) throw error
-      onSuccess()
-    } catch (err: any) {
-      setError(err.message === 'Invalid login credentials' ? 'E-mail ou senha incorretos.' : err.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setLoading(true)
-    setError(null)
-
-    try {
-      const { data, error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: { full_name: fullName, phone }
-        }
-      })
-      if (signUpError) throw signUpError
-
-      if (data.user) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .update({ full_name: fullName, phone })
-          .eq('id', data.user.id)
-
-        if (profileError) console.error('Error updating profile:', profileError)
+      if (activeTab === 'login') {
+        const { error: signInError } = await supabase.auth.signInWithPassword({
+          email: formData.email,
+          password: formData.password,
+        })
+        if (signInError) throw signInError
+      } else {
+        const { error: signUpError } = await supabase.auth.signUp({
+          email: formData.email,
+          password: formData.password,
+          options: {
+            data: {
+              full_name: formData.fullName,
+              phone: formData.phone,
+              role: 'customer',
+              tenant_id: TENANT_ID
+            }
+          }
+        })
+        if (signUpError) throw signUpError
       }
 
-      onSuccess()
+      onSuccess?.()
+      onClose()
+      window.location.reload() // Quick way to refresh UI state
     } catch (err: any) {
-      setError(err.message)
+      console.error(err)
+      setError(err.message === 'Invalid login credentials' ? 'E-mail ou senha inválidos.' : err.message)
     } finally {
       setLoading(false)
     }
@@ -74,97 +69,108 @@ export function LoginModal({ isOpen, onClose, onSuccess }: LoginModalProps) {
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="bg-[#0D0D0D] border-[#1C1C1C] text-white max-w-[400px] rounded-2xl">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-playfair text-apollo-orange italic">
-            {activeTab === 'login' ? 'Bem-vindo de volta' : 'Crie sua conta'}
+      <DialogContent className="max-w-[400px] bg-[#141414] border-[#2A2A2A] text-white p-0 overflow-hidden">
+        <DialogHeader className="p-6 pb-2">
+          <DialogTitle className="text-2xl font-playfair font-bold italic text-apollo-orange">
+            {activeTab === 'login' ? 'Bem-vindo de volta' : 'Criar conta'}
           </DialogTitle>
         </DialogHeader>
 
-        <div className="flex bg-[#1C1C1C] rounded-lg p-1 mb-6">
-          <button
-            onClick={() => setActiveTab('login')}
-            className={cn(
-              "flex-1 py-2 text-sm font-bold rounded-md transition-all",
-              activeTab === 'login' ? "bg-apollo-orange text-white" : "text-white/40 hover:text-white"
+        <div className="px-6 pb-6">
+          <div className="flex bg-[#0D0D0D] rounded-xl p-1 mb-6">
+            <button
+              onClick={() => setActiveTab('login')}
+              className={cn(
+                "flex-1 py-2.5 text-xs font-bold rounded-lg transition-all",
+                activeTab === 'login' ? "bg-apollo-orange text-white" : "text-white/40 hover:text-white"
+              )}
+            >
+              Entrar
+            </button>
+            <button
+              onClick={() => setActiveTab('register')}
+              className={cn(
+                "flex-1 py-2.5 text-xs font-bold rounded-lg transition-all",
+                activeTab === 'register' ? "bg-apollo-orange text-white" : "text-white/40 hover:text-white"
+              )}
+            >
+              Cadastrar
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {activeTab === 'register' && (
+              <>
+                <div className="relative">
+                  <User className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
+                  <input
+                    required
+                    value={formData.fullName}
+                    onChange={e => setFormData({ ...formData, fullName: e.target.value })}
+                    className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-apollo-orange transition-colors"
+                    placeholder="Nome completo"
+                  />
+                </div>
+                <div className="relative">
+                  <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
+                  <input
+                    required
+                    value={formData.phone}
+                    onChange={e => setFormData({ ...formData, phone: e.target.value })}
+                    className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-apollo-orange transition-colors"
+                    placeholder="(99) 99999-9999"
+                  />
+                </div>
+              </>
             )}
-          >
-            Entrar
-          </button>
-          <button
-            onClick={() => setActiveTab('register')}
-            className={cn(
-              "flex-1 py-2 text-sm font-bold rounded-md transition-all",
-              activeTab === 'register' ? "bg-apollo-orange text-white" : "text-white/40 hover:text-white"
+
+            <div className="relative">
+              <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
+              <input
+                required
+                type="email"
+                value={formData.email}
+                onChange={e => setFormData({ ...formData, email: e.target.value })}
+                className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-apollo-orange transition-colors"
+                placeholder="E-mail"
+              />
+            </div>
+
+            <div className="relative">
+              <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
+              <input
+                required
+                type="password"
+                value={formData.password}
+                onChange={e => setFormData({ ...formData, password: e.target.value })}
+                className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-apollo-orange transition-colors"
+                placeholder="Senha"
+              />
+            </div>
+
+            {error && (
+              <p className="text-xs text-red-500 font-bold bg-red-500/10 p-3 rounded-lg border border-red-500/20">
+                {error}
+              </p>
             )}
-          >
-            Cadastrar
-          </button>
+
+            <button
+              disabled={loading}
+              className="w-full bg-apollo-orange hover:bg-apollo-orange/90 text-white font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 shadow-lg shadow-apollo-orange/20 disabled:opacity-50"
+            >
+              {loading ? <Loader2 className="animate-spin" size={18} /> : (
+                <>
+                  <span>{activeTab === 'login' ? 'Entrar agora' : 'Finalizar cadastro'}</span>
+                  <ArrowRight size={18} />
+                </>
+              )}
+            </button>
+          </form>
+
+          <p className="text-center text-[10px] text-white/40 mt-6 uppercase tracking-widest font-bold">
+            🔒 Checkout 100% Seguro
+          </p>
         </div>
-
-        {error && (
-          <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-xs p-3 rounded-lg mb-4">
-            {error}
-          </div>
-        )}
-
-        <form onSubmit={activeTab === 'login' ? handleLogin : handleRegister} className="space-y-4">
-          {activeTab === 'register' && (
-            <>
-              <div className="space-y-1">
-                <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">Nome completo</label>
-                <input
-                  required
-                  value={fullName}
-                  onChange={e => setFullName(e.target.value)}
-                  className="w-full bg-[#1C1C1C] border border-[#2A2A2A] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-apollo-orange transition-colors"
-                  placeholder="Seu nome completo"
-                />
-              </div>
-              <div className="space-y-1">
-                <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">Telefone</label>
-                <input
-                  required
-                  value={phone}
-                  onChange={e => setPhone(e.target.value)}
-                  className="w-full bg-[#1C1C1C] border border-[#2A2A2A] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-apollo-orange transition-colors"
-                  placeholder="(99) 99999-9999"
-                />
-              </div>
-            </>
-          )}
-
-          <div className="space-y-1">
-            <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">E-mail</label>
-            <input
-              required
-              type="email"
-              value={email}
-              onChange={e => setEmail(e.target.value)}
-              className="w-full bg-[#1C1C1C] border border-[#2A2A2A] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-apollo-orange transition-colors"
-              placeholder="seu@email.com"
-            />
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">Senha</label>
-            <input
-              required
-              type="password"
-              value={password}
-              onChange={e => setPassword(e.target.value)}
-              className="w-full bg-[#1C1C1C] border border-[#2A2A2A] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-apollo-orange transition-colors"
-              placeholder="••••••••"
-            />
-          </div>
-
-          <button
-            disabled={loading}
-            className="w-full bg-apollo-orange hover:bg-apollo-orange/90 text-white font-bold py-4 rounded-xl shadow-lg shadow-apollo-orange/20 transition-all disabled:opacity-50 mt-4"
-          >
-            {loading ? 'Processando...' : activeTab === 'login' ? 'Entrar' : 'Criar conta'}
-          </button>
-        </form>
       </DialogContent>
     </Dialog>
   )
