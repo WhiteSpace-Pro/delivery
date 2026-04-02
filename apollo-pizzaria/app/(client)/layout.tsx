@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
-import { ShoppingCart, User as UserIcon } from "lucide-react";
+import { ShoppingCart, User as UserIcon, LogOut } from "lucide-react";
 import Link from "next/link";
 import { CartProvider, useCart } from "@/contexts/CartContext";
 import { CartDrawer } from "@/components/client/CartDrawer";
 import { useUser } from "@/hooks/useUser";
+import { createClient } from "@/lib/supabase/client";
+import { LoginModal } from "@/components/client/LoginModal";
 
 function HeaderBadge() {
   const { totalItems } = useCart();
@@ -21,7 +23,14 @@ function HeaderBadge() {
 
 function Header() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [isLoginOpen, setIsLoginOpen] = useState(false);
   const { user } = useUser();
+  const supabase = createClient();
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+    window.location.href = "/";
+  };
 
   return (
     <>
@@ -36,11 +45,27 @@ function Header() {
               Cardápio
             </Link>
 
-            {user && (
-              <Link href="/meus-pedidos" className="text-sm font-medium hover:text-[#E85D24] transition-colors flex items-center gap-2">
-                <UserIcon size={16} />
-                <span className="hidden sm:inline">Meus Pedidos</span>
-              </Link>
+            {user ? (
+              <div className="flex items-center gap-4">
+                <Link href="/meus-pedidos" className="text-sm font-medium hover:text-[#E85D24] transition-colors flex items-center gap-2">
+                  <UserIcon size={16} />
+                  <span className="hidden sm:inline">Meus Pedidos</span>
+                </Link>
+                <button
+                  onClick={handleLogout}
+                  className="text-white/40 hover:text-red-400 transition-colors"
+                  title="Sair"
+                >
+                  <LogOut size={16} />
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={() => setIsLoginOpen(true)}
+                className="text-sm font-medium hover:text-[#E85D24] transition-colors"
+              >
+                Entrar
+              </button>
             )}
 
             <button
@@ -56,6 +81,7 @@ function Header() {
       </header>
 
       <CartDrawer isOpen={isDrawerOpen} onClose={() => setIsDrawerOpen(false)} />
+      <LoginModal isOpen={isLoginOpen} onClose={() => setIsLoginOpen(false)} />
     </>
   );
 }

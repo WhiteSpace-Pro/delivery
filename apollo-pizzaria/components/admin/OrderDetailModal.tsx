@@ -39,6 +39,7 @@ export function OrderDetailModal({ order, onClose, hasPendingReceipt, onReceiptV
           items:order_items(
             *,
             product:products(name, type),
+            half_product:products!order_items_half_product_id_fkey(name),
             edge:pizza_options(name)
           )
         `)
@@ -79,13 +80,18 @@ export function OrderDetailModal({ order, onClose, hasPendingReceipt, onReceiptV
     }
   }
 
+  const formatTime = (isoString: string | null) => {
+    if (!isoString) return '–'
+    return new Date(isoString).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  }
+
   const statusSteps = [
-    { key: 'pending', label: 'Pendente' },
-    { key: 'confirmed', label: 'Confirmado' },
-    { key: 'preparing', label: 'Preparando' },
-    { key: 'ready', label: 'Pronto' },
-    { key: 'out_for_delivery', label: 'Saiu' },
-    { key: 'delivered', label: 'Entregue' }
+    { key: 'pending', label: 'Recebido', time: details?.created_at },
+    { key: 'confirmed', label: 'Confirmado', time: details?.confirmed_at },
+    { key: 'preparing', label: 'Preparando', time: details?.preparing_at },
+    { key: 'ready', label: 'Pronto', time: details?.ready_at },
+    { key: 'out_for_delivery', label: 'Saiu', time: details?.dispatched_at },
+    { key: 'delivered', label: 'Entregue', time: details?.delivered_at }
   ]
 
   const currentStatusIdx = statusSteps.findIndex(s => s.key === order.status)
@@ -110,14 +116,14 @@ export function OrderDetailModal({ order, onClose, hasPendingReceipt, onReceiptV
         <header className="p-6 border-b border-[#E5E7EB] flex justify-between items-start">
           <div>
             <div className="flex items-center gap-3 mb-1">
-              <h2 className="text-2xl font-bold">#${order.id.slice(-4)}</h2>
+              <h2 className="text-2xl font-bold">#{order.id.slice(-4)}</h2>
               <span className="bg-[#F8F7F5] text-[#666] text-xs font-bold px-2 py-1 rounded-md uppercase tracking-wider">
                 {order.status}
               </span>
             </div>
             <div className="flex items-center gap-1 text-[#666] text-sm">
               <Clock size={14} />
-              há ${Math.floor((Date.now() - new Date(order.created_at || '').getTime()) / 60000)} min
+              há {Math.floor((Date.now() - new Date(order.created_at || '').getTime()) / 60000)} min
             </div>
           </div>
           <button onClick={onClose} className="p-2 hover:bg-[#F8F7F5] rounded-full transition-colors">
@@ -128,7 +134,7 @@ export function OrderDetailModal({ order, onClose, hasPendingReceipt, onReceiptV
         <div className="flex-1 overflow-y-auto p-6 space-y-8">
           {loading ? (
             <div className="flex flex-col items-center justify-center h-40 text-[#666]">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-apollo-orange mb-2" />
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#E85D24] mb-2" />
               <p className="text-sm">Carregando detalhes...</p>
             </div>
           ) : (
@@ -140,16 +146,19 @@ export function OrderDetailModal({ order, onClose, hasPendingReceipt, onReceiptV
                     <div key={step.key} className="relative z-10 flex flex-col items-center gap-2">
                       <div className={cn(
                         "w-6 h-6 rounded-full border-4 border-white flex items-center justify-center transition-colors",
-                        idx <= currentStatusIdx ? "bg-[#E85D24]" : "bg-[#E5E7EB]"
+                        idx <= currentStatusIdx ? (idx === currentStatusIdx ? "bg-amber-500" : "bg-[#22c55e]") : "bg-[#E5E7EB]"
                       )}>
-                        {idx < currentStatusIdx && <CheckCircle2 size={12} className="text-white" />}
+                        {idx < currentStatusIdx ? <CheckCircle2 size={12} className="text-white" /> : (idx === currentStatusIdx && <div className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />)}
                       </div>
-                      <span className={cn(
-                        "text-[10px] font-bold uppercase tracking-tighter",
-                        idx <= currentStatusIdx ? "text-[#E85D24]" : "text-[#666]"
-                      )}>
-                        {step.label}
-                      </span>
+                      <div className="flex flex-col items-center">
+                        <span className={cn(
+                          "text-[9px] font-bold uppercase tracking-tighter",
+                          idx <= currentStatusIdx ? (idx === currentStatusIdx ? "text-amber-500" : "text-[#22c55e]") : "text-[#666]"
+                        )}>
+                          {step.label}
+                        </span>
+                        <span className="text-[8px] text-[#999] font-medium">{formatTime(step.time)}</span>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -184,9 +193,14 @@ export function OrderDetailModal({ order, onClose, hasPendingReceipt, onReceiptV
                           </p>
                         </>
                       ) : (
-                        <p className="italic text-[#666]">
-                          {details?.delivery_type === 'pickup' ? 'Retirada na loja' : (details?.delivery_instructions || 'Endereço não informado')}
-                        </p>
+                        <div>
+                          <p className="italic text-[#666]">
+                            {details?.delivery_type === 'pickup' ? 'Retirada na loja' : (details?.delivery_instructions || 'Endereço não informado')}
+                          </p>
+                          {details?.delivery_fee > 0 && (
+                            <p className="text-xs text-[#666] font-medium mt-0.5">Taxa R$ {details.delivery_fee.toFixed(2).replace('.', ',')}</p>
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -195,16 +209,20 @@ export function OrderDetailModal({ order, onClose, hasPendingReceipt, onReceiptV
 
               <section className="space-y-4">
                 <h3 className="font-bold">Itens do Pedido</h3>
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {details?.items?.map((item: any) => (
                     <div key={item.id} className="flex justify-between items-start">
                       <div className="flex gap-3">
                         <span className="font-bold text-[#E85D24]">{item.quantity}×</span>
                         <div>
                           <p className="font-bold text-sm">
-                            {item.product?.name || 'Item'}
+                            {item.is_half ? (
+                                `${item.product?.name} / ${item.half_product?.name}`
+                            ) : (
+                                item.product?.name || 'Item'
+                            )}
                           </p>
-                          <div className="flex gap-2 text-[10px] text-[#666] uppercase font-bold">
+                          <div className="flex flex-wrap gap-2 text-[10px] text-[#666] uppercase font-bold mt-0.5">
                             {item.size && <span>• {item.size}</span>}
                             {item.edge?.name && <span>• Borda {item.edge.name}</span>}
                           </div>
@@ -240,7 +258,11 @@ export function OrderDetailModal({ order, onClose, hasPendingReceipt, onReceiptV
                 </div>
                 <div className="pt-2 flex flex-col gap-1">
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-bold uppercase text-[#666]">{details?.payment_method}</span>
+                    <span className="text-xs font-bold uppercase text-[#666]">
+                        {details?.payment_method === 'pix' ? 'PIX' :
+                         details?.payment_method === 'cash' ? 'Dinheiro' :
+                         details?.payment_method === 'credit_card' ? 'Crédito' : 'Débito'}
+                    </span>
                     <span className={cn(
                       "text-[10px] font-bold px-2 py-0.5 rounded uppercase",
                       details?.payment_status === 'paid' ? "bg-[#22c55e]/10 text-[#22c55e]" : "bg-[#666]/10 text-[#666]"

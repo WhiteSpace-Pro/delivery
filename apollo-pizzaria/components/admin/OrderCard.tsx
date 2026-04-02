@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -15,7 +16,9 @@ interface OrderCardProps {
 }
 
 export function OrderCard({ order, hasPendingReceipt, onOpenDetail, onMoveToNext }: OrderCardProps) {
-  const [minutesElapsed, setMinutesElapsed] = useState(0)
+  const [totalMinutes, setTotalMinutes] = useState(0)
+  const [stageMinutes, setStageMinutes] = useState(0)
+
   const {
     attributes,
     listeners,
@@ -33,22 +36,51 @@ export function OrderCard({ order, hasPendingReceipt, onOpenDetail, onMoveToNext
 
   useEffect(() => {
     const calculateTime = () => {
-      const diff = Date.now() - new Date(order.created_at || '').getTime()
-      setMinutesElapsed(Math.floor(diff / 60000))
+      const now = Date.now()
+
+      // Total time
+      const start = new Date(order.created_at || '').getTime()
+      setTotalMinutes(Math.floor((now - start) / 60000))
+
+      // Stage time
+      const anyOrder = order as any
+      let stageStart = order.created_at
+      if (order.status === 'confirmed' && anyOrder.confirmed_at) stageStart = anyOrder.confirmed_at
+      if (order.status === 'preparing' && anyOrder.preparing_at) stageStart = anyOrder.preparing_at
+      if (order.status === 'ready' && anyOrder.ready_at) stageStart = anyOrder.ready_at
+      if (order.status === 'out_for_delivery' && anyOrder.dispatched_at) stageStart = anyOrder.dispatched_at
+      if (order.status === 'delivered' && anyOrder.delivered_at) stageStart = anyOrder.delivered_at
+
+      const stageDiff = now - new Date(stageStart || '').getTime()
+      setStageMinutes(Math.floor(stageDiff / 60000))
     }
+
     calculateTime()
     const interval = setInterval(calculateTime, 60000)
     return () => clearInterval(interval)
-  }, [order.created_at])
+  }, [order])
 
-  const isDelayed = (Date.now() - new Date(order.updated_at || '').getTime()) > 20 * 60 * 1000
+  const getDelayInfo = () => {
+    const limits: Record<string, number> = {
+      pending: 5,
+      confirmed: 5,
+      preparing: 20,
+      ready: 10,
+      out_for_delivery: 40,
+      delivered: 999999
+    }
+    const limit = limits[order.status] || 20
+    const isDelayed = stageMinutes >= limit
+    return { isDelayed }
+  }
 
-  // Since order_items in DB doesn't have product_name, we use a placeholder or would need to join products.
-  // The prompt asked for "2× Pizza G Muçarela", which implies product name availability.
-  // I'll use a generic "Item" + item.id for now or assume it's in a joined field if I had one.
-  // Actually, I'll update the fetch to include products if possible, but for now I'll just use ID slice to avoid breakage.
+  const { isDelayed } = getDelayInfo()
+
   const itemsSummary = order.order_items
-    ?.map(item => `${item.quantity}× Item #${item.product_id?.slice(-4) || '???'}`)
+    ?.map(item => {
+      const name = (item as any).product?.name || `Item #${item.product_id?.slice(-4)}`
+      return `${item.quantity}× ${name}`
+    })
     .join(', ')
 
   const actionLabels: Record<string, string> = {
@@ -65,12 +97,12 @@ export function OrderCard({ order, hasPendingReceipt, onOpenDetail, onMoveToNext
       style={style}
       className={cn(
         "bg-white rounded-lg shadow-sm border border-[#E5E7EB] p-3 group relative cursor-default select-none",
-        isDelayed && "border-l-[3px] border-l-[#ef4444]"
+        isDelayed ? "border-l-[3px] border-l-[#ef4444]" : "border-l-[3px] border-l-[#22c55e]"
       )}
     >
       <div className="flex justify-between items-start mb-2">
         <span className="font-bold text-[#0D0D0D] text-base" {...attributes} {...listeners}>
-          #${order.id.slice(-4)}
+          #{order.id.slice(-4)}
         </span>
         <div className="flex items-center gap-2">
           {hasPendingReceipt && (
@@ -82,9 +114,14 @@ export function OrderCard({ order, hasPendingReceipt, onOpenDetail, onMoveToNext
               Comprovante
             </button>
           )}
-          <div className="flex items-center gap-1 text-[#666] text-[10px]">
-            <Clock size={10} />
-            há ${minutesElapsed} min
+          <div className="flex flex-col items-end">
+            <div className="flex items-center gap-1 text-[#666] text-[10px]">
+              <Clock size={10} />
+              há {totalMinutes} min
+            </div>
+            <div className="text-[9px] text-[#999] font-medium">
+              nesta etapa há {stageMinutes} min
+            </div>
           </div>
         </div>
       </div>

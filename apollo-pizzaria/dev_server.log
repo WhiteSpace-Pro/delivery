@@ -7,176 +7,30 @@
   - Environments: .env.local
 
  ✓ Starting...
- ✓ Ready in 2.8s
- ✓ Compiled /middleware in 358ms (124 modules)
- ○ Compiling / ...
- ✓ Compiled / in 11.5s (1566 modules)
-Error fetching products: {
-  message: 'Invalid API key',
-  hint: 'Double check your Supabase `anon` or `service_role` API key.'
-}
- GET / 200 in 13774ms
- ✓ Compiled in 2.3s (749 modules)
-Error fetching products: {
-  message: 'Invalid API key',
-  hint: 'Double check your Supabase `anon` or `service_role` API key.'
-}
- GET / 200 in 138ms
- ○ Compiling /cardapio ...
- ✓ Compiled /cardapio in 1875ms (1541 modules)
-Error fetching categories: {
-  message: 'Invalid API key',
-  hint: 'Double check your Supabase `anon` or `service_role` API key.'
-}
-Error fetching products: {
-  message: 'Invalid API key',
-  hint: 'Double check your Supabase `anon` or `service_role` API key.'
-}
- ✓ Compiled in 1032ms (1555 modules)
-Error fetching products: {
-  message: 'Invalid API key',
-  hint: 'Double check your Supabase `anon` or `service_role` API key.'
-}
- GET / 200 in 491ms
-Error fetching categories: {
-  message: 'Invalid API key',
-  hint: 'Double check your Supabase `anon` or `service_role` API key.'
-}
-Error fetching products: {
-  message: 'Invalid API key',
-  hint: 'Double check your Supabase `anon` or `service_role` API key.'
-}
-Error fetching categories: {
-  message: 'Invalid API key',
-  hint: 'Double check your Supabase `anon` or `service_role` API key.'
-}
-Error fetching products: {
-  message: 'Invalid API key',
-  hint: 'Double check your Supabase `anon` or `service_role` API key.'
-}
- GET /cardapio 200 in 203ms
- ✓ Compiled in 876ms (1555 modules)
-Error fetching products: {
-  message: 'Invalid API key',
-  hint: 'Double check your Supabase `anon` or `service_role` API key.'
-}
- GET / 200 in 377ms
- ○ Compiling /_not-found ...
- ✓ Compiled /_not-found in 1866ms (1544 modules)
- GET /cardapio 404 in 2199ms
- GET /_next/static/media/13971731025ec697-s.p.woff2 404 in 160ms
- GET /_next/static/media/eaead17c7dbfcd5d-s.p.woff2 404 in 160ms
- GET /_next/static/css/app/layout.css?v=1774846820621 404 in 155ms
- GET /_next/static/chunks/main-app.js?v=1774846820621 404 in 102ms
- GET /_next/static/chunks/app-pages-internals.js 404 in 96ms
- ✓ Compiled in 180ms (124 modules)
+ ✓ Ready in 1800ms
+ ○ Compiling /middleware ...
+ ✓ Compiled /middleware in 1907ms (124 modules)
+ ○ Compiling /login ...
+ ✓ Compiled /login in 7.8s (593 modules)
+ GET /login 200 in 9040ms
+ ✓ Compiled in 1383ms (299 modules)
 <w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (215kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
-Error fetching categories: {
-  message: 'Invalid API key',
-  hint: 'Double check your Supabase `anon` or `service_role` API key.'
-}
-Error fetching products: {
-  message: 'Invalid API key',
-  hint: 'Double check your Supabase `anon` or `service_role` API key.'
-}
-TenantID used: 496c5a35-6843-4061-b3ab-159d15a0cbc6
-Categories found: undefined
-Products found: undefined
- GET /cardapio 200 in 593ms
- GET /_next/static/css/app/layout.css?v=1774846909278 404 in 121ms
- GET /_next/static/media/eaead17c7dbfcd5d-s.p.woff2 404 in 178ms
- GET /_next/static/media/13971731025ec697-s.p.woff2 404 in 185ms
- GET /_next/static/chunks/main-app.js?v=1774846909278 404 in 181ms
- GET /_next/static/chunks/app-pages-internals.js 404 in 183ms
- GET /_next/static/chunks/app/(client)/layout.js 404 in 141ms
- GET /_next/static/chunks/app/(client)/cardapio/page.js 404 in 63ms
- ✓ Compiled in 944ms (1558 modules)
-All categories total in DB: undefined
-Error fetching categories: {
-  message: 'Invalid API key',
-  hint: 'Double check your Supabase `anon` or `service_role` API key.'
-}
-Error fetching products: {
-  message: 'Invalid API key',
-  hint: 'Double check your Supabase `anon` or `service_role` API key.'
-}
-Using TenantID: 496c5a35-6843-4061-b3ab-159d15a0cbc6
-Filtered Categories count: undefined
-Filtered Products count: undefined
- GET /cardapio 200 in 361ms
- GET /_next/static/css/app/layout.css?v=1774846961925 404 in 79ms
- GET /_next/static/media/13971731025ec697-s.p.woff2 404 in 138ms
- GET /_next/static/media/eaead17c7dbfcd5d-s.p.woff2 404 in 136ms
- GET /_next/static/chunks/main-app.js?v=1774846961925 404 in 134ms
- GET /_next/static/chunks/app-pages-internals.js 404 in 132ms
- GET /_next/static/chunks/app/(client)/layout.js 404 in 74ms
- GET /_next/static/chunks/app/(client)/cardapio/page.js 404 in 47ms
-Error fetching products: {
-  message: 'Invalid API key',
-  hint: 'Double check your Supabase `anon` or `service_role` API key.'
-}
- GET / 200 in 136ms
-All categories total in DB: undefined
-Error fetching categories: {
-  message: 'Invalid API key',
-  hint: 'Double check your Supabase `anon` or `service_role` API key.'
-}
-Error fetching products: {
-  message: 'Invalid API key',
-  hint: 'Double check your Supabase `anon` or `service_role` API key.'
-}
-Using TenantID: 496c5a35-6843-4061-b3ab-159d15a0cbc6
-Filtered Categories count: undefined
-Filtered Products count: undefined
- GET /cardapio 200 in 295ms
- GET /_next/static/css/app/layout.css?v=1774847044113 404 in 79ms
- GET /_next/static/media/13971731025ec697-s.p.woff2 404 in 126ms
- GET /_next/static/media/eaead17c7dbfcd5d-s.p.woff2 404 in 124ms
- GET /_next/static/chunks/main-app.js?v=1774847044113 404 in 121ms
- GET /_next/static/chunks/app-pages-internals.js 404 in 109ms
- GET /_next/static/chunks/app/(client)/layout.js 404 in 102ms
- GET /_next/static/chunks/app/(client)/cardapio/page.js 404 in 39ms
- ✓ Compiled in 1240ms (1555 modules)
- ✓ Compiled in 670ms (1555 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/app/apollo-pizzaria/.next/cache/webpack/server-development/4.pack.gz_' -> '/app/apollo-pizzaria/.next/cache/webpack/server-development/4.pack.gz'
-   Reload env: .env.local
-<w> [webpack.cache.PackFileCacheStrategy] Restoring pack failed from /app/apollo-pizzaria/.next/cache/webpack/server-development.pack.gz: Error: incorrect data check
- ✓ Compiled in 925ms (1665 modules)
- ✓ Compiled in 647ms (1555 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/app/apollo-pizzaria/.next/cache/webpack/client-development/0.pack.gz_' -> '/app/apollo-pizzaria/.next/cache/webpack/client-development/0.pack.gz'
- ✓ Compiled in 944ms (1555 modules)
- ✓ Compiled in 10.7s (1555 modules)
- ⨯ ./components/client/PizzaModal.tsx
-Error:
-  [31mx[0m Expression expected
-    ,-[[36;1;4m/app/apollo-pizzaria/components/client/PizzaModal.tsx[0m:83:1]
- [2m83[0m |       basePrice = Math.max(p1?.extra_price_gg || 0, isHalfAndHalf ? (p2?.extra_price_gg || 0) : 0);
- [2m84[0m |     }
- [2m85[0m |
- [2m86[0m |     const edgePrice = edgeOptions.find(o => o.id === selectedEdgeId)??.extra_price || 0;
-    : [31;1m                                                                      ^[0m
- [2m87[0m |     return basePrice + edgePrice;
- [2m88[0m |   };
-    `----
-
-Caused by:
-    Syntax Error
-
-Import trace for requested module:
-./components/client/PizzaModal.tsx
-./app/(client)/ClientPageContent.tsx
- ✓ Compiled in 1976ms (1555 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/app/apollo-pizzaria/.next/cache/webpack/client-development/1.pack.gz_' -> '/app/apollo-pizzaria/.next/cache/webpack/client-development/1.pack.gz'
- ✓ Compiled in 9.6s (1555 modules)
- ✓ Compiled in 1735ms (1563 modules)
- ✓ Compiled in 1488ms (1556 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/app/apollo-pizzaria/.next/cache/webpack/server-development/0.pack.gz_' -> '/app/apollo-pizzaria/.next/cache/webpack/server-development/0.pack.gz'
-<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: invalid block type
- ✓ Compiled in 372ms (124 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/app/apollo-pizzaria/.next/cache/webpack/edge-server-development/0.pack.gz_' -> '/app/apollo-pizzaria/.next/cache/webpack/edge-server-development/0.pack.gz'
- ✓ Compiled in 2.4s (1556 modules)
- ✓ Compiled in 1961ms (1556 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: invalid block type
- ✓ Compiled in 2s (1556 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: invalid block type
-<w> [webpack.cache.PackFileCacheStrategy] Caching failed for pack: Error: ENOENT: no such file or directory, rename '/app/apollo-pizzaria/.next/cache/webpack/server-development/2.pack.gz_' -> '/app/apollo-pizzaria/.next/cache/webpack/server-development/2.pack.gz'
+ ○ Compiling /cardapio ...
+ ✓ Compiled /cardapio in 6.7s (1701 modules)
+ GET /cardapio 200 in 8493ms
+ GET /cardapio 200 in 598ms
+ GET /login 200 in 75ms
+ GET /cardapio 200 in 452ms
+ ○ Compiling /cart ...
+ ✓ Compiled /cart in 1154ms (1713 modules)
+ GET /cart 200 in 1496ms
+ GET /login 200 in 28ms
+ ✓ Compiled in 322ms (124 modules)
+ GET /cardapio 200 in 771ms
+ GET /cart 200 in 121ms
+ ○ Compiling /checkout ...
+ ✓ Compiled /checkout in 2.4s (1829 modules)
+ GET /checkout 200 in 2777ms
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (215kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+ ✓ Compiled in 220ms (124 modules)
+ ✓ Compiled in 79ms (124 modules)
