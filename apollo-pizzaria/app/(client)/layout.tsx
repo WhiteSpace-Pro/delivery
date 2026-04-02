@@ -1,10 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import { ShoppingCart } from "lucide-react";
+import { ShoppingCart, User as UserIcon } from "lucide-react";
 import Link from "next/link";
 import { CartProvider, useCart } from "@/contexts/CartContext";
 import { CartDrawer } from "@/components/client/CartDrawer";
+import { useUser } from "@/hooks/useUser";
 
 function HeaderBadge() {
   const { totalItems } = useCart();
@@ -20,6 +21,7 @@ function HeaderBadge() {
 
 function Header() {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const { user } = useUser();
 
   return (
     <>
@@ -29,10 +31,17 @@ function Header() {
             Apollo
           </Link>
 
-          <nav className="flex items-center gap-6">
+          <nav className="flex items-center gap-4 md:gap-6">
             <Link href="/cardapio" className="text-sm font-medium hover:text-[#E85D24] transition-colors">
               Cardápio
             </Link>
+
+            {user && (
+              <Link href="/meus-pedidos" className="text-sm font-medium hover:text-[#E85D24] transition-colors flex items-center gap-2">
+                <UserIcon size={16} />
+                <span className="hidden sm:inline">Meus Pedidos</span>
+              </Link>
+            )}
 
             <button
               onClick={() => setIsDrawerOpen(true)}
