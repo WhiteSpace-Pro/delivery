@@ -7,6 +7,8 @@ import { revalidatePath } from 'next/cache'
 const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 
 interface PlaceOrderParams {
+  customer_name: string | null
+  customer_phone: string | null
   customer_id: string | null
   delivery_type: 'delivery' | 'pickup'
   delivery_address_id: string | null
@@ -28,6 +30,8 @@ export async function placeOrder(params: PlaceOrderParams) {
     .insert({
       tenant_id: TENANT_ID,
       customer_id: params.customer_id,
+      customer_name: params.customer_name,
+      customer_phone: params.customer_phone,
       delivery_address_id: params.delivery_address_id,
       delivery_fee: params.delivery_fee,
       subtotal: params.subtotal,
