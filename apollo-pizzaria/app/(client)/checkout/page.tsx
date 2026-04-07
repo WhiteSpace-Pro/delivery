@@ -174,6 +174,8 @@ export default function CheckoutPage() {
       // 3. Place Order
       const orderId = await placeOrder({
         customer_id: currentUserId,
+        customer_name: customerName || null,
+        customer_phone: customerPhone || null,
         delivery_type: deliveryType,
         delivery_address_id: addressId,
         delivery_fee: deliveryFee,
