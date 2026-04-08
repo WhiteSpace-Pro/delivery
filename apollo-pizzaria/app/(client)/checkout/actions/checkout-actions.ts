@@ -86,8 +86,11 @@ export async function saveAddress(params: {
   number: string
   complement: string
   neighborhood: string
-  delivery_region_id: string
+  delivery_region_id?: string | null
   delivery_fee: number
+  zipcode?: string
+  lat?: number
+  lng?: number
 }) {
   const supabase = createClient()
 
