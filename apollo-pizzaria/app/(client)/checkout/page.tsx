@@ -67,8 +67,8 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'cash' | 'credit_card' | 'debit_card'>('pix')
   const [changeFor, setChangeFor] = useState('')
 
-  const [showSignup] = useState(false)
-  const [signupForm] = useState({ email: '', password: '' })
+  const [showSignup, setShowSignup] = useState(false)
+  const [signupForm, setSignupForm] = useState({ email: '', password: '' })
 
   const subtotal = items.reduce((acc, item) => acc + item.total_price, 0)
 
@@ -304,6 +304,56 @@ export default function CheckoutPage() {
                 />
               </div>
             </div>
+
+            {!user && (
+              <div className="mt-6 pt-6 border-t border-[#2A2A2A]">
+                <label className="flex items-center gap-3 cursor-pointer group">
+                  <div className={cn(
+                    "w-5 h-5 rounded border-2 flex items-center justify-center transition-all flex-shrink-0",
+                    showSignup ? "bg-apollo-orange border-apollo-orange" : "border-white/10 group-hover:border-white/30"
+                  )}>
+                    {showSignup && <Check size={14} className="text-white" />}
+                  </div>
+                  <span className="text-xs font-bold text-white/60 group-hover:text-white transition-colors">
+                    Criar conta para acompanhar meus pedidos
+                  </span>
+                  <input
+                    type="checkbox"
+                    className="hidden"
+                    checked={showSignup}
+                    onChange={e => setShowSignup(e.target.checked)}
+                  />
+                </label>
+
+                {showSignup && (
+                  <div className="mt-4 grid md:grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2 duration-300">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">E-mail</label>
+                      <input
+                        type="email"
+                        value={signupForm.email}
+                        onChange={e => setSignupForm(prev => ({ ...prev, email: e.target.value }))}
+                        className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:border-apollo-orange transition-all"
+                        placeholder="seu@email.com"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">Senha</label>
+                      <input
+                        type="password"
+                        value={signupForm.password}
+                        onChange={e => setSignupForm(prev => ({ ...prev, password: e.target.value }))}
+                        className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:border-apollo-orange transition-all"
+                        placeholder="Mínimo 6 caracteres"
+                      />
+                    </div>
+                    <p className="md:col-span-2 text-[11px] text-white/30 ml-1">
+                      Deixe em branco para continuar sem conta — seu pedido será registrado normalmente.
+                    </p>
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           {/* SEÇÃO 2: ENDEREÇO */}
