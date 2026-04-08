@@ -8,7 +8,7 @@ import { useUser } from '@/hooks/useUser'
 import { createClient } from '@/lib/supabase/client'
 import { placeOrder, saveAddress } from './actions/checkout-actions'
 import { LoginModal } from '@/components/client/LoginModal'
-import { MapPin, Truck, ShoppingBag, ChevronDown, Check, Loader2, ArrowLeft, Clock, Search } from 'lucide-react'
+import { MapPin, Truck, ShoppingBag, Check, Loader2, ArrowLeft, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { calculateDeliveryFee } from '@/lib/maps/distance'
 
@@ -40,7 +40,7 @@ export default function CheckoutPage() {
   const [loading, setLoading] = useState(false)
   const [calculatingFee, setCalculatingFee] = useState(false)
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false)
-  const [regions, setRegions] = useState<DeliveryRegion[]>([])
+  // const [regions, setRegions] = useState<DeliveryRegion[]>([])
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([])
 
   const [customerName, setCustomerName] = useState('')
@@ -66,8 +66,8 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'cash' | 'credit_card' | 'debit_card'>('pix')
   const [changeFor, setChangeFor] = useState('')
 
-  const [showSignup, setShowSignup] = useState(false)
-  const [signupForm, setSignupForm] = useState({ email: '', password: '' })
+  const [showSignup] = useState(false)
+  const [signupForm] = useState({ email: '', password: '' })
 
   const subtotal = items.reduce((acc, item) => acc + item.total_price, 0)
 
@@ -79,14 +79,14 @@ export default function CheckoutPage() {
   }, [profile])
 
   const fetchRegionsAndAddresses = useCallback(async () => {
-    const { data: regionsData } = await supabase
+    /* const { data: regionsData } = await supabase
       .from('delivery_regions')
       .select('*')
       .eq('tenant_id', TENANT_ID)
       .eq('is_active', true)
       .order('fee', { ascending: true })
 
-    if (regionsData) setRegions(regionsData as any)
+    if (regionsData) setRegions(regionsData as any) */
 
     if (user) {
       const { data: addrData } = await supabase

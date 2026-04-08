@@ -5,7 +5,7 @@
  */
 
 const TOMTOM_API_KEY = "rPEJoG15dtntubxA7insGisIOA7wwJ9Q";
-const PIZZARIA_ADDRESS = "Av. Jequitinhonha, 218 - Vera Cruz, Belo Horizonte - MG, 30285-130";
+// const PIZZARIA_ADDRESS = "Av. Jequitinhonha, 218 - Vera Cruz, Belo Horizonte - MG, 30285-130";
 const PIZZARIA_COORDS = { lat: -19.9191, lng: -43.9133 }; // Coordenadas aproximadas para Vera Cruz, BH
 const FEE_PER_KM = 1.0;
 
