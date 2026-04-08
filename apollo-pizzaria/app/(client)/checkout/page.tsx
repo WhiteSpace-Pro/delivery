@@ -31,11 +31,12 @@ interface SavedAddress {
   zipcode?: string
 }
 
+const supabase = createClient()
+
 export default function CheckoutPage() {
   const router = useRouter()
   const { items, clearCart } = useCart()
   const { user, profile } = useUser()
-  const supabase = createClient()
 
   const [loading, setLoading] = useState(false)
   const [calculatingFee, setCalculatingFee] = useState(false)
@@ -102,7 +103,7 @@ export default function CheckoutPage() {
         setSelectedAddressId('new')
       }
     }
-  }, [user, supabase])
+  }, [user])
 
   useEffect(() => {
     fetchRegionsAndAddresses()
