@@ -8,17 +8,18 @@ import { useUser } from '@/hooks/useUser'
 import { createClient } from '@/lib/supabase/client'
 import { placeOrder, saveAddress } from './actions/checkout-actions'
 import { LoginModal } from '@/components/client/LoginModal'
-import { MapPin, Truck, ShoppingBag, ChevronDown, Check, Loader2, ArrowLeft, Clock } from 'lucide-react'
+import { MapPin, Truck, ShoppingBag, Check, Loader2, ArrowLeft, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { calculateDeliveryFee } from '@/lib/maps/distance'
 
 const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 
-interface DeliveryRegion {
-  id: string
-  name: string
-  fee: number
-  estimated_time: number
-}
+// interface DeliveryRegion {
+//   id: string
+//   name: string
+//   fee: number
+//   estimated_time: number
+// }
 
 interface SavedAddress {
   id: string
@@ -27,17 +28,20 @@ interface SavedAddress {
   neighborhood: string
   complement: string | null
   delivery_fee: number
+  zipcode?: string
 }
+
+const supabase = createClient()
 
 export default function CheckoutPage() {
   const router = useRouter()
   const { items, clearCart } = useCart()
   const { user, profile } = useUser()
-  const supabase = createClient()
 
   const [loading, setLoading] = useState(false)
+  const [calculatingFee, setCalculatingFee] = useState(false)
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false)
-  const [regions, setRegions] = useState<DeliveryRegion[]>([])
+  // const [regions, setRegions] = useState<DeliveryRegion[]>([])
   const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([])
 
   const [customerName, setCustomerName] = useState('')
@@ -46,12 +50,16 @@ export default function CheckoutPage() {
   const [selectedAddressId, setSelectedAddressId] = useState<string | 'new'>('new')
 
   const [addressForm, setAddressForm] = useState({
+    zipcode: '',
     street: '',
     number: '',
     complement: '',
     neighborhood: '',
     regionId: '',
     fee: 0,
+    distance: 0,
+    lat: 0,
+    lng: 0,
     instructions: '',
     shouldSave: false
   })
@@ -59,8 +67,8 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'cash' | 'credit_card' | 'debit_card'>('pix')
   const [changeFor, setChangeFor] = useState('')
 
-  const [showSignup, setShowSignup] = useState(false)
-  const [signupForm, setSignupForm] = useState({ email: '', password: '' })
+  const [showSignup] = useState(false)
+  const [signupForm] = useState({ email: '', password: '' })
 
   const subtotal = items.reduce((acc, item) => acc + item.total_price, 0)
 
@@ -72,14 +80,14 @@ export default function CheckoutPage() {
   }, [profile])
 
   const fetchRegionsAndAddresses = useCallback(async () => {
-    const { data: regionsData } = await supabase
+    /* const { data: regionsData } = await supabase
       .from('delivery_regions')
       .select('*')
       .eq('tenant_id', TENANT_ID)
       .eq('is_active', true)
       .order('fee', { ascending: true })
 
-    if (regionsData) setRegions(regionsData as any)
+    if (regionsData) setRegions(regionsData as any) */
 
     if (user) {
       const { data: addrData } = await supabase
@@ -95,27 +103,50 @@ export default function CheckoutPage() {
         setSelectedAddressId('new')
       }
     }
-  }, [user, supabase])
+  }, [user])
 
   useEffect(() => {
     fetchRegionsAndAddresses()
   }, [fetchRegionsAndAddresses])
 
-  const selectedRegion = regions.find(r => r.id === addressForm.regionId)
   const deliveryFee = deliveryType === 'pickup' ? 0 :
     (selectedAddressId === 'new' ? addressForm.fee :
       (savedAddresses.find(a => a.id === selectedAddressId)?.delivery_fee || 0))
 
   const finalTotal = subtotal + deliveryFee
 
-  const handleRegionChange = (regionId: string) => {
-    const region = regions.find(r => r.id === regionId)
-    setAddressForm(prev => ({
-      ...prev,
-      regionId,
-      neighborhood: region?.name || '',
-      fee: Number(region?.fee) || 0
-    }))
+  const handleZipcodeSearch = async () => {
+    if (addressForm.zipcode.length < 8) return
+    
+    setCalculatingFee(true)
+    try {
+      // 1. Buscar dados do CEP (ViaCEP ou similar para preencher rua/bairro)
+      const cepResponse = await fetch(`https://viacep.com.br/ws/${addressForm.zipcode.replace(/\D/g, '')}/json/`)
+      const cepData = await cepResponse.json()
+      
+      if (cepData.erro) {
+        alert('CEP não encontrado')
+        return
+      }
+
+      // 2. Calcular frete pela distância usando Nominatim
+      const fullAddress = `${cepData.logradouro}, ${cepData.bairro}, ${cepData.localidade} - ${cepData.uf}, ${addressForm.zipcode}`
+      const result = await calculateDeliveryFee(fullAddress)
+      
+      setAddressForm(prev => ({
+        ...prev,
+        street: cepData.logradouro,
+        neighborhood: cepData.bairro,
+        fee: result.fee,
+        distance: result.distance,
+        lat: result.coords?.lat || 0,
+        lng: result.coords?.lng || 0
+      }))
+    } catch (error) {
+      console.error('Erro ao buscar CEP/Frete:', error)
+    } finally {
+      setCalculatingFee(false)
+    }
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -167,13 +198,15 @@ export default function CheckoutPage() {
               number: addressForm.number,
               complement: addressForm.complement,
               neighborhood: addressForm.neighborhood,
-              delivery_region_id: addressForm.regionId,
-              delivery_fee: addressForm.fee
-            })
+              delivery_fee: addressForm.fee,
+              zipcode: addressForm.zipcode,
+              lat: addressForm.lat,
+              lng: addressForm.lng
+            } as any)
             addressId = savedAddr.id
           } else if (!addressId) {
             // Fallback for anonymous or unsaved: store in instructions
-            const fullAddressText = `${addressForm.street}, ${addressForm.number}${addressForm.complement ? ` - ${addressForm.complement}` : ''} (${addressForm.neighborhood})`
+            const fullAddressText = `${addressForm.street}, ${addressForm.number}${addressForm.complement ? ` - ${addressForm.complement}` : ''} (${addressForm.neighborhood}) - CEP: ${addressForm.zipcode}`
             finalInstructions = `ENDEREÇO: ${fullAddressText}${addressForm.instructions ? ` | OBS: ${addressForm.instructions}` : ''}`
           }
         }
@@ -277,7 +310,7 @@ export default function CheckoutPage() {
           <section className="bg-[#1C1C1C] rounded-2xl p-6 border border-[#2A2A2A] shadow-xl">
             <div className="flex items-center gap-3 mb-6">
               <div className="w-8 h-8 rounded-full bg-apollo-orange/20 flex items-center justify-center text-apollo-orange font-bold text-sm">2</div>
-              <h2 className="text-lg font-bold">Entrega ou Retirada</h2>
+              <h2 className="text-lg font-bold">Entrega</h2>
             </div>
 
             <div className="flex bg-[#0D0D0D] rounded-2xl p-1 mb-8 border border-white/5">
@@ -354,6 +387,27 @@ export default function CheckoutPage() {
 
                 {(selectedAddressId === 'new' || savedAddresses.length === 0) && (
                   <div className="space-y-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                    <div className="space-y-1.5">
+                      <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">CEP</label>
+                      <div className="flex gap-2">
+                        <input
+                          required
+                          value={addressForm.zipcode}
+                          onChange={e => setAddressForm(prev => ({ ...prev, zipcode: e.target.value }))}
+                          className="flex-1 bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:border-apollo-orange transition-all"
+                          placeholder="00000-000"
+                        />
+                        <button
+                          type="button"
+                          onClick={handleZipcodeSearch}
+                          disabled={calculatingFee || addressForm.zipcode.length < 8}
+                          className="bg-apollo-orange hover:bg-apollo-orange/80 disabled:opacity-50 px-4 rounded-xl transition-all flex items-center justify-center"
+                        >
+                          {calculatingFee ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
+                        </button>
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-4 gap-4">
                       <div className="col-span-3 space-y-1.5">
                         <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">Rua</label>
@@ -380,20 +434,13 @@ export default function CheckoutPage() {
                     <div className="grid md:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
                             <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">Bairro</label>
-                            <div className="relative">
-                                <select
-                                    required
-                                    value={addressForm.regionId}
-                                    onChange={e => handleRegionChange(e.target.value)}
-                                    className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl pl-4 pr-10 py-3.5 text-sm appearance-none focus:outline-none focus:border-apollo-orange transition-all"
-                                >
-                                    <option value="">Selecione...</option>
-                                    {regions.map(r => (
-                                        <option key={r.id} value={r.id}>{r.name}</option>
-                                    ))}
-                                </select>
-                                <ChevronDown size={18} className="absolute right-4 top-1/2 -translate-y-1/2 text-white/20 pointer-events-none" />
-                            </div>
+                            <input
+                                required
+                                value={addressForm.neighborhood}
+                                onChange={e => setAddressForm(prev => ({ ...prev, neighborhood: e.target.value }))}
+                                className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:border-apollo-orange transition-all"
+                                placeholder="Seu bairro"
+                            />
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">Complemento</label>
@@ -406,13 +453,13 @@ export default function CheckoutPage() {
                         </div>
                     </div>
 
-                    {selectedRegion && (
+                    {addressForm.fee > 0 && (
                       <div className="bg-apollo-orange/10 border border-apollo-orange/20 rounded-xl p-4 flex items-center justify-between">
                         <div className="flex items-center gap-3">
-                            <Clock size={16} className="text-apollo-orange" />
-                            <span className="text-xs font-bold text-white/80">Tempo estimado: ~{selectedRegion.estimated_time} min</span>
+                            <Truck size={16} className="text-apollo-orange" />
+                            <span className="text-xs font-bold text-white/80">Distância: {addressForm.distance.toFixed(1)} km</span>
                         </div>
-                        <span className="text-sm font-bold text-apollo-orange">Taxa: R$ {selectedRegion.fee.toFixed(2).replace('.', ',')}</span>
+                        <span className="text-sm font-bold text-apollo-orange">Taxa: R$ {addressForm.fee.toFixed(2).replace('.', ',')}</span>
                       </div>
                     )}
 
@@ -478,115 +525,73 @@ export default function CheckoutPage() {
                   onClick={() => setPaymentMethod(method.id as any)}
                   className={cn(
                     "flex flex-col items-center justify-center gap-3 p-4 rounded-xl border transition-all duration-300",
-                    paymentMethod === method.id ? "bg-apollo-orange border-apollo-orange shadow-lg shadow-apollo-orange/10 scale-[1.02]" : "bg-[#0D0D0D] border-[#2A2A2A] text-white/30 hover:border-white/10"
+                    paymentMethod === method.id ? "bg-apollo-orange border-apollo-orange shadow-lg shadow-apollo-orange/20" : "bg-[#0D0D0D] border-[#2A2A2A] text-white/40 hover:text-white hover:border-white/10"
                   )}
                 >
                   <span className="text-2xl">{method.icon}</span>
-                  <span className="text-[10px] font-bold uppercase tracking-widest">{method.label}</span>
+                  <span className="text-xs font-bold uppercase tracking-widest">{method.label}</span>
                 </button>
               ))}
             </div>
 
             {paymentMethod === 'cash' && (
               <div className="space-y-1.5 animate-in slide-in-from-top-2 duration-300">
-                <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">Precisa de troco?</label>
-                <div className="relative">
-                    <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20 font-bold text-sm">R$</span>
-                    <input
-                        type="number"
-                        value={changeFor}
-                        onChange={e => setChangeFor(e.target.value)}
-                        className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl pl-12 pr-4 py-3.5 text-sm focus:outline-none focus:border-apollo-orange transition-all"
-                        placeholder="Ex: 100,00"
-                    />
-                </div>
+                <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">Troco para quanto?</label>
+                <input
+                  type="number"
+                  value={changeFor}
+                  onChange={e => setChangeFor(e.target.value)}
+                  className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:border-apollo-orange transition-all"
+                  placeholder="Ex: 50"
+                />
               </div>
             )}
           </section>
 
-          {/* SEÇÃO 4: CONTA OPCIONAL */}
-          {!user && customerName && customerPhone && (
-             <section className="bg-apollo-orange/5 rounded-2xl p-6 border border-dashed border-apollo-orange/30 overflow-hidden transition-all">
-               <button
-                type="button"
-                onClick={() => setShowSignup(!showSignup)}
-                className="w-full flex items-center justify-between text-left group"
-               >
-                 <div className="flex items-center gap-4">
-                  <div className="w-10 h-10 bg-apollo-orange/10 rounded-full flex items-center justify-center text-xl border border-apollo-orange/20">💾</div>
-                  <div>
-                    <h3 className="text-sm font-bold text-apollo-orange">Salvar dados para a próxima vez?</h3>
-                    <p className="text-[10px] text-white/40 uppercase tracking-wider font-bold">Crie uma conta em segundos.</p>
-                  </div>
-                 </div>
-                 <ChevronDown size={20} className={cn("text-apollo-orange transition-transform duration-500", showSignup && "rotate-180")} />
-               </button>
+          {/* RESUMO E BOTÃO FINAL */}
+          <div className="bg-[#1C1C1C] rounded-2xl p-6 border border-[#2A2A2A] shadow-2xl sticky bottom-4">
+            <div className="space-y-2 mb-6">
+              <div className="flex justify-between text-sm">
+                <span className="text-white/40">Subtotal</span>
+                <span className="font-bold">R$ {subtotal.toFixed(2).replace('.', ',')}</span>
+              </div>
+              {deliveryType === 'delivery' && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-white/40">Taxa de Entrega</span>
+                  <span className="text-apollo-orange font-bold">+ R$ {deliveryFee.toFixed(2).replace('.', ',')}</span>
+                </div>
+              )}
+              <div className="h-px bg-white/5 my-2" />
+              <div className="flex justify-between items-center">
+                <span className="text-lg font-bold">Total</span>
+                <span className="text-2xl font-playfair font-bold text-apollo-orange italic">R$ {finalTotal.toFixed(2).replace('.', ',')}</span>
+              </div>
+            </div>
 
-               {showSignup && (
-                  <div className="pt-6 space-y-4 border-t border-apollo-orange/10 mt-6 animate-in fade-in slide-in-from-top-2 duration-500">
-                     <div className="grid md:grid-cols-2 gap-4">
-                        <div className="space-y-1.5">
-                            <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">E-mail</label>
-                            <input
-                                type="email"
-                                value={signupForm.email}
-                                onChange={e => setSignupForm(prev => ({ ...prev, email: e.target.value }))}
-                                className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:border-apollo-orange transition-all"
-                                placeholder="seu@email.com"
-                            />
-                        </div>
-                        <div className="space-y-1.5">
-                            <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">Senha</label>
-                            <input
-                                type="password"
-                                value={signupForm.password}
-                                onChange={e => setSignupForm(prev => ({ ...prev, password: e.target.value }))}
-                                className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:border-apollo-orange transition-all"
-                                placeholder="Mín. 6 caracteres"
-                            />
-                        </div>
-                     </div>
-                     <p className="text-[10px] text-white/40 text-center italic">Ao finalizar o pedido, sua conta será criada automaticamente.</p>
-                  </div>
-               )}
-             </section>
-          )}
-
-          <div className="pt-8 pb-20">
-             <div className="bg-[#1C1C1C] rounded-2xl p-6 border border-[#2A2A2A] mb-4 space-y-3">
-                 <div className="flex justify-between text-sm">
-                     <span className="text-white/40">Subtotal</span>
-                     <span className="font-bold">R$ {subtotal.toFixed(2).replace('.', ',')}</span>
-                 </div>
-                 {deliveryType === 'delivery' && (
-                    <div className="flex justify-between text-sm">
-                        <span className="text-white/40">Taxa de Entrega</span>
-                        <span className="font-bold text-apollo-orange">+ R$ {deliveryFee.toFixed(2).replace('.', ',')}</span>
-                    </div>
-                 )}
-                 <div className="flex justify-between items-center pt-3 border-t border-white/5">
-                     <span className="text-lg font-bold">Total</span>
-                     <span className="text-2xl font-playfair font-bold italic text-apollo-orange">R$ {finalTotal.toFixed(2).replace('.', ',')}</span>
-                 </div>
-             </div>
-
-             <button
-              disabled={loading}
-              className="w-full bg-apollo-orange hover:bg-apollo-orange/90 text-white font-bold py-5 rounded-2xl shadow-2xl shadow-apollo-orange/20 transition-all active:scale-[0.98] flex items-center justify-center gap-3 disabled:opacity-50 disabled:active:scale-100"
+            <button
+              type="submit"
+              disabled={loading || (deliveryType === 'delivery' && !deliveryFee && selectedAddressId === 'new')}
+              className="w-full bg-apollo-orange hover:bg-apollo-orange/90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl shadow-xl shadow-apollo-orange/20 transition-all flex items-center justify-center gap-3"
             >
-              {loading ? <Loader2 className="animate-spin" size={24} /> : <Check size={24} />}
-              <span className="text-lg">
-                {loading ? 'Processando pedido...' : 'Finalizar Pedido'}
-              </span>
+              {loading ? (
+                <>
+                  <Loader2 className="animate-spin" size={20} />
+                  Processando...
+                </>
+              ) : (
+                <>
+                  <Check size={20} />
+                  Finalizar Pedido
+                </>
+              )}
             </button>
           </div>
         </form>
       </div>
 
-      <LoginModal
-        isOpen={isLoginModalOpen}
-        onClose={() => setIsLoginModalOpen(false)}
-        onSuccess={() => setIsLoginModalOpen(false)}
+      <LoginModal 
+        isOpen={isLoginModalOpen} 
+        onClose={() => setIsLoginModalOpen(false)} 
       />
     </div>
   )

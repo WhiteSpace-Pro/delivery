@@ -34,11 +34,12 @@ interface Order {
 const FALLBACK_PIX_KEY = "31985375524";
 const FALLBACK_PIX_TYPE = "telefone";
 
+const supabase = createClient();
+
 export default function OrderPage() {
   const { id } = useParams();
   const router = useRouter();
   // const { tenantId } = useUser();
-  const supabase = createClient();
 
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
@@ -92,7 +93,7 @@ export default function OrderPage() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [id, router, supabase]);
+  }, [id, router]);
 
   const handleCopyPix = () => {
     navigator.clipboard.writeText(pixKey);
