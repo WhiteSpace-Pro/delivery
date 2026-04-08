@@ -14,12 +14,12 @@ import { calculateDeliveryFee } from '@/lib/maps/distance'
 
 const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 
-interface DeliveryRegion {
-  id: string
-  name: string
-  fee: number
-  estimated_time: number
-}
+// interface DeliveryRegion {
+//   id: string
+//   name: string
+//   fee: number
+//   estimated_time: number
+// }
 
 interface SavedAddress {
   id: string
