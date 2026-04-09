@@ -22,7 +22,7 @@ export default async function MyOrdersPage() {
   try {
     const { data, error } = await supabaseAdmin
       .from('orders')
-      .select(`*, order_items(*, products(name))`)
+      .select(`*, order_items(*, products:products!order_items_product_id_fkey(name))`)
       .eq('customer_id', user.id)
       .eq('tenant_id', process.env.NEXT_PUBLIC_TENANT_ID_APOLLO!)
       .order('created_at', { ascending: false })
@@ -95,7 +95,7 @@ export default async function MyOrdersPage() {
 
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const itemsSummary = (order.order_items as any[])
-                .map((item) => `${item.quantity}× ${item.products?.name}`)
+                .map((item) => `${item.quantity}× ${item.products?.name || 'Produto'}`)
                 .join(', ')
 
               return (
