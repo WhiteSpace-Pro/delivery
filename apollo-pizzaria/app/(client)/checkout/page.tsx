@@ -186,14 +186,23 @@ export default function CheckoutPage() {
 
       setAddressForm(prev => ({ ...prev, street, neighborhood }))
 
-      // 2. Geocode the customer address
-      const addressQuery = `${street || neighborhood}, ${city}, ${uf}, Brasil`
-      const geocodeRes = await fetch(`/api/geocode?address=${encodeURIComponent(addressQuery)}`)
+      // 2. Geocode — pass all address parts separately for precise query
+      // number comes from the form field, not ViaCEP
+      const currentNumber = addressForm.number
+      const params = new URLSearchParams({
+        street,
+        number: currentNumber,
+        neighborhood,
+        city,
+        state: uf,
+      })
+      const geocodeRes = await fetch(`/api/geocode?${params.toString()}`)
       const geocode = await geocodeRes.json()
 
       if (geocode.lat != null && geocode.lng != null) {
         // 3. Haversine distance
         const distKm = haversineKm(STORE_LAT, STORE_LNG, geocode.lat, geocode.lng)
+        console.log('[checkout] distância km:', distKm.toFixed(2))
         const fee = calcFee(distKm)
         const estimatedTime = calcTime(distKm)
 
