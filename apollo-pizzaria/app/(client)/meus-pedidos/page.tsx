@@ -13,8 +13,6 @@ export default async function MyOrdersPage() {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  console.log('[meus-pedidos] user.id:', user?.id ?? 'NOT AUTHENTICATED')
-
   if (!user) redirect('/')
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -22,14 +20,20 @@ export default async function MyOrdersPage() {
   try {
     const { data, error } = await supabaseAdmin
       .from('orders')
-      .select(`*, order_items(*, products(name))`)
+      .select(`
+        *,
+        order_items(
+          *,
+          products!order_items_product_id_fkey(name)
+        )
+      `)
       .eq('customer_id', user.id)
       .eq('tenant_id', process.env.NEXT_PUBLIC_TENANT_ID_APOLLO!)
       .order('created_at', { ascending: false })
 
-    console.log('[meus-pedidos] orders count:', data?.length ?? 0)
-    console.log('[meus-pedidos] error:', JSON.stringify(error))
-    console.log('[meus-pedidos] tenant_id env:', process.env.NEXT_PUBLIC_TENANT_ID_APOLLO)
+    if (error) {
+      console.error('[meus-pedidos] Query error:', error)
+    }
 
     orders = data
   } catch (e) {
@@ -95,7 +99,7 @@ export default async function MyOrdersPage() {
 
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               const itemsSummary = (order.order_items as any[])
-                .map((item) => `${item.quantity}× ${item.products?.name}`)
+                .map((item) => `${item.quantity}× ${item.products?.name || 'Item'}`)
                 .join(', ')
 
               return (
