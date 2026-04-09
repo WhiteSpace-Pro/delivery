@@ -44,26 +44,30 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
 
-    const { data: ordersData } = await supabase
+    const { data: ordersData, error: ordersError } = await supabase
       .from('orders')
-      .select('*, order_items(*, products(name, type)), profiles!orders_customer_id_fkey(*)')
+      .select('*, order_items(*, products!order_items_product_id_fkey(name, type)), profiles!orders_customer_id_fkey(*)')
       .eq('tenant_id', tenantId)
       .gte('created_at', today.toISOString())
       .neq('status', 'cancelled')
       .order('created_at', { ascending: true })
 
-    if (ordersData) {
+    if (ordersError) {
+      console.error('Error fetching orders:', ordersError)
+    } else if (ordersData) {
       setOrders(ordersData as unknown as OrderWithItems[])
     }
 
-    const { data: notifications } = await supabase
+    const { data: notifications, error: notifError } = await supabase
       .from('notifications')
       .select('order_id' as any)
       .eq('tenant_id', tenantId)
       .eq('type' as any, 'receipt_uploaded')
       .eq('is_read' as any, false)
 
-    if (notifications) {
+    if (notifError) {
+      console.error('Error fetching notifications:', notifError)
+    } else if (notifications) {
       setPendingReceipts(new Set(notifications.map((n: any) => n.order_id)))
     }
   }, [tenantId, supabase])
@@ -78,13 +82,15 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
         table: 'orders',
         filter: `tenant_id=eq.${tenantId}`
       }, async (payload) => {
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('orders')
-          .select('*, order_items(*, products(name, type)), profiles!orders_customer_id_fkey(*)')
+          .select('*, order_items(*, products!order_items_product_id_fkey(name, type)), profiles!orders_customer_id_fkey(*)')
           .eq('id', payload.new.id)
           .single()
 
-        if (data) {
+        if (error) {
+          console.error('Error fetching new order:', error)
+        } else if (data) {
           setOrders(prev => [...prev, data as unknown as OrderWithItems])
           if (data.status === 'pending') playNotificationSound()
         }
