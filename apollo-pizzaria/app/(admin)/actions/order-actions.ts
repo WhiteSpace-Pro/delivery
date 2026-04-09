@@ -1,14 +1,23 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use server'
 
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { OrderStatus } from '@/types/enums'
 import { revalidatePath } from 'next/cache'
 
 const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 
-export async function updateOrderStatus(orderId: string, status: OrderStatus) {
+async function requireAdmin() {
   const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
+  if (!profile || !['admin', 'kitchen'].includes(profile.role)) throw new Error('Forbidden')
+}
+
+export async function updateOrderStatus(orderId: string, status: OrderStatus) {
+  await requireAdmin()
 
   const now = new Date().toISOString()
   const updateData: any = { status }
@@ -19,9 +28,9 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus) {
   if (status === 'out_for_delivery') updateData.dispatched_at = now
   if (status === 'delivered') updateData.delivered_at = now
 
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from('orders')
-    .update(updateData)
+    .update(updateData as any)
     .eq('id', orderId)
     .eq('tenant_id', TENANT_ID)
 
@@ -34,18 +43,17 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus) {
 }
 
 export async function assignDriverAndSend(orderId: string, driverId: string | null) {
-  const supabase = createClient()
+  await requireAdmin()
 
   const now = new Date().toISOString()
-  const updateData: any = {
-    assigned_delivery_id: driverId,
-    status: 'out_for_delivery',
-    dispatched_at: now
-  }
 
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from('orders')
-    .update(updateData)
+    .update({
+      assigned_delivery_id: driverId,
+      status: 'out_for_delivery',
+      dispatched_at: now,
+    } as any)
     .eq('id', orderId)
     .eq('tenant_id', TENANT_ID)
 
@@ -58,9 +66,9 @@ export async function assignDriverAndSend(orderId: string, driverId: string | nu
 }
 
 export async function toggleStoreStatus(currentStatus: boolean) {
-  const supabase = createClient()
+  await requireAdmin()
 
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from('tenants')
     .update({ is_active: !currentStatus } as any)
     .eq('id', TENANT_ID)
@@ -75,45 +83,30 @@ export async function toggleStoreStatus(currentStatus: boolean) {
 
 export async function getReceiptSignedUrl(receiptPath: string) {
   const supabase = createClient()
-
-  const { data, error } = await supabase.storage
-    .from('receipts')
-    .createSignedUrl(receiptPath, 60)
-
-  if (error) {
-    console.error('Error creating signed URL:', error)
-    throw new Error('Failed to get receipt URL')
-  }
-
+  const { data, error } = await supabase.storage.from('receipts').createSignedUrl(receiptPath, 60)
+  if (error) throw new Error('Failed to get receipt URL')
   return data.signedUrl
 }
 
 export async function markNotificationAsRead(orderId: string) {
-  const supabase = createClient()
+  await requireAdmin()
 
-  const { error } = await supabase
+  await supabaseAdmin
     .from('notifications')
     .update({ is_read: true } as any)
     .eq('order_id' as any, orderId)
     .eq('type' as any, 'receipt_uploaded')
     .eq('tenant_id', TENANT_ID)
 
-  if (error) {
-    console.error('Error marking notification as read:', error)
-    throw new Error('Failed to mark notification as read')
-  }
-
   revalidatePath('/admin', 'page')
 }
 
 export async function cancelOrder(orderId: string) {
-  const supabase = createClient()
+  await requireAdmin()
 
-  const updateData: any = { status: 'cancelled' }
-
-  const { error } = await supabase
+  const { error } = await supabaseAdmin
     .from('orders')
-    .update(updateData)
+    .update({ status: 'cancelled' } as any)
     .eq('id', orderId)
     .eq('tenant_id', TENANT_ID)
 

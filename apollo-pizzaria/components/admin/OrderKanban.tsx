@@ -21,6 +21,8 @@ import {
 import { sortableKeyboardCoordinates } from '@dnd-kit/sortable'
 import { DroppableColumn } from './DroppableColumn'
 
+const supabaseModule = createClient()
+
 const COLUMNS: { key: OrderStatus; label: string; color: string }[] = [
   { key: 'pending', label: 'Novo', color: 'bg-red-500' },
   { key: 'confirmed', label: 'Confirmado', color: 'bg-blue-500' },
@@ -36,7 +38,7 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
   const [selectedOrder, setSelectedOrder] = useState<OrderWithItems | null>(null)
   const [assignModalOrder, setAssignModalOrder] = useState<OrderWithItems | null>(null)
 
-  const supabase = createClient()
+  const supabase = supabaseModule
 
   const fetchInitialData = useCallback(async () => {
     const today = new Date()
