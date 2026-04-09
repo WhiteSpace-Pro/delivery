@@ -4,6 +4,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 // import { useUser } from "@/hooks/useUser";
+// Note: initial order fetch uses /api/orders/[id] (supabaseAdmin) to bypass RLS for anonymous users
 import { uploadReceipt } from "@/lib/upload";
 import {
   CheckCircle2,
@@ -58,20 +59,17 @@ export default function OrderPage() {
     async function fetchOrder() {
       if (!id) return;
 
-      const { data, error } = await supabase
-        .from('orders')
-        .select('*')
-        .eq('id', id as string)
-        .single();
+      const res = await fetch(`/api/orders/${id as string}`);
 
-      if (error || !data) {
-        console.error("[Apollo/order] Order not found:", error);
+      if (!res.ok) {
+        console.error("[Apollo/order] Order not found:", res.status);
         router.push("/cardapio");
         return;
       }
 
-      setOrder(data as unknown as Order);
-      setUploadSuccess(!!(data as unknown as Order).receipt_url);
+      const data: Order = await res.json();
+      setOrder(data);
+      setUploadSuccess(!!data.receipt_url);
       setLoading(false);
     }
 
