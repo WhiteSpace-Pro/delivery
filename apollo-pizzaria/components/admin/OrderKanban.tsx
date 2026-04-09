@@ -46,7 +46,7 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
 
     const { data: ordersData } = await supabase
       .from('orders')
-      .select('*, order_items(*), profiles!orders_customer_id_fkey(*)')
+      .select('*, order_items(*, products(name, type)), profiles!orders_customer_id_fkey(*)')
       .eq('tenant_id', tenantId)
       .gte('created_at', today.toISOString())
       .neq('status', 'cancelled')
@@ -80,7 +80,7 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
       }, async (payload) => {
         const { data } = await supabase
           .from('orders')
-          .select('*, order_items(*), profiles!orders_customer_id_fkey(*)')
+          .select('*, order_items(*, products(name, type)), profiles!orders_customer_id_fkey(*)')
           .eq('id', payload.new.id)
           .single()
 

@@ -43,3 +43,7 @@ digest: "2045141176"
  GET / 500 in 10406ms
  ✓ Compiled in 988ms (831 modules)
 <w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (215kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+ ✓ Compiled in 6.2s (831 modules)
+ ✓ Compiled in 1912ms (831 modules)
+ ✓ Compiled in 554ms (831 modules)
+ ✓ Compiled in 690ms (831 modules)

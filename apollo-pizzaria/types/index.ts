@@ -8,8 +8,15 @@ export type Profile = Database['public']['Tables']['profiles']['Row'];
 export type Order = Database['public']['Tables']['orders']['Row'];
 export type OrderItem = Database['public']['Tables']['order_items']['Row'];
 
+export interface OrderItemWithProduct extends OrderItem {
+  products: {
+    name: string;
+    type: Database['public']['Enums']['product_type'];
+  } | null;
+}
+
 export interface OrderWithItems extends Order {
-  order_items: OrderItem[];
+  order_items: OrderItemWithProduct[];
   profiles: Profile;
 }
 
