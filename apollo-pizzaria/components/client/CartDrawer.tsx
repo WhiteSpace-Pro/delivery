@@ -22,11 +22,13 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
 
   const subtotal = items.reduce((sum, item) => sum + item.total_price, 0);
 
-  const handleGoToCheckout = () => {
+  const handleGoToCheckout = async () => {
     if (user) {
       onClose();
       router.push('/checkout');
     } else {
+      onClose();
+      await new Promise(r => setTimeout(r, 300));
       setLoginOpen(true);
     }
   };
