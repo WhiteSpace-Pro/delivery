@@ -5,7 +5,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { createClient } from '@/lib/supabase/client'
-import { createProfile } from '@/app/(client)/checkout/actions/checkout-actions'
+
 import { motion, AnimatePresence } from 'framer-motion'
 import { Loader2, ArrowRight, ArrowLeft, User, Lock, Mail, Phone } from 'lucide-react'
 
@@ -172,11 +172,16 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
       })
       if (signUpError) throw signUpError
       if (authData.user) {
-        await createProfile({
-          id: authData.user.id,
-          full_name: regFullName,
-          phone: regPhone,
-          tenant_id: TENANT_ID,
+        await fetch('/api/auth/create-profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            user_id: authData.user.id,
+            full_name: regFullName,
+            email: emailToUse,
+            phone: regPhone || null,
+            tenant_id: TENANT_ID,
+          }),
         })
       }
       handleSuccess()

@@ -76,6 +76,20 @@ interface PlaceOrderParams {
 }
 
 export async function placeOrder(params: PlaceOrderParams) {
+  // 0. Ensure profile exists — upsert with minimal data to avoid 406 on SELECT
+  await supabaseAdmin
+    .from('profiles')
+    .upsert(
+      {
+        id: params.customer_id,
+        tenant_id: TENANT_ID,
+        role: 'customer',
+        full_name: params.customer_name ?? null,
+        is_active: true,
+      } as never,
+      { onConflict: 'id', ignoreDuplicates: true }
+    )
+
   // 1. Create order
   const { data: order, error: orderError } = await supabaseAdmin
     .from('orders')
