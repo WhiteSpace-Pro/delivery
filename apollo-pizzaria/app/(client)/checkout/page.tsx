@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 import { useCart } from '@/contexts/CartContext'
 import { useUser } from '@/hooks/useUser'
 import { createClient } from '@/lib/supabase/client'
-import { placeOrder, saveAddress } from './actions/checkout-actions'
+import { placeOrder, saveAddress, createProfile } from './actions/checkout-actions'
 import { LoginModal } from '@/components/client/LoginModal'
 import { MapPin, Truck, ShoppingBag, Check, Loader2, ArrowLeft, Search } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -174,14 +174,12 @@ export default function CheckoutPage() {
         if (signUpError) throw signUpError
         if (authData.user) {
           currentUserId = authData.user.id
-          await supabase.from('profiles').upsert({
+          await createProfile({
             id: authData.user.id,
             full_name: customerName,
             phone: customerPhone,
             tenant_id: TENANT_ID,
-            role: 'customer',
-            is_active: true
-          }, { onConflict: 'id' })
+          })
         }
       }
 

@@ -4,6 +4,47 @@
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+export async function createProfile(params: {
+  id: string
+  full_name: string
+  phone: string
+  tenant_id: string
+}) {
+  await supabaseAdmin
+    .from('profiles')
+    .upsert({
+      id: params.id,
+      full_name: params.full_name,
+      phone: params.phone,
+      tenant_id: params.tenant_id,
+      role: 'customer',
+      is_active: true,
+    }, { onConflict: 'id' })
+}
+
+export async function confirmReceiptUpload(
+  orderId: string,
+  receiptPath: string,
+  tenantId: string
+) {
+  const { error: updateError } = await supabaseAdmin
+    .from('orders')
+    .update({ receipt_url: receiptPath } as never)
+    .eq('id', orderId)
+
+  if (updateError) throw new Error('Erro ao vincular o comprovante ao pedido.')
+
+  await supabaseAdmin
+    .from('notifications')
+    .insert({
+      tenant_id: tenantId,
+      type: 'order_status',
+      title: 'Comprovante recebido',
+      message: `Comprovante Pix enviado para o pedido #${orderId.substring(0, 8)}`,
+      is_read: false,
+    } as never)
+}
+
 const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 
 interface PlaceOrderParams {

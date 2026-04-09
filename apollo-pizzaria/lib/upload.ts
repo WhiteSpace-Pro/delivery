@@ -1,4 +1,5 @@
 import { createClient } from "@/lib/supabase/client";
+import { confirmReceiptUpload } from "@/app/(client)/checkout/actions/checkout-actions";
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
@@ -47,37 +48,8 @@ export async function uploadReceipt(orderId: string, file: File, tenantId: strin
       throw new Error("Erro ao fazer upload do arquivo para o servidor.");
     }
 
-    // 3. Update orders table
-    /* eslint-disable @typescript-eslint/no-explicit-any */
-    const { error: updateError } = await supabase
-      .from('orders')
-      .update({ receipt_url: uploadData.path } as any)
-      .eq('id', orderId);
-
-    if (updateError) {
-      console.error("[Apollo/upload] Database update error:", updateError);
-      throw new Error("Erro ao vincular o comprovante ao pedido.");
-    }
-
-    // 4. Send notification (Fire and forget-ish)
-    try {
-      const { error: notifyError } = await supabase
-        .from('notifications')
-        .insert({
-          tenant_id: tenantId,
-          type: 'receipt_uploaded',
-          order_id: orderId,
-          message: `Comprovante Pix enviado para o pedido #${orderId.substring(0, 8)}`,
-          read: false
-        } as any);
-
-      if (notifyError) {
-        console.warn("[Apollo/notify] Failed to insert notification:", notifyError);
-      }
-    } catch (nErr) {
-      console.warn("[Apollo/notify] Unexpected error inserting notification:", nErr);
-    }
-    /* eslint-enable @typescript-eslint/no-explicit-any */
+    // 3. Update order + insert notification via Server Action (supabaseAdmin — bypasses RLS)
+    await confirmReceiptUpload(orderId, uploadData.path, tenantId);
 
     return { success: true, path: uploadData.path };
   } catch (error) {
