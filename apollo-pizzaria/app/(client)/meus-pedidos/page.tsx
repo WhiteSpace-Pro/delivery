@@ -1,10 +1,9 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { cn } from '@/lib/utils'
 import { ChevronRight, ShoppingBag, ArrowLeft } from 'lucide-react'
 import Link from 'next/link'
-
-const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 
 export default async function MyOrdersPage() {
   const supabase = createClient()
@@ -12,7 +11,7 @@ export default async function MyOrdersPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/')
 
-  const { data: orders } = await supabase
+  const { data: orders } = await supabaseAdmin
     .from('orders')
     .select(`
       *,
@@ -22,7 +21,7 @@ export default async function MyOrdersPage() {
       )
     `)
     .eq('customer_id', user.id)
-    .eq('tenant_id', TENANT_ID)
+    .eq('tenant_id', process.env.NEXT_PUBLIC_TENANT_ID_APOLLO!)
     .order('created_at', { ascending: false })
 
   const statusMap: Record<string, { label: string; color: string }> = {
