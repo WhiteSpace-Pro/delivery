@@ -17,21 +17,25 @@ export default async function MyOrdersPage() {
 
   if (!user) redirect('/')
 
-  const { data: orders, error } = await supabaseAdmin
-    .from('orders')
-    .select(`
-      *,
-      items:order_items(
-        *,
-        product:products(name)
-      )
-    `)
-    .eq('customer_id', user.id)
-    .eq('tenant_id', process.env.NEXT_PUBLIC_TENANT_ID_APOLLO!)
-    .order('created_at', { ascending: false })
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let orders: any[] | null = null
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('orders')
+      .select(`*, items:order_items(*, product:products(name))`)
+      .eq('customer_id', user.id)
+      .eq('tenant_id', process.env.NEXT_PUBLIC_TENANT_ID_APOLLO!)
+      .order('created_at', { ascending: false })
 
-  console.log('[meus-pedidos] orders count:', orders?.length ?? 0)
-  console.log('[meus-pedidos] error:', error)
+    console.log('[meus-pedidos] orders count:', data?.length ?? 0)
+    console.log('[meus-pedidos] error:', JSON.stringify(error))
+    console.log('[meus-pedidos] tenant_id env:', process.env.NEXT_PUBLIC_TENANT_ID_APOLLO)
+
+    orders = data
+  } catch (e) {
+    console.error('[meus-pedidos] EXCEPTION:', e)
+    return <div className="min-h-screen bg-[#0D0D0D] text-white flex items-center justify-center">Erro ao carregar pedidos</div>
+  }
 
   const statusMap: Record<string, { label: string; color: string }> = {
     pending:          { label: 'Pendente',         color: 'bg-white/10 text-white/60' },
