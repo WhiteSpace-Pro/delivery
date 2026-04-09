@@ -22,7 +22,7 @@ export default async function MyOrdersPage() {
   try {
     const { data, error } = await supabaseAdmin
       .from('orders')
-      .select(`*, items:order_items(*, product:products(name))`)
+      .select(`*, order_items(*, products(name))`)
       .eq('customer_id', user.id)
       .eq('tenant_id', process.env.NEXT_PUBLIC_TENANT_ID_APOLLO!)
       .order('created_at', { ascending: false })
@@ -94,8 +94,8 @@ export default async function MyOrdersPage() {
               const status = statusMap[order.status] ?? statusMap.pending
 
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
-              const itemsSummary = (order.items as any[])
-                .map((item) => `${item.quantity}× ${item.product?.name}`)
+              const itemsSummary = (order.order_items as any[])
+                .map((item) => `${item.quantity}× ${item.products?.name}`)
                 .join(', ')
 
               return (
