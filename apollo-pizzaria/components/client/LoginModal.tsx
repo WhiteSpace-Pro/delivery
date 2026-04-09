@@ -178,7 +178,6 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
           body: JSON.stringify({
             user_id: authData.user.id,
             full_name: regFullName,
-            email: emailToUse,
             phone: regPhone || null,
             tenant_id: TENANT_ID,
           }),
