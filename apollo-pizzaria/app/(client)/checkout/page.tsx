@@ -14,6 +14,27 @@ import { cn } from '@/lib/utils'
 const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 const supabase = createClient()
 
+const STORE_LAT = -19.9558
+const STORE_LNG = -43.9275
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
+
+function calcFee(distKm: number): number {
+  return Math.max(2, Math.ceil(distKm))
+}
+
+function calcTime(distKm: number): number {
+  return Math.max(20, Math.round(distKm * 3))
+}
+
 interface SavedAddress {
   id: string
   label: string | null
@@ -150,15 +171,74 @@ export default function CheckoutPage() {
     if (cep.length < 8) return
     setCalculatingFee(true)
     try {
-      const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`)
-      const data = await response.json()
-      if (data.erro) { alert('CEP não encontrado'); return }
-      setAddressForm(prev => ({
-        ...prev,
-        street: data.logradouro || '',
-        neighborhood: data.bairro || '',
-      }))
-      lookupRegion(data.bairro || '')
+      // 1. ViaCEP — fill address fields
+      const viacepRes = await fetch(`https://viacep.com.br/ws/${cep}/json/`)
+      const viacep = await viacepRes.json()
+      if (viacep.erro) {
+        setAddressForm(prev => ({ ...prev, regionNotFound: true, fee: 0, estimatedTime: 0 }))
+        return
+      }
+
+      const street = viacep.logradouro || ''
+      const neighborhood = viacep.bairro || ''
+      const city = viacep.localidade || 'Belo Horizonte'
+      const uf = viacep.uf || 'MG'
+
+      setAddressForm(prev => ({ ...prev, street, neighborhood }))
+
+      // 2. Geocode the customer address
+      const addressQuery = `${street || neighborhood}, ${city}, ${uf}, Brasil`
+      const geocodeRes = await fetch(`/api/geocode?address=${encodeURIComponent(addressQuery)}`)
+      const geocode = await geocodeRes.json()
+
+      if (geocode.lat != null && geocode.lng != null) {
+        // 3. Haversine distance
+        const distKm = haversineKm(STORE_LAT, STORE_LNG, geocode.lat, geocode.lng)
+        const fee = calcFee(distKm)
+        const estimatedTime = calcTime(distKm)
+
+        // 4. Coverage check: compare against max fee in delivery_regions
+        const maxRegionFee = regions.length > 0
+          ? Math.max(...regions.map(r => r.fee))
+          : 15
+
+        if (fee > maxRegionFee) {
+          setAddressForm(prev => ({
+            ...prev,
+            street,
+            neighborhood,
+            regionId: '',
+            fee: 0,
+            estimatedTime: 0,
+            lat: geocode.lat,
+            lng: geocode.lng,
+            regionNotFound: true,
+          }))
+          return
+        }
+
+        // Find nearest region for ID reference (optional)
+        const matchedRegion = regions.find(r =>
+          r.name.toLowerCase().includes(neighborhood.toLowerCase()) ||
+          neighborhood.toLowerCase().includes(r.name.toLowerCase())
+        )
+
+        setAddressForm(prev => ({
+          ...prev,
+          street,
+          neighborhood,
+          regionId: matchedRegion?.id || '',
+          fee,
+          estimatedTime,
+          lat: geocode.lat,
+          lng: geocode.lng,
+          regionNotFound: false,
+        }))
+      } else {
+        // 5. Geocoding failed — fallback to neighborhood lookup in delivery_regions
+        setAddressForm(prev => ({ ...prev, street, neighborhood }))
+        lookupRegion(neighborhood)
+      }
     } catch {
       console.error('Erro ao buscar CEP')
     } finally {
@@ -395,9 +475,12 @@ export default function CheckoutPage() {
                           type="button"
                           onClick={handleZipcodeSearch}
                           disabled={calculatingFee || addressForm.zipcode.replace(/\D/g, '').length < 8}
-                          className="bg-apollo-orange hover:bg-apollo-orange/80 disabled:opacity-40 px-4 rounded-xl transition-all flex items-center"
+                          className="bg-apollo-orange hover:bg-apollo-orange/80 disabled:opacity-40 px-4 rounded-xl transition-all flex items-center gap-2 text-xs font-bold whitespace-nowrap"
                         >
-                          {calculatingFee ? <Loader2 size={20} className="animate-spin" /> : <Search size={20} />}
+                          {calculatingFee
+                            ? <><Loader2 size={16} className="animate-spin" /><span className="hidden sm:inline">Calculando...</span></>
+                            : <Search size={20} />
+                          }
                         </button>
                       </div>
                     </div>
@@ -450,20 +533,26 @@ export default function CheckoutPage() {
                       </div>
                     </div>
 
-                    {/* Delivery region feedback */}
-                    {addressForm.fee > 0 && (
+                    {/* Delivery fee feedback */}
+                    {calculatingFee && (
+                      <div className="bg-white/5 border border-white/5 rounded-xl p-3 flex items-center gap-2">
+                        <Loader2 size={16} className="text-apollo-orange animate-spin" />
+                        <span className="text-xs text-white/50">Calculando taxa de entrega...</span>
+                      </div>
+                    )}
+                    {!calculatingFee && addressForm.fee > 0 && (
                       <div className="bg-apollo-orange/10 border border-apollo-orange/20 rounded-xl p-3 flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <Truck size={16} className="text-apollo-orange" />
-                          <span className="text-xs text-white/70">Estimativa: ~{addressForm.estimatedTime} min</span>
+                          <span className="text-xs text-white/70">~{addressForm.estimatedTime} min</span>
                         </div>
                         <span className="text-sm font-bold text-apollo-orange">Taxa: R$ {addressForm.fee.toFixed(2).replace('.', ',')}</span>
                       </div>
                     )}
-                    {addressForm.regionNotFound && (
+                    {!calculatingFee && addressForm.regionNotFound && (
                       <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
                         <AlertCircle size={16} className="text-red-400 flex-shrink-0" />
-                        <span className="text-xs text-red-400">Não entregamos neste bairro ainda.</span>
+                        <span className="text-xs text-red-400">Fora da área de entrega.</span>
                       </div>
                     )}
 
