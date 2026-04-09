@@ -30,10 +30,10 @@ export async function getDriversWithStats() {
   today.setHours(0, 0, 0, 0)
   const todayISO = today.toISOString()
 
-  // Fetch drivers
+  // Fetch drivers with new vehicle columns using any to bypass local outdated types
   const { data: drivers, error: driversError } = await supabaseAdmin
     .from('profiles')
-    .select('id, full_name, role, is_active, created_at')
+    .select('id, full_name, phone, role, is_active, created_at, vehicle_type, vehicle_color, vehicle_plate' as any)
     .eq('role', 'delivery')
     .eq('tenant_id', TENANT_ID)
 
@@ -41,6 +41,8 @@ export async function getDriversWithStats() {
     console.error('Error fetching drivers:', driversError)
     throw new Error('Failed to fetch drivers')
   }
+
+  const typedDrivers = (drivers || []) as any[]
 
   // Fetch today's delivered orders for these drivers
   const { data: orders, error: ordersError } = await supabaseAdmin
@@ -62,15 +64,19 @@ export async function getDriversWithStats() {
     console.error('Error fetching auth users:', authError)
   }
 
-  const stats = drivers.map(driver => {
+  const stats = typedDrivers.map(driver => {
     const ordersCount = orders?.filter(o => o.assigned_delivery_id === driver.id).length || 0
     const authUser = authUsers?.users.find(u => u.id === driver.id)
 
     return {
       id: driver.id,
       full_name: driver.full_name,
+      phone: driver.phone,
       role: driver.role,
       is_active: driver.is_active,
+      vehicle_type: driver.vehicle_type,
+      vehicle_color: driver.vehicle_color,
+      vehicle_plate: driver.vehicle_plate,
       email: authUser?.email || 'N/A',
       ordersToday: ordersCount
     }
@@ -79,7 +85,15 @@ export async function getDriversWithStats() {
   return stats
 }
 
-export async function createDriver(formData: { full_name: string; email: string; password_temp: string }) {
+export async function createDriver(formData: {
+  full_name: string;
+  email: string;
+  phone: string;
+  password_temp: string;
+  vehicle_type: string;
+  vehicle_color: string;
+  vehicle_plate: string;
+}) {
   await requireAdmin()
 
   // 1. Create user in Auth
@@ -99,13 +113,17 @@ export async function createDriver(formData: { full_name: string; email: string;
     throw new Error(authError.message)
   }
 
-  // 2. Profile update (role 'delivery' and tenant_id)
+  // 2. Profile update (role 'delivery', tenant_id, and new columns)
   const { error: profileError } = await supabaseAdmin
     .from('profiles')
     .update({
       role: 'delivery',
       tenant_id: TENANT_ID,
       full_name: formData.full_name,
+      phone: formData.phone,
+      vehicle_type: formData.vehicle_type,
+      vehicle_color: formData.vehicle_color,
+      vehicle_plate: formData.vehicle_plate,
       is_active: false
     } as any)
     .eq('id', authData.user.id)

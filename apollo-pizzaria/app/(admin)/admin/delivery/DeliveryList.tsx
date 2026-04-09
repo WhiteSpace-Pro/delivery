@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, User, Mail, Truck, Copy, Check } from 'lucide-react'
+import { Plus, User, Mail, Truck, Copy, Check, Phone } from 'lucide-react'
 import { toggleDriverStatus, createDriver, getDriversWithStats } from '@/app/(admin)/actions/delivery-actions'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
@@ -10,8 +10,12 @@ import { Label } from '@/components/ui/label'
 interface Driver {
   id: string
   full_name: string | null
+  phone: string | null
   email: string
   is_active: boolean | null
+  vehicle_type: string | null
+  vehicle_color: string | null
+  vehicle_plate: string | null
   ordersToday: number
 }
 
@@ -19,7 +23,14 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
   const [drivers, setDrivers] = useState<Driver[]>(initialDrivers)
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [newDriver, setNewDriver] = useState({ full_name: '', email: '', password: '' })
+  const [newDriver, setNewDriver] = useState({
+    full_name: '',
+    email: '',
+    phone: '',
+    vehicle_type: 'Moto',
+    vehicle_color: '',
+    vehicle_plate: ''
+  })
   const [generatedPassword, setGeneratedPassword] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
 
@@ -32,6 +43,20 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
     }
   }
 
+  const formatPlate = (value: string) => {
+    // Remove non-alphanumeric
+    const clean = value.replace(/[^A-Z0-9]/gi, '').toUpperCase()
+    if (clean.length <= 7) {
+      // ABC-1234
+      if (clean.length > 3) {
+        return clean.slice(0, 3) + '-' + clean.slice(3)
+      }
+      return clean
+    }
+    // ABC1D23 (Mercosul) - usually just display it clean or handled
+    return clean.slice(0, 7)
+  }
+
   const handleCreateDriver = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
@@ -41,7 +66,7 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
       setGeneratedPassword(tempPass)
       // Refresh list
       const updatedDrivers = await getDriversWithStats()
-      setDrivers(updatedDrivers)
+      setDrivers(updatedDrivers as unknown as Driver[])
     } catch (error) {
       console.error('Failed to create driver:', error)
       alert('Erro ao criar motoboy. Verifique se o e-mail já está em uso.')
@@ -64,7 +89,14 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
         <button
           onClick={() => {
             setGeneratedPassword(null)
-            setNewDriver({ full_name: '', email: '', password: '' })
+            setNewDriver({
+              full_name: '',
+              email: '',
+              phone: '',
+              vehicle_type: 'Moto',
+              vehicle_color: '',
+              vehicle_plate: ''
+            })
             setIsModalOpen(true)
           }}
           className="flex items-center gap-2 px-6 py-3 bg-[#E85D24] text-white rounded-xl font-bold hover:bg-[#D14D1B] transition-colors shadow-sm"
@@ -79,8 +111,8 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="bg-[#F8F7F5] border-b border-[#0D0D0D]/10">
-                <th className="px-6 py-4 font-bold text-sm text-[#0D0D0D]/60 uppercase tracking-wider">Nome</th>
-                <th className="px-6 py-4 font-bold text-sm text-[#0D0D0D]/60 uppercase tracking-wider">Email</th>
+                <th className="px-6 py-4 font-bold text-sm text-[#0D0D0D]/60 uppercase tracking-wider">Motoboy</th>
+                <th className="px-6 py-4 font-bold text-sm text-[#0D0D0D]/60 uppercase tracking-wider">Veículo</th>
                 <th className="px-6 py-4 font-bold text-sm text-[#0D0D0D]/60 uppercase tracking-wider">Status</th>
                 <th className="px-6 py-4 font-bold text-sm text-[#0D0D0D]/60 uppercase tracking-wider text-center">Pedidos hoje</th>
                 <th className="px-6 py-4 font-bold text-sm text-[#0D0D0D]/60 uppercase tracking-wider text-right">Ações</th>
@@ -95,22 +127,28 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
                         <div className="w-10 h-10 rounded-full bg-apollo-orange/10 flex items-center justify-center text-apollo-orange font-bold">
                           {driver.full_name?.charAt(0) || <User size={18} />}
                         </div>
-                        <span className="font-bold text-[#0D0D0D]">{driver.full_name || 'N/A'}</span>
+                        <div className="flex flex-col">
+                          <span className="font-bold text-[#0D0D0D]">{driver.full_name || 'N/A'}</span>
+                          <div className="flex flex-col text-[13px] text-[#555555] font-dm-sans">
+                            <span className="flex items-center gap-1"><Mail size={12} className="text-[#4A4A4A]" /> {driver.email}</span>
+                            <span className="flex items-center gap-1"><Phone size={12} className="text-[#4A4A4A]" /> {driver.phone || 'S/T'}</span>
+                          </div>
+                        </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-[#666]">
-                      <div className="flex items-center gap-2">
-                        <Mail size={14} />
-                        {driver.email}
+                    <td className="px-6 py-4">
+                      <div className="flex flex-col text-[13px] text-[#555555] font-dm-sans">
+                         <span className="font-bold text-[#4A4A4A]">{driver.vehicle_type} {driver.vehicle_color}</span>
+                         <span className="text-[#666] uppercase">{driver.vehicle_plate}</span>
                       </div>
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-bold ${
                         driver.is_active
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-600'
+                          ? 'bg-[#D1FAE5] text-[#065F46]'
+                          : 'bg-[#F3F4F6] text-[#6B7280]'
                       }`}>
-                        <div className={`w-1.5 h-1.5 rounded-full mr-2 ${driver.is_active ? 'bg-green-500' : 'bg-gray-400'}`} />
+                        <div className={`w-1.5 h-1.5 rounded-full mr-2 ${driver.is_active ? 'bg-[#10B981]' : 'bg-gray-400'}`} />
                         {driver.is_active ? 'ONLINE' : 'OFFLINE'}
                       </span>
                     </td>
@@ -144,7 +182,7 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
       </div>
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="bg-white rounded-2xl sm:max-w-[450px] p-0 overflow-hidden border-none shadow-2xl">
+        <DialogContent className="bg-white rounded-2xl sm:max-w-[500px] p-0 overflow-hidden border-none shadow-2xl">
           {!generatedPassword ? (
             <form onSubmit={handleCreateDriver}>
               <DialogHeader className="p-6 bg-[#F8F7F5] border-b border-[#0D0D0D]/5">
@@ -154,35 +192,81 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
                 </DialogTitle>
               </DialogHeader>
 
-              <div className="p-6 space-y-4">
-                <div className="space-y-2">
-                  <Label htmlFor="full_name" className="text-sm font-bold text-[#0D0D0D]/60 uppercase">Nome Completo</Label>
+              <div className="p-6 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="sm:col-span-2 space-y-2">
+                  <Label htmlFor="full_name" className="text-[11px] font-bold text-[#0D0D0D]/60 uppercase tracking-wider">Nome Completo</Label>
                   <input
                     id="full_name"
                     required
                     value={newDriver.full_name}
                     onChange={(e) => setNewDriver({ ...newDriver, full_name: e.target.value })}
                     placeholder="Ex: João Silva"
-                    className="w-full px-4 py-3 rounded-xl border border-[#0D0D0D]/10 focus:outline-none focus:ring-2 focus:ring-apollo-orange/20 focus:border-apollo-orange transition-all"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#0D0D0D]/10 focus:outline-none focus:ring-2 focus:ring-apollo-orange/20 focus:border-apollo-orange transition-all text-sm"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="email" className="text-sm font-bold text-[#0D0D0D]/60 uppercase">E-mail de Acesso</Label>
+                  <Label htmlFor="phone" className="text-[11px] font-bold text-[#0D0D0D]/60 uppercase tracking-wider">Telefone</Label>
+                  <input
+                    id="phone"
+                    required
+                    value={newDriver.phone}
+                    onChange={(e) => setNewDriver({ ...newDriver, phone: e.target.value })}
+                    placeholder="(31) 99999-9999"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#0D0D0D]/10 focus:outline-none focus:ring-2 focus:ring-apollo-orange/20 focus:border-apollo-orange transition-all text-sm"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="email" className="text-[11px] font-bold text-[#0D0D0D]/60 uppercase tracking-wider">E-mail de Acesso</Label>
                   <input
                     id="email"
                     type="email"
                     required
                     value={newDriver.email}
                     onChange={(e) => setNewDriver({ ...newDriver, email: e.target.value })}
-                    placeholder="joao.silva@email.com"
-                    className="w-full px-4 py-3 rounded-xl border border-[#0D0D0D]/10 focus:outline-none focus:ring-2 focus:ring-apollo-orange/20 focus:border-apollo-orange transition-all"
+                    placeholder="joao@apollo.com"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#0D0D0D]/10 focus:outline-none focus:ring-2 focus:ring-apollo-orange/20 focus:border-apollo-orange transition-all text-sm"
                   />
                 </div>
 
-                <p className="text-xs text-[#666] bg-blue-50 p-3 rounded-lg border border-blue-100 italic">
-                  * Uma senha temporária será gerada automaticamente após salvar.
-                </p>
+                <div className="space-y-2">
+                   <Label htmlFor="vehicle_type" className="text-[11px] font-bold text-[#0D0D0D]/60 uppercase tracking-wider">Veículo</Label>
+                   <select
+                     id="vehicle_type"
+                     value={newDriver.vehicle_type}
+                     onChange={(e) => setNewDriver({ ...newDriver, vehicle_type: e.target.value })}
+                     className="w-full px-4 py-2.5 rounded-xl border border-[#0D0D0D]/10 focus:outline-none focus:ring-2 focus:ring-apollo-orange/20 focus:border-apollo-orange transition-all text-sm bg-white"
+                   >
+                     <option>Moto</option>
+                     <option>Carro</option>
+                     <option>Bicicleta</option>
+                     <option>Van</option>
+                   </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="vehicle_color" className="text-[11px] font-bold text-[#0D0D0D]/60 uppercase tracking-wider">Cor do Veículo</Label>
+                  <input
+                    id="vehicle_color"
+                    value={newDriver.vehicle_color}
+                    onChange={(e) => setNewDriver({ ...newDriver, vehicle_color: e.target.value })}
+                    placeholder="Vermelha"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#0D0D0D]/10 focus:outline-none focus:ring-2 focus:ring-apollo-orange/20 focus:border-apollo-orange transition-all text-sm"
+                  />
+                </div>
+
+                <div className="sm:col-span-2 space-y-2">
+                  <Label htmlFor="vehicle_plate" className="text-[11px] font-bold text-[#0D0D0D]/60 uppercase tracking-wider">Placa</Label>
+                  <input
+                    id="vehicle_plate"
+                    value={newDriver.vehicle_plate}
+                    onChange={(e) => setNewDriver({ ...newDriver, vehicle_plate: formatPlate(e.target.value) })}
+                    placeholder="ABC-1234"
+                    maxLength={8}
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#0D0D0D]/10 focus:outline-none focus:ring-2 focus:ring-apollo-orange/20 focus:border-apollo-orange transition-all text-sm font-mono uppercase"
+                  />
+                </div>
               </div>
 
               <DialogFooter className="p-6 bg-[#F8F7F5]/50 flex-col sm:flex-row gap-3 border-t border-[#0D0D0D]/5">
