@@ -46,6 +46,7 @@ interface Order {
   receipt_url: string | null;
   change_for: number | null;
   tenant_id: string;
+  assigned_delivery_id: string | null;
 }
 
 const FALLBACK_PIX_KEY = "31985375524";
@@ -60,6 +61,7 @@ export default function OrderPage() {
 
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
+  const [driverName, setDriverName] = useState('Motoboy');
   const [copied, setCopied] = useState(false);
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
@@ -94,6 +96,15 @@ export default function OrderPage() {
       setOrder(data);
       setUploadSuccess(!!data.receipt_url);
       setLoading(false);
+
+      if (data.assigned_delivery_id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', data.assigned_delivery_id)
+          .single();
+        if (profile?.full_name) setDriverName(profile.full_name);
+      }
     }
 
     fetchOrder();
@@ -394,7 +405,7 @@ export default function OrderPage() {
 
       {isApproaching && (
         <ApproachingPopup
-          driverName="Motoboy"
+          driverName={driverName}
           orderId={orderId}
         />
       )}
