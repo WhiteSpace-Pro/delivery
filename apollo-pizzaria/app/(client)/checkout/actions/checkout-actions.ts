@@ -4,6 +4,8 @@
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
+const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
+
 export async function createProfile(params: {
   id: string
   full_name: string
@@ -45,12 +47,10 @@ export async function confirmReceiptUpload(
     } as never)
 }
 
-const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
-
 interface PlaceOrderParams {
+  customer_id: string
   customer_name: string | null
   customer_phone: string | null
-  customer_id: string | null
   delivery_type: 'delivery' | 'pickup'
   delivery_address_id: string | null
   delivery_fee: number
@@ -60,6 +60,19 @@ interface PlaceOrderParams {
   change_for: number | null
   delivery_instructions: string | null
   items: any[]
+  // New address to save after order (optional)
+  newAddress?: {
+    label: string
+    street: string
+    number: string
+    complement: string
+    neighborhood: string
+    zipcode: string
+    delivery_region_id: string | null
+    delivery_fee: number
+    lat?: number
+    lng?: number
+  } | null
 }
 
 export async function placeOrder(params: PlaceOrderParams) {
@@ -80,7 +93,7 @@ export async function placeOrder(params: PlaceOrderParams) {
       delivery_instructions: params.delivery_instructions,
       delivery_type: params.delivery_type,
       status: 'pending',
-      payment_status: 'pending'
+      payment_status: 'pending',
     } as any)
     .select()
     .single()
@@ -94,7 +107,7 @@ export async function placeOrder(params: PlaceOrderParams) {
   const orderItems = params.items.map(item => ({
     tenant_id: TENANT_ID,
     order_id: order.id,
-    product_id: item.id, // item.id is product_id from cart
+    product_id: item.id,
     quantity: item.quantity,
     unit_price: item.unit_price,
     total_price: item.total_price,
@@ -102,7 +115,7 @@ export async function placeOrder(params: PlaceOrderParams) {
     edge_option_id: item.border_id || null,
     is_half: !!item.half_half,
     half_product_id: item.half_half?.id || null,
-    observations: item.observations || null
+    observations: item.observations || null,
   }))
 
   const { error: itemsError } = await supabaseAdmin
@@ -115,39 +128,29 @@ export async function placeOrder(params: PlaceOrderParams) {
     throw new Error('Falha ao criar itens do pedido')
   }
 
-  revalidatePath('/meus-pedidos')
-  return order.id
-}
-
-export async function saveAddress(params: {
-  user_id: string
-  street: string
-  number: string
-  complement: string
-  neighborhood: string
-  delivery_region_id?: string | null
-  delivery_fee: number
-  zipcode?: string
-  lat?: number
-  lng?: number
-}) {
-  const { data, error } = await supabaseAdmin
-    .from('addresses')
-    .insert({
-      ...params,
-      tenant_id: TENANT_ID,
-      label: 'Casa',
-      city: 'Belo Horizonte',
-      state: 'MG',
-      is_primary: false
-    } as any)
-    .select()
-    .single()
-
-  if (error) {
-    console.error('Save address error:', error)
-    throw new Error('Falha ao salvar endereço')
+  // 3. Save new address if requested
+  if (params.newAddress) {
+    await supabaseAdmin
+      .from('addresses')
+      .insert({
+        user_id: params.customer_id,
+        tenant_id: TENANT_ID,
+        label: params.newAddress.label || 'Casa',
+        street: params.newAddress.street,
+        number: params.newAddress.number,
+        complement: params.newAddress.complement || null,
+        neighborhood: params.newAddress.neighborhood,
+        zipcode: params.newAddress.zipcode,
+        delivery_region_id: params.newAddress.delivery_region_id || null,
+        delivery_fee: params.newAddress.delivery_fee,
+        lat: params.newAddress.lat || null,
+        lng: params.newAddress.lng || null,
+        city: 'Belo Horizonte',
+        state: 'MG',
+        is_primary: false,
+      } as any)
   }
 
-  return data
+  revalidatePath('/meus-pedidos')
+  return order.id
 }

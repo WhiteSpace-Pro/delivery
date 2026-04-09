@@ -25,7 +25,7 @@ export async function middleware(request: NextRequest) {
   const isPublicRoute =
     pathname === '/' || pathname === '/menu' || pathname.startsWith('/menu') || pathname.startsWith('/cart') || pathname.startsWith('/order') ||
     pathname === '/login' ||
-    pathname === '/cardapio' || pathname === '/checkout' ||
+    pathname === '/cardapio' ||
     pathname.startsWith('/api/webhooks')
 
   if (isPublicRoute) {
