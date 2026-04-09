@@ -1,5 +1,6 @@
 'use client'
 
+import Head from 'next/head'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { useUser } from '@/hooks/useUser'
@@ -32,6 +33,12 @@ export default function DeliveryLayout({
 
   return (
     <div className="min-h-screen bg-[#1A1A1A] text-white font-dm font-bold">
+      <Head>
+        <link rel="manifest" href="/manifest.json" />
+        <meta name="theme-color" content="#E85D24" />
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+      </Head>
       {/* Header */}
       <header className="h-16 bg-[#0D0D0D] px-4 md:px-8 border-b border-white/5 flex items-center justify-between sticky top-0 z-40">
         <Link href="/delivery" className="flex items-center gap-2">
