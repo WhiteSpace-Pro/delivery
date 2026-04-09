@@ -1,3 +1,6 @@
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
+
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
@@ -9,9 +12,12 @@ export default async function MyOrdersPage() {
   const supabase = createClient()
 
   const { data: { user } } = await supabase.auth.getUser()
+
+  console.log('[meus-pedidos] user.id:', user?.id ?? 'NOT AUTHENTICATED')
+
   if (!user) redirect('/')
 
-  const { data: orders } = await supabaseAdmin
+  const { data: orders, error } = await supabaseAdmin
     .from('orders')
     .select(`
       *,
@@ -23,6 +29,9 @@ export default async function MyOrdersPage() {
     .eq('customer_id', user.id)
     .eq('tenant_id', process.env.NEXT_PUBLIC_TENANT_ID_APOLLO!)
     .order('created_at', { ascending: false })
+
+  console.log('[meus-pedidos] orders count:', orders?.length ?? 0)
+  console.log('[meus-pedidos] error:', error)
 
   const statusMap: Record<string, { label: string; color: string }> = {
     pending:          { label: 'Pendente',         color: 'bg-white/10 text-white/60' },
