@@ -1,11 +1,17 @@
 "use client";
 
 import React, { useEffect, useState, useRef } from 'react';
+import dynamic from 'next/dynamic';
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-// import { useUser } from "@/hooks/useUser";
-// Note: initial order fetch uses /api/orders/[id] (supabaseAdmin) to bypass RLS for anonymous users
+import { useDeliveryTracking } from "@/hooks/useDeliveryTracking";
+import { ApproachingPopup } from "@/components/client/ApproachingPopup";
 import { uploadReceipt } from "@/lib/upload";
+
+const TomTomMap = dynamic(
+  () => import('@/components/client/TomTomMap').then(m => m.TomTomMap),
+  { ssr: false, loading: () => <div className="w-full h-48 bg-[#1C1C1C] rounded-2xl animate-pulse" /> }
+);
 import {
   CheckCircle2,
   Copy,
@@ -20,6 +26,16 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
+
+const STATUS_LABELS: Record<string, { label: string; color: string }> = {
+  pending:          { label: 'Aguardando confirmação', color: '#8A8480' },
+  confirmed:        { label: 'Confirmado pela loja',   color: '#D4941A' },
+  preparing:        { label: 'Preparando seu pedido',  color: '#E85D24' },
+  ready:            { label: 'Pronto! Aguardando motoboy', color: '#22c55e' },
+  out_for_delivery: { label: 'Saiu para entrega 🛵',   color: '#E85D24' },
+  delivered:        { label: 'Entregue! Bom apetite 🍕', color: '#22c55e' },
+  cancelled:        { label: 'Pedido cancelado',       color: '#ef4444' },
+}
 
 interface Order {
   id: string;
@@ -51,6 +67,13 @@ export default function OrderPage() {
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const orderId = (id as string) || '';
+  const isDelivering = order?.status === 'out_for_delivery';
+  const { location: driverLocation, isApproaching } = useDeliveryTracking({
+    orderId,
+    enabled: isDelivering,
+  });
 
   const pixKey = process.env.NEXT_PUBLIC_PIX_KEY || FALLBACK_PIX_KEY;
   const pixType = process.env.NEXT_PUBLIC_PIX_KEY_TYPE || FALLBACK_PIX_TYPE;
@@ -146,6 +169,38 @@ export default function OrderPage() {
   return (
     <div className="min-h-screen bg-[#0D0D0D] text-[#F5F0E8] py-8 px-4 font-dm-sans">
       <div className="max-w-2xl mx-auto space-y-8">
+
+        {/* SECTION 0: Delivery tracking (shown when out_for_delivery) */}
+        {isDelivering && (
+          <section className="bg-[#141414] border border-white/5 rounded-3xl p-5 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-playfair font-bold text-lg">Rastreamento</h2>
+              <span className="text-xs font-bold px-2 py-1 rounded-full" style={{ background: '#E85D24' + '20', color: '#E85D24' }}>
+                🛵 A caminho
+              </span>
+            </div>
+
+            <TomTomMap
+              driverLat={driverLocation?.lat ?? null}
+              driverLng={driverLocation?.lng ?? null}
+            />
+
+            {!driverLocation && (
+              <p className="text-xs text-white/30 text-center">Aguardando posição do motoboy...</p>
+            )}
+          </section>
+        )}
+
+        {/* Status badge */}
+        {order.status && STATUS_LABELS[order.status] && (
+          <div className="bg-[#141414] border border-white/5 rounded-2xl px-5 py-4 flex items-center gap-3">
+            <div className="w-3 h-3 rounded-full animate-pulse flex-shrink-0"
+              style={{ background: STATUS_LABELS[order.status].color }} />
+            <p className="font-bold text-sm" style={{ color: STATUS_LABELS[order.status].color }}>
+              {STATUS_LABELS[order.status].label}
+            </p>
+          </div>
+        )}
 
         {/* SECTION 1: Confirmation */}
         <section className="text-center space-y-4">
@@ -336,6 +391,13 @@ export default function OrderPage() {
         </footer>
 
       </div>
+
+      {isApproaching && (
+        <ApproachingPopup
+          driverName="Motoboy"
+          orderId={orderId}
+        />
+      )}
     </div>
   );
 }
