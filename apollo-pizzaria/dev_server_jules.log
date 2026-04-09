@@ -1,0 +1,45 @@
+
+> apollo-pizzaria@0.1.0 dev
+> next dev
+
+ ⚠ Port 3000 is in use, trying 3001 instead.
+  ▲ Next.js 14.2.10
+  - Local:        http://localhost:3001
+
+ ✓ Starting...
+ ✓ Ready in 1738ms
+ ○ Compiling /middleware ...
+ ✓ Compiled /middleware in 1006ms (124 modules)
+ ○ Compiling / ...
+ ✓ Compiled / in 9.6s (1730 modules)
+NEXT_PUBLIC_TENANT_ID_APOLLO is not defined in environment variables. Using fallback tenant ID.
+ ⨯ Error: Your project's URL and Key are required to create a Supabase client!
+
+Check your Supabase project's API settings to find these values
+
+https://supabase.com/dashboard/project/_/settings/api
+    at createClient (./lib/supabase/server.ts:11:77)
+    at HomePage (page.tsx:17:88)
+    at stringify (<anonymous>)
+digest: "2075471340"
+ ⨯ Error: Your project's URL and Key are required to create a Supabase client!
+
+Check your Supabase project's API settings to find these values
+
+https://supabase.com/dashboard/project/_/settings/api
+    at createClient (./lib/supabase/server.ts:11:77)
+    at ClientLayout (layout.tsx:15:88)
+    at stringify (<anonymous>)
+digest: "2045141176"
+ ⨯ Error: Your project's URL and Key are required to create a Supabase client!
+
+Check your Supabase project's API settings to find these values
+
+https://supabase.com/dashboard/project/_/settings/api
+    at createClient (./lib/supabase/server.ts:11:77)
+    at ClientLayout (layout.tsx:15:88)
+    at stringify (<anonymous>)
+digest: "2045141176"
+ GET / 500 in 10406ms
+ ✓ Compiled in 988ms (831 modules)
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (215kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)

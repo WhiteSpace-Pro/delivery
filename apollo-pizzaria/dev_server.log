@@ -4,33 +4,6 @@
 
   ▲ Next.js 14.2.10
   - Local:        http://localhost:3000
-  - Environments: .env.local
 
  ✓ Starting...
- ✓ Ready in 1800ms
- ○ Compiling /middleware ...
- ✓ Compiled /middleware in 1907ms (124 modules)
- ○ Compiling /login ...
- ✓ Compiled /login in 7.8s (593 modules)
- GET /login 200 in 9040ms
- ✓ Compiled in 1383ms (299 modules)
-<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (215kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
- ○ Compiling /cardapio ...
- ✓ Compiled /cardapio in 6.7s (1701 modules)
- GET /cardapio 200 in 8493ms
- GET /cardapio 200 in 598ms
- GET /login 200 in 75ms
- GET /cardapio 200 in 452ms
- ○ Compiling /cart ...
- ✓ Compiled /cart in 1154ms (1713 modules)
- GET /cart 200 in 1496ms
- GET /login 200 in 28ms
- ✓ Compiled in 322ms (124 modules)
- GET /cardapio 200 in 771ms
- GET /cart 200 in 121ms
- ○ Compiling /checkout ...
- ✓ Compiled /checkout in 2.4s (1829 modules)
- GET /checkout 200 in 2777ms
-<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (215kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
- ✓ Compiled in 220ms (124 modules)
- ✓ Compiled in 79ms (124 modules)
+ ✓ Ready in 1755ms
