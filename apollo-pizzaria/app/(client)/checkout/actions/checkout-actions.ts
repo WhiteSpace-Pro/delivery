@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 'use server'
 
-import { createClient } from '@/lib/supabase/server'
+import { supabaseAdmin } from '@/lib/supabase/admin'
 import { revalidatePath } from 'next/cache'
 
 const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
@@ -22,10 +22,8 @@ interface PlaceOrderParams {
 }
 
 export async function placeOrder(params: PlaceOrderParams) {
-  const supabase = createClient()
-
   // 1. Create order
-  const { data: order, error: orderError } = await supabase
+  const { data: order, error: orderError } = await supabaseAdmin
     .from('orders')
     .insert({
       tenant_id: TENANT_ID,
@@ -66,13 +64,13 @@ export async function placeOrder(params: PlaceOrderParams) {
     observations: item.observations || null
   }))
 
-  const { error: itemsError } = await supabase
+  const { error: itemsError } = await supabaseAdmin
     .from('order_items')
     .insert(orderItems as any)
 
   if (itemsError) {
     console.error('Order items creation error:', itemsError)
-    await supabase.from('orders').delete().eq('id', order.id)
+    await supabaseAdmin.from('orders').delete().eq('id', order.id)
     throw new Error('Falha ao criar itens do pedido')
   }
 
@@ -92,9 +90,7 @@ export async function saveAddress(params: {
   lat?: number
   lng?: number
 }) {
-  const supabase = createClient()
-
-  const { data, error } = await supabase
+  const { data, error } = await supabaseAdmin
     .from('addresses')
     .insert({
       ...params,
