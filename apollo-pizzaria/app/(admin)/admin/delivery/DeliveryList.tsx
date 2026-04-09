@@ -201,7 +201,7 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
                     value={newDriver.full_name}
                     onChange={(e) => setNewDriver({ ...newDriver, full_name: e.target.value })}
                     placeholder="Ex: João Silva"
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#0D0D0D]/10 focus:outline-none focus:ring-2 focus:ring-apollo-orange/20 focus:border-apollo-orange transition-all text-sm"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#0D0D0D]/10 focus:outline-none focus:ring-2 focus:ring-apollo-orange/20 focus:border-apollo-orange transition-all text-sm text-[#0D0D0D]"
                   />
                 </div>
 
@@ -213,7 +213,7 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
                     value={newDriver.phone}
                     onChange={(e) => setNewDriver({ ...newDriver, phone: e.target.value })}
                     placeholder="(31) 99999-9999"
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#0D0D0D]/10 focus:outline-none focus:ring-2 focus:ring-apollo-orange/20 focus:border-apollo-orange transition-all text-sm"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#0D0D0D]/10 focus:outline-none focus:ring-2 focus:ring-apollo-orange/20 focus:border-apollo-orange transition-all text-sm text-[#0D0D0D]"
                   />
                 </div>
 
@@ -226,7 +226,7 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
                     value={newDriver.email}
                     onChange={(e) => setNewDriver({ ...newDriver, email: e.target.value })}
                     placeholder="joao@apollo.com"
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#0D0D0D]/10 focus:outline-none focus:ring-2 focus:ring-apollo-orange/20 focus:border-apollo-orange transition-all text-sm"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#0D0D0D]/10 focus:outline-none focus:ring-2 focus:ring-apollo-orange/20 focus:border-apollo-orange transition-all text-sm text-[#0D0D0D]"
                   />
                 </div>
 
@@ -236,7 +236,7 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
                      id="vehicle_type"
                      value={newDriver.vehicle_type}
                      onChange={(e) => setNewDriver({ ...newDriver, vehicle_type: e.target.value })}
-                     className="w-full px-4 py-2.5 rounded-xl border border-[#0D0D0D]/10 focus:outline-none focus:ring-2 focus:ring-apollo-orange/20 focus:border-apollo-orange transition-all text-sm bg-white"
+                     className="w-full px-4 py-2.5 rounded-xl border border-[#0D0D0D]/10 focus:outline-none focus:ring-2 focus:ring-apollo-orange/20 focus:border-apollo-orange transition-all text-sm text-[#0D0D0D] bg-white"
                    >
                      <option>Moto</option>
                      <option>Carro</option>
@@ -252,7 +252,7 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
                     value={newDriver.vehicle_color}
                     onChange={(e) => setNewDriver({ ...newDriver, vehicle_color: e.target.value })}
                     placeholder="Vermelha"
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#0D0D0D]/10 focus:outline-none focus:ring-2 focus:ring-apollo-orange/20 focus:border-apollo-orange transition-all text-sm"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#0D0D0D]/10 focus:outline-none focus:ring-2 focus:ring-apollo-orange/20 focus:border-apollo-orange transition-all text-sm text-[#0D0D0D]"
                   />
                 </div>
 
@@ -264,7 +264,7 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
                     onChange={(e) => setNewDriver({ ...newDriver, vehicle_plate: formatPlate(e.target.value) })}
                     placeholder="ABC-1234"
                     maxLength={8}
-                    className="w-full px-4 py-2.5 rounded-xl border border-[#0D0D0D]/10 focus:outline-none focus:ring-2 focus:ring-apollo-orange/20 focus:border-apollo-orange transition-all text-sm font-mono uppercase"
+                    className="w-full px-4 py-2.5 rounded-xl border border-[#0D0D0D]/10 focus:outline-none focus:ring-2 focus:ring-apollo-orange/20 focus:border-apollo-orange transition-all text-sm text-[#0D0D0D] font-mono uppercase"
                   />
                 </div>
               </div>
