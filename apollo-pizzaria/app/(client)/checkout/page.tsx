@@ -14,8 +14,9 @@ import { cn } from '@/lib/utils'
 const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 const supabase = createClient()
 
-const STORE_LAT = -19.9558
-const STORE_LNG = -43.9275
+const STORE_LAT = -19.9077
+const STORE_LNG = -43.8948
+// Apollo Pizzaria — Av. Jequitinhonha, 218, Vera Cruz, BH
 
 function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371
