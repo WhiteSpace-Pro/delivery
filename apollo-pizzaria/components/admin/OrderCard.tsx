@@ -6,7 +6,7 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import { OrderWithItems } from '@/types'
 import { cn } from '@/lib/utils'
-import { Paperclip, Clock, ChevronRight } from 'lucide-react'
+import { Clock, ChevronRight } from 'lucide-react'
 
 interface OrderCardProps {
   order: OrderWithItems
@@ -37,12 +37,9 @@ export function OrderCard({ order, hasPendingReceipt, onOpenDetail, onMoveToNext
   useEffect(() => {
     const calculateTime = () => {
       const now = Date.now()
-
-      // Total time
       const start = new Date(order.created_at || '').getTime()
       setTotalMinutes(Math.floor((now - start) / 60000))
 
-      // Stage time
       const anyOrder = order as any
       let stageStart = order.created_at
       if (order.status === 'confirmed' && anyOrder.confirmed_at) stageStart = anyOrder.confirmed_at
@@ -78,14 +75,8 @@ export function OrderCard({ order, hasPendingReceipt, onOpenDetail, onMoveToNext
 
   const itemsSummary = order.order_items
     ?.map(item => {
-      const productName = item.products?.name || "Produto desconhecido"
-      const sizeLabel = item.size ? ` ${item.size}` : ""
-
-      const fullDisplayName = item.products?.type === 'pizza'
-        ? `Pizza${sizeLabel} ${productName}`
-        : productName
-
-      return `${item.quantity}× ${fullDisplayName}`
+      const productName = item.products?.name || "Produto"
+      return `${item.quantity}× ${productName}${item.size ? ' ' + item.size : ''}`
     })
     .join(', ')
 
@@ -96,6 +87,9 @@ export function OrderCard({ order, hasPendingReceipt, onOpenDetail, onMoveToNext
     ready: '🛵 Saiu',
     out_for_delivery: '✓ Entregue',
   }
+
+  const isAwaitingCollection = order.payment_status === ('awaiting_collection' as any)
+  const isPixPending = order.payment_method === 'pix' && order.payment_status === 'pending'
 
   return (
     <div
@@ -110,26 +104,28 @@ export function OrderCard({ order, hasPendingReceipt, onOpenDetail, onMoveToNext
         <span className="font-bold text-[#0D0D0D] text-base" {...attributes} {...listeners}>
           #{order.id.slice(-4)}
         </span>
-        <div className="flex items-center gap-2">
-          {hasPendingReceipt && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onOpenDetail(); }}
-              className="flex items-center gap-1 bg-[#f59e0b] text-white text-[10px] font-bold px-1.5 py-0.5 rounded"
-            >
-              <Paperclip size={10} />
-              Comprovante
-            </button>
-          )}
-          <div className="flex flex-col items-end">
-            <div className="flex items-center gap-1 text-[#666] text-[10px]">
+        <div className="flex flex-col items-end">
+           <div className="flex items-center gap-1 text-[#666] text-[10px]">
               <Clock size={10} />
               há {totalMinutes} min
             </div>
             <div className="text-[9px] text-[#999] font-medium">
               nesta etapa há {stageMinutes} min
             </div>
-          </div>
         </div>
+      </div>
+
+      <div className="flex flex-wrap gap-1 mb-2">
+         {(isPixPending || hasPendingReceipt) && (
+           <span className="bg-yellow-100 text-yellow-800 text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
+             PIX — Aguardando comprovante
+           </span>
+         )}
+         {isAwaitingCollection && (
+           <span className="bg-blue-100 text-blue-800 text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
+             A cobrar
+           </span>
+         )}
       </div>
 
       <p className="text-[#374151] text-xs line-clamp-2 mb-3 leading-relaxed">
@@ -141,22 +137,16 @@ export function OrderCard({ order, hasPendingReceipt, onOpenDetail, onMoveToNext
           <span className="font-bold text-[#0D0D0D] text-sm">
             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.total_amount || 0)}
           </span>
-          {order.payment_method === 'pix' ? (
-            <span className={cn("text-[10px] font-bold", order.payment_status === 'paid' ? "text-[#22c55e]" : "text-[#666]")}>
-              PIX {order.payment_status === 'paid' ? '✓' : ''}
-            </span>
-          ) : order.payment_method === 'cash' ? (
-            <span className="text-[10px] font-bold text-[#eab308]">Dinheiro</span>
-          ) : (
-            <span className="text-[10px] font-bold text-[#666]">Cartão</span>
-          )}
+          <span className="text-[9px] text-[#666] font-bold uppercase tracking-tighter">
+            {order.payment_method === 'pix' ? 'PIX' :
+             order.payment_method === 'cash' ? 'Dinheiro' : 'Cartão'}
+          </span>
         </div>
 
         <div className="flex gap-1">
           <button
             onClick={(e) => { e.stopPropagation(); onOpenDetail(); }}
             className="p-1.5 rounded-md hover:bg-[#F8F7F5] text-[#666] transition-colors"
-            title="Detalhes"
           >
             <ChevronRight size={18} />
           </button>

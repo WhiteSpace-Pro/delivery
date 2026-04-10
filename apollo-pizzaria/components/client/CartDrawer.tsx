@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { X, ShoppingCart, Trash2, ArrowRight } from "lucide-react";
 import { useCart, CartItem } from "@/contexts/CartContext";
@@ -8,6 +8,7 @@ import { useUser } from "@/hooks/useUser";
 import { CartItemRow } from "./CartItemRow";
 import { LoginModal } from "./LoginModal";
 import { motion, AnimatePresence } from "framer-motion";
+import { createClient } from "@/lib/supabase/client";
 
 interface CartDrawerProps {
   isOpen: boolean;
@@ -19,10 +20,25 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
   const { items, addItem, removeItem, clearCart } = useCart();
   const { user } = useUser();
   const [loginOpen, setLoginOpen] = useState(false);
+  const [isStoreOpen, setIsStoreOpen] = useState(true);
+  const supabase = createClient();
+
+  useEffect(() => {
+    async function checkStoreStatus() {
+      const tenantId = process.env.NEXT_PUBLIC_TENANT_ID_APOLLO || '496c5a35-6843-4061-b3ab-159d15a0cbc6';
+      const { data } = await supabase.from('tenants').select('is_active').eq('id', tenantId).single();
+      if (data) setIsStoreOpen(!!(data as any)?.is_active);
+    }
+    checkStoreStatus();
+  }, [supabase]);
 
   const subtotal = items.reduce((sum, item) => sum + item.total_price, 0);
 
   const handleGoToCheckout = async () => {
+    if (!isStoreOpen) {
+      alert("A loja está fechada no momento. Não é possível realizar pedidos.");
+      return;
+    }
     if (user) {
       onClose();
       router.push('/checkout');
@@ -114,6 +130,11 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
               {/* Footer */}
               {items.length > 0 && (
                 <div className="p-6 border-t border-white/5 bg-[#141414] space-y-4">
+                  {!isStoreOpen && (
+                    <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-red-500 text-xs text-center font-bold uppercase tracking-wider">
+                      A loja está fechada
+                    </div>
+                  )}
                   <div className="flex items-center justify-between">
                     <span className="text-[#8A8480] font-medium">Subtotal</span>
                     <span className="text-xl font-bold text-[#F5F0E8]">
@@ -123,8 +144,9 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
 
                   <div className="flex flex-col gap-3">
                     <button
+                      disabled={!isStoreOpen}
                       onClick={handleGoToCheckout}
-                      className="w-full bg-[#E85D24] hover:bg-[#D15420] text-white font-bold h-14 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#E85D24]/10"
+                      className="w-full bg-[#E85D24] hover:bg-[#D15420] disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold h-14 rounded-xl flex items-center justify-center gap-2 transition-all shadow-lg shadow-[#E85D24]/10"
                     >
                       Ir para o checkout
                       <ArrowRight size={18} />

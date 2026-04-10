@@ -4,9 +4,9 @@
  * Valor configurado: R$ 1,00 por KM (apenas ida).
  */
 
-const TOMTOM_API_KEY = "rPEJoG15dtntubxA7insGisIOA7wwJ9Q";
-// const PIZZARIA_ADDRESS = "Av. Jequitinhonha, 218 - Vera Cruz, Belo Horizonte - MG, 30285-130";
-const PIZZARIA_COORDS = { lat: -19.9191, lng: -43.9133 }; // Coordenadas aproximadas para Vera Cruz, BH
+const TOMTOM_API_KEY = process.env.NEXT_PUBLIC_TOMTOM_API_KEY || "rPEJoG15dtntubxA7insGisIOA7wwJ9Q";
+// Coords da pizzaria: lat -19.9077, lng -43.8948 (conforme prompt)
+const PIZZARIA_COORDS = { lat: -19.9077, lng: -43.8948 };
 const FEE_PER_KM = 1.0;
 
 interface Coords {
@@ -76,8 +76,8 @@ export async function calculateDeliveryFee(clientAddress: string): Promise<{
   // Usando a distância real de rota em vez de Haversine para maior precisão
   const distance = await getRouteDistance(coords);
   
-  // O pedido diz 1,00 o KM, só ida.
-  const fee = Math.max(0, distance * FEE_PER_KM);
+  // Taxa = Math.ceil(distanceKm) × 1.00 (arredondamento sempre para cima conforme prompt)
+  const fee = Math.ceil(distance) * FEE_PER_KM;
 
   return {
     distance,

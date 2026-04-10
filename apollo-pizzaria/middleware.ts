@@ -65,6 +65,9 @@ export async function middleware(request: NextRequest) {
   if (!user) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
+    if (pathname !== '/') {
+      url.searchParams.set('redirect', pathname)
+    }
     return NextResponse.redirect(url)
   }
 
@@ -91,6 +94,7 @@ export async function middleware(request: NextRequest) {
     if (role !== 'delivery') {
       const url = request.nextUrl.clone()
       url.pathname = '/'
+      url.searchParams.set('error', 'restricted')
       return NextResponse.redirect(url)
     }
   }

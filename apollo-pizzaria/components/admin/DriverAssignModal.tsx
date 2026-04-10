@@ -26,7 +26,7 @@ export function DriverAssignModal({ order, tenantId, onClose }: DriverAssignModa
         .select('*')
         .eq('tenant_id', tenantId)
         .eq('role', 'delivery')
-        .eq('is_active', true)
+        .eq('is_available' as any, true)
 
       if (data) setDrivers(data)
     }

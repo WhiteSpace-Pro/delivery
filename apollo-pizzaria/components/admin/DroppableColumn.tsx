@@ -21,7 +21,7 @@ export function DroppableColumn({ id, title, color, orders, pendingReceipts, onO
   return (
     <div
       ref={setNodeRef}
-      className="flex flex-col w-[280px] bg-[#F1F0EE] rounded-xl p-3 min-h-[500px]"
+      className="flex flex-col w-[300px] bg-[#F1F0EE] rounded-xl p-3 min-h-[500px]"
     >
       <header className="flex items-center gap-2 mb-4">
         <span className={`w-2 h-2 rounded-full ${color}`} />
@@ -31,7 +31,7 @@ export function DroppableColumn({ id, title, color, orders, pendingReceipts, onO
         </span>
       </header>
 
-      <div className="flex flex-col gap-3">
+      <div className="flex flex-col gap-3 flex-1 overflow-y-auto pr-1">
         <SortableContext items={orders.map(o => o.id)} strategy={verticalListSortingStrategy}>
           {orders.map(order => (
             <OrderCard

@@ -36,19 +36,30 @@ export default async function AdminDashboard() {
   const todayISO = today.toISOString()
 
   // Initial fetch for metrics
+  // Group 3.1: Dashboard counts
   const { data: ordersToday } = await supabase
     .from('orders')
     .select('total_amount, payment_status, status')
     .eq('tenant_id', TENANT_ID)
     .gte('created_at', todayISO)
 
-  const ordersCount = ordersToday?.length || 0
+  // Pedidos hoje: contar apenas status != 'pending' (PIX não confirmado)
+  // No prompt consolidado diz: excluir PIX não confirmado. Mas PIX confirmado vira confirmed.
+  // Então status != 'pending' é o filtro correto.
+  const confirmedOrdersToday = ordersToday?.filter(o => o.status !== 'pending') || []
+  const ordersCount = confirmedOrdersToday.length
+
+  // Faturamento hoje: SUM(total_amount) WHERE payment_status = 'paid'
   const totalRevenue = ordersToday
     ?.filter(o => o.payment_status === 'paid')
     .reduce((sum, o) => sum + (o.total_amount || 0), 0) || 0
+
+  // Ticket médio: faturamento / pedidos confirmados
   const averageTicket = ordersCount > 0 ? totalRevenue / ordersCount : 0
+
+  // Em andamento: status IN ('confirmed','preparing','ready','out_for_delivery') AND payment_status != 'pending'
   const inProgressCount = ordersToday
-    ?.filter(o => !['delivered', 'cancelled'].includes(o.status))
+    ?.filter(o => ['confirmed', 'preparing', 'ready', 'out_for_delivery'].includes(o.status) && o.payment_status !== 'pending')
     .length || 0
 
   const hours = new Date().getHours()
@@ -56,10 +67,12 @@ export default async function AdminDashboard() {
   if (hours >= 0 && hours < 12) greeting = 'Bom dia'
   else if (hours >= 12 && hours < 18) greeting = 'Boa tarde'
 
+  // Group 3.7: Data no dashboard com ano
   const formattedDate = new Intl.DateTimeFormat('pt-BR', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
+    year: 'numeric'
   }).format(new Date())
 
   return (
@@ -71,7 +84,7 @@ export default async function AdminDashboard() {
           </h1>
           <p className="text-[#666] capitalize">{formattedDate}</p>
         </div>
-        <StoreStatusToggle isActive={tenant?.is_active ?? false} />
+        <StoreStatusToggle isActive={(tenant as any)?.is_active ?? false} />
       </header>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
