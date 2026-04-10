@@ -35,28 +35,39 @@ export default async function AdminDashboard() {
   today.setHours(0, 0, 0, 0)
   const todayISO = today.toISOString()
 
-  // Group 3.1 & 5: Correct Dashboard counts
+  // Pedidos hoje (excluir PIX fantasma):
+  // COUNT(*) WHERE created_at >= CURRENT_DATE AND NOT (status = 'pending' AND payment_status = 'pending')
   const { data: ordersToday } = await supabase
     .from('orders')
     .select('total_amount, payment_status, status')
     .eq('tenant_id', TENANT_ID)
     .gte('created_at', todayISO)
 
-  const confirmedOrdersToday = ordersToday?.filter(o => o.status !== 'cancelled' && !(o.status === 'pending' && o.payment_status === 'pending')) || []
+  const confirmedOrdersToday = ordersToday?.filter(o =>
+    !(o.status === 'pending' && o.payment_status === 'pending') && o.status !== 'cancelled'
+  ) || []
   const ordersCount = confirmedOrdersToday.length
 
-  // Faturamento hoje: payment_status IN ('paid', 'awaiting_collection', 'collected') AND status NOT IN ('pending', 'cancelled')
+  // Faturamento hoje:
+  // SUM(total_amount) WHERE created_at >= CURRENT_DATE
+  // AND payment_status IN ('paid', 'awaiting_collection', 'collected')
+  // AND status NOT IN ('pending', 'cancelled')
   const totalRevenue = ordersToday
     ?.filter(o =>
        ['paid', 'awaiting_collection', 'collected'].includes(o.payment_status as any) &&
        !['pending', 'cancelled'].includes(o.status)
     )
-    .reduce((sum, o) => sum + (o.total_amount || 0), 0) || 0
+    .reduce((sum, o) => sum + Number(o.total_amount || 0), 0) || 0
 
   const averageTicket = ordersCount > 0 ? totalRevenue / ordersCount : 0
 
+  // Em andamento:
+  // COUNT(*) WHERE status IN ('confirmed','preparing','ready','out_for_delivery') AND payment_status != 'pending'
   const inProgressCount = ordersToday
-    ?.filter(o => ['confirmed', 'preparing', 'ready', 'out_for_delivery'].includes(o.status) && o.payment_status !== 'pending')
+    ?.filter(o =>
+      ['confirmed', 'preparing', 'ready', 'out_for_delivery'].includes(o.status) &&
+      o.payment_status !== 'pending'
+    )
     .length || 0
 
   const hours = new Date().getHours()

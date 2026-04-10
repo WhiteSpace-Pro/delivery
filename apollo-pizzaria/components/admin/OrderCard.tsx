@@ -75,7 +75,8 @@ export function OrderCard({ order, hasPendingReceipt, onOpenDetail, onMoveToNext
 
   const itemsSummary = order.order_items
     ?.map(item => {
-      const productName = item.products?.name ?? `Item #${item.product_id?.slice(-4)}`
+      const product = (item as any)['products!order_items_product_id_fkey'] || (item as any).products
+      const productName = product?.name ?? `Item #${item.product_id?.slice(-4)}`
       return `${item.quantity}× ${productName}${item.size ? ' ' + item.size : ''}`
     })
     .join(', ')
@@ -135,7 +136,7 @@ export function OrderCard({ order, hasPendingReceipt, onOpenDetail, onMoveToNext
       <div className="flex justify-between items-center mt-auto">
         <div className="flex flex-col">
           <span className="font-bold text-[#0D0D0D] text-sm">
-            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(order.total_amount || 0)}
+            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(order.total_amount) || 0)}
           </span>
           <span className="text-[9px] text-[#666] font-bold uppercase tracking-tighter">
             {order.payment_method === 'pix' ? 'PIX' :

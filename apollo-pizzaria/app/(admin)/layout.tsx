@@ -26,7 +26,7 @@ export default function AdminLayout({
     { name: 'Dashboard', icon: LayoutDashboard, href: '/admin' },
     { name: 'Cardápio', icon: Utensils, href: '/cardapio' },
     { name: 'Motoboys', icon: Truck, href: '/admin/delivery' },
-    { name: 'Relatórios', icon: BarChart3, href: '/admin/reports' },
+    { name: 'Relatórios', icon: BarChart3, href: '/admin/relatorios' },
     { name: 'Configurações', icon: Settings, href: '/admin/settings' },
   ]
 

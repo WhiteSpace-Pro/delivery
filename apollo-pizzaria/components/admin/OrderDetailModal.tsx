@@ -33,12 +33,7 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
     async function fetchFullDetails() {
       const { data } = await supabase
         .from('orders')
-        .select(`
-          *,
-          order_items(*, products(*)),
-          address:addresses(*),
-          profiles(*)
-        `)
+        .select('*, order_items(*, products!order_items_product_id_fkey(name, type), half_product:products!order_items_half_product_id_fkey(name), edge:edge_options(name)), addresses(*), profiles(full_name, phone)')
         .eq('id', order.id)
         .single()
 
@@ -88,6 +83,7 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
 
   const customerName = details?.customer_name || details?.profiles?.full_name || 'Cliente'
   const customerPhone = details?.customer_phone || details?.profiles?.phone || 'N/A'
+  const address = details?.addresses
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
@@ -113,14 +109,16 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
                 <div className="bg-[#F8F7F5] p-4 rounded-xl space-y-1 border border-[#E5E7EB]">
                    <p className="font-bold text-lg">{customerName}</p>
                    <p className="text-sm text-[#666] flex items-center gap-2"><Phone size={14} /> {customerPhone}</p>
-                   <div className="pt-2 mt-2 border-t border-[#E5E7EB] flex gap-2">
-                      <MapPin size={16} className="text-apollo-orange shrink-0 mt-0.5" />
-                      <div className="text-sm">
-                         <p className="font-semibold">{details.address?.street}, {details.address?.number}</p>
-                         <p className="text-xs text-[#666]">{details.address?.neighborhood} {details.address?.complement ? ` • ${details.address.complement}` : ''}</p>
-                         <p className="text-xs text-[#666]">{details.address?.city}, {details.address?.state}</p>
-                      </div>
-                   </div>
+                   {address && (
+                     <div className="pt-2 mt-2 border-t border-[#E5E7EB] flex gap-2">
+                        <MapPin size={16} className="text-apollo-orange shrink-0 mt-0.5" />
+                        <div className="text-sm">
+                           <p className="font-semibold">{address.street}, {address.number}</p>
+                           <p className="text-xs text-[#666]">{address.neighborhood} {address.complement ? ` • ${address.complement}` : ''}</p>
+                           <p className="text-xs text-[#666]">{address.city}, {address.state}</p>
+                        </div>
+                     </div>
+                   )}
                 </div>
               </section>
 
@@ -137,19 +135,19 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
                               {item.observations && <p className="text-xs text-apollo-orange italic mt-1 font-medium">{item.observations}</p>}
                            </div>
                         </div>
-                        <span className="font-bold">R$ {(item.unit_price * item.quantity).toFixed(2).replace('.', ',')}</span>
+                        <span className="font-bold">R$ {(Number(item.unit_price) * item.quantity).toFixed(2).replace('.', ',')}</span>
                       </div>
                     ))}
                  </div>
               </section>
 
               <section className="bg-[#F8F7F5] p-6 rounded-2xl border border-[#E5E7EB] space-y-3">
-                 <div className="flex justify-between text-sm"><span className="text-[#666]">Subtotal</span><span className="font-bold">R$ {details.subtotal.toFixed(2).replace('.', ',')}</span></div>
-                 <div className="flex justify-between text-sm"><span className="text-[#666]">Taxa de entrega</span><span className="font-bold">R$ {details.delivery_fee.toFixed(2).replace('.', ',')}</span></div>
+                 <div className="flex justify-between text-sm"><span className="text-[#666]">Subtotal</span><span className="font-bold">R$ {Number(details.subtotal).toFixed(2).replace('.', ',')}</span></div>
+                 <div className="flex justify-between text-sm"><span className="text-[#666]">Taxa de entrega</span><span className="font-bold">R$ {Number(details.delivery_fee).toFixed(2).replace('.', ',')}</span></div>
                  <div className="h-px bg-[#E5E7EB] my-2" />
                  <div className="flex justify-between items-center">
                     <span className="font-bold">Total</span>
-                    <span className="text-2xl font-bold text-apollo-orange italic">R$ {details.total_amount.toFixed(2).replace('.', ',')}</span>
+                    <span className="text-2xl font-bold text-apollo-orange italic">R$ {Number(details.total_amount).toFixed(2).replace('.', ',')}</span>
                  </div>
                  <div className="pt-4 flex flex-col gap-2">
                     <div className="flex items-center justify-between">

@@ -101,6 +101,28 @@ export async function markNotificationAsRead(orderId: string) {
   revalidatePath('/admin', 'page')
 }
 
+export async function getKanbanOrders() {
+  await requireAdmin()
+
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  const { data, error } = await supabaseAdmin
+    .from("orders")
+    .select("*, order_items(*, products!order_items_product_id_fkey(name, type)), addresses(*), profiles(full_name, phone)")
+    .eq("tenant_id", TENANT_ID)
+    .gte("created_at", today.toISOString())
+    .neq("status", "cancelled")
+    .order("created_at", { ascending: false })
+
+  if (error) {
+    console.error("Error fetching kanban orders:", error)
+    throw new Error("Failed to fetch orders")
+  }
+
+  return data
+}
+
 export async function cancelOrder(orderId: string) {
   await requireAdmin()
 
