@@ -31,7 +31,11 @@ export async function confirmReceiptUpload(
 ) {
   const { error: updateError } = await supabaseAdmin
     .from('orders')
-    .update({ receipt_url: receiptPath } as never)
+    .update({
+      pix_receipt_note: receiptPath,
+      status: 'pending',
+      payment_status: 'pending'
+    } as any)
     .eq('id', orderId)
 
   if (updateError) throw new Error('Erro ao vincular o comprovante ao pedido.')
@@ -40,11 +44,12 @@ export async function confirmReceiptUpload(
     .from('notifications')
     .insert({
       tenant_id: tenantId,
+      order_id: orderId,
       type: 'order_status',
       title: 'Comprovante recebido',
       message: `Comprovante Pix enviado para o pedido #${orderId.substring(0, 8)}`,
       is_read: false,
-    } as never)
+    } as any)
 }
 
 interface PlaceOrderParams {
@@ -76,7 +81,7 @@ interface PlaceOrderParams {
 }
 
 export async function placeOrder(params: PlaceOrderParams) {
-  // 0. Ensure profile exists — upsert with minimal data to avoid 406 on SELECT
+  // 0. Ensure profile exists
   await supabaseAdmin
     .from('profiles')
     .upsert(
@@ -85,12 +90,17 @@ export async function placeOrder(params: PlaceOrderParams) {
         tenant_id: TENANT_ID,
         role: 'customer',
         full_name: params.customer_name ?? null,
+        phone: params.customer_phone ?? null,
         is_active: true,
-      } as never,
-      { onConflict: 'id', ignoreDuplicates: true }
+      } as any,
+      { onConflict: 'id' }
     )
 
-  // 1. Create order
+  // 1. Create order with correct initial statuses (Group 3 logic)
+  const isPix = params.payment_method === 'pix'
+  const initialStatus = isPix ? 'pending' : 'confirmed'
+  const initialPaymentStatus = isPix ? 'pending' : 'awaiting_collection'
+
   const { data: order, error: orderError } = await supabaseAdmin
     .from('orders')
     .insert({
@@ -106,8 +116,8 @@ export async function placeOrder(params: PlaceOrderParams) {
       change_for: params.change_for,
       delivery_instructions: params.delivery_instructions,
       delivery_type: params.delivery_type,
-      status: 'pending',
-      payment_status: 'pending',
+      status: initialStatus,
+      payment_status: initialPaymentStatus,
     } as any)
     .select()
     .single()

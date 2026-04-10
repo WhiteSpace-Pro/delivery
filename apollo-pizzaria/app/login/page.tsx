@@ -1,21 +1,33 @@
 'use client'
 
-import { useState } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
-export default function LoginPage() {
+function LoginContent() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
+  const searchParams = useSearchParams()
   const supabase = createClient()
+
+  const redirectPath = searchParams.get('redirect')
+
+  useEffect(() => {
+    const errorParam = searchParams.get('error')
+    if (errorParam === 'restricted') {
+      setError('Acesso restrito a entregadores')
+    }
+  }, [searchParams])
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
     setError(null)
+    setMessage(null)
 
     const { data, error: authError } = await supabase.auth.signInWithPassword({
       email,
@@ -29,7 +41,6 @@ export default function LoginPage() {
     }
 
     if (data.user) {
-      // Fetch user profile to determine role
       const { data: profile, error: profileError } = await supabase
         .from('profiles')
         .select('role')
@@ -42,7 +53,11 @@ export default function LoginPage() {
         return
       }
 
-      // Redirect based on role
+      if (redirectPath) {
+        router.push(redirectPath)
+        return
+      }
+
       switch (profile.role) {
         case 'admin':
         case 'kitchen':
@@ -57,6 +72,25 @@ export default function LoginPage() {
           break
       }
     }
+  }
+
+  const handleForgotPassword = async () => {
+    if (!email) {
+      setError('Por favor, informe seu e-mail para redefinir a senha')
+      return
+    }
+
+    setIsLoading(true)
+    const { error } = await supabase.auth.resetPasswordForEmail(email, {
+      redirectTo: `${window.location.origin}/auth/confirm?next=/minha-conta/senha`,
+    })
+
+    if (error) {
+      setError('Erro ao enviar e-mail de redefinição')
+    } else {
+      setMessage('Verifique seu e-mail para redefinir a senha')
+    }
+    setIsLoading(false)
   }
 
   return (
@@ -74,10 +108,7 @@ export default function LoginPage() {
         <form onSubmit={handleLogin} className="mt-8 space-y-6">
           <div className="space-y-4">
             <div>
-              <label
-                htmlFor="email"
-                className="block text-sm font-dm text-white/80 mb-1"
-              >
+              <label htmlFor="email" className="block text-sm font-dm text-white/80 mb-1">
                 E-mail
               </label>
               <input
@@ -93,10 +124,7 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <label
-                htmlFor="password"
-                className="block text-sm font-dm text-white/80 mb-1"
-              >
+              <label htmlFor="password" title="Senha" className="block text-sm font-dm text-white/80 mb-1">
                 Senha
               </label>
               <input
@@ -113,9 +141,25 @@ export default function LoginPage() {
             </div>
           </div>
 
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={handleForgotPassword}
+              className="text-sm text-apollo-orange hover:underline font-dm"
+            >
+              Esqueci minha senha
+            </button>
+          </div>
+
           {error && (
             <div className="bg-red-500/10 border border-red-500/20 text-red-500 text-sm p-3 rounded-lg text-center font-dm">
               {error}
+            </div>
+          )}
+
+          {message && (
+            <div className="bg-green-500/10 border border-green-500/20 text-green-500 text-sm p-3 rounded-lg text-center font-dm">
+              {message}
             </div>
           )}
 
@@ -124,10 +168,18 @@ export default function LoginPage() {
             disabled={isLoading}
             className="w-full bg-apollo-orange hover:bg-apollo-orange/90 disabled:opacity-50 text-white font-dm font-bold py-3 rounded-lg transition-colors"
           >
-            {isLoading ? 'Entrando...' : 'Entrar'}
+            {isLoading ? 'Carregando...' : 'Entrar'}
           </button>
         </form>
       </div>
     </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<div>Carregando...</div>}>
+      <LoginContent />
+    </Suspense>
   )
 }

@@ -1,15 +1,16 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { useUser } from '@/hooks/useUser'
 import { createClient } from '@/lib/supabase/client'
+import { useUser } from '@/hooks/useUser'
 import { useGPSTracking } from '@/hooks/useGPSTracking'
 import { ConfirmModal } from '@/components/delivery/ConfirmModal'
-import { ProblemModal } from '@/components/delivery/ProblemModal'
-import { MapPin, Navigation, AlertTriangle, Loader2, RefreshCw } from 'lucide-react'
+import { MapPin, Navigation, Loader2 } from 'lucide-react'
+import { calculateRouteForDeliveries } from '@/lib/maps/tomtom'
+import { Profile } from '@/types'
 
 const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
+const STORE_COORDS = { lat: -19.9077, lng: -43.8948 }
 const supabase = createClient()
 
 interface DeliveryOrder {
@@ -18,6 +19,7 @@ interface DeliveryOrder {
   delivery_instructions: string | null
   total_amount: number
   payment_method: string
+  distanceTo?: number
   address: {
     street: string
     number: string
@@ -29,33 +31,26 @@ interface DeliveryOrder {
   items: { quantity: number; product: { name: string } | null }[]
 }
 
-interface EtaInfo { km: string; min: string }
-
 export default function DeliveryPage() {
   const { user, profile, isLoading } = useUser()
   const [isOnline, setIsOnline] = useState(false)
   const [toggleLoading, setToggleLoading] = useState(false)
   const [orders, setOrders] = useState<DeliveryOrder[]>([])
-  const [loadingOrders, setLoadingOrders] = useState(false)
-  const [eta, setEta] = useState<Record<string, EtaInfo>>({})
   const [confirmOrder, setConfirmOrder] = useState<DeliveryOrder | null>(null)
-  const [problemOrder, setProblemOrder] = useState<DeliveryOrder | null>(null)
 
   const firstOrder = orders[0]
-  const { position, permissionError } = useGPSTracking({
+  const { position } = useGPSTracking({
     orderId: firstOrder?.id || '',
     deliveryId: user?.id || '',
     enabled: isOnline && !!firstOrder,
   })
 
-  // Seed online status from profile.is_active
   useEffect(() => {
-    if (profile) setIsOnline(!!(profile as any).is_active)
+    if (profile) setIsOnline(!!(profile as Profile).is_active)
   }, [profile])
 
   const fetchOrders = useCallback(async () => {
     if (!user) return
-    setLoadingOrders(true)
     const { data } = await supabase
       .from('orders')
       .select(`
@@ -68,221 +63,96 @@ export default function DeliveryPage() {
       .eq('status', 'out_for_delivery')
       .order('created_at', { ascending: true })
 
-    if (data) setOrders(data as any)
-    setLoadingOrders(false)
+    if (data) {
+       const typedData = data as unknown as DeliveryOrder[];
+       const destinations = typedData
+         .filter(o => o.address?.lat && o.address?.lng)
+         .map(o => ({ lat: o.address!.lat!, lng: o.address!.lng!, orderId: o.id }));
+
+       if (destinations.length > 0) {
+          const routeResult = await calculateRouteForDeliveries(STORE_COORDS, destinations as any);
+          const sorted = [...typedData].sort((a, b) => {
+             const idxA = routeResult.route.findIndex(r => (r as any).orderId === a.id);
+             const idxB = routeResult.route.findIndex(r => (r as any).orderId === b.id);
+             return idxA - idxB;
+          }).map(o => {
+             const routeInfo = routeResult.route.find(r => (r as any).orderId === o.id);
+             return { ...o, distanceTo: routeInfo ? (routeInfo as any).distanceFromLast : 0 };
+          });
+          setOrders(sorted);
+       } else {
+          setOrders(typedData);
+       }
+    }
   }, [user])
 
   useEffect(() => {
-    if (isOnline) fetchOrders()
-    else setOrders([])
+    if (isOnline) {
+      void fetchOrders()
+    } else {
+      setOrders([])
+    }
   }, [isOnline, fetchOrders])
-
-  // Fetch ETA for each order when position updates
-  useEffect(() => {
-    if (!position || orders.length === 0) return
-    orders.forEach(async (order) => {
-      const addr = order.address
-      if (!addr?.lat || !addr?.lng) return
-      try {
-        const res = await fetch(
-          `/api/eta?from=${position.lat},${position.lng}&to=${addr.lat},${addr.lng}`
-        )
-        const data = await res.json()
-        if (data.eta_minutes != null) {
-          setEta(prev => ({
-            ...prev,
-            [order.id]: {
-              km: data.distance_km?.toFixed(1) || '–',
-              min: String(data.eta_minutes),
-            },
-          }))
-        }
-      } catch { /* ignore */ }
-    })
-  }, [position, orders])
 
   const handleToggleOnline = async () => {
     if (!user) return
     setToggleLoading(true)
     const next = !isOnline
     setIsOnline(next)
-    await supabase
-      .from('profiles')
-      .update({ is_active: next } as never)
-      .eq('id', user.id)
+    await supabase.from('profiles').update({ is_active: next } as any).eq('id', user.id)
     setToggleLoading(false)
-    if (next) fetchOrders()
+    if (next) void fetchOrders()
   }
 
-  const handleDeliveryConfirmed = () => {
-    setConfirmOrder(null)
-    fetchOrders()
-  }
-
-  const handleProblemReported = () => {
-    setProblemOrder(null)
-    fetchOrders()
-  }
-
-  if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <Loader2 size={40} className="text-[#E85D24] animate-spin" />
-      </div>
-    )
-  }
+  if (isLoading) return <div className="flex items-center justify-center h-64"><Loader2 size={40} className="text-[#E85D24] animate-spin" /></div>
 
   return (
-    <div className="max-w-lg mx-auto space-y-4 pb-24">
-      {/* ONLINE / OFFLINE Toggle */}
-      <button
-        onClick={handleToggleOnline}
-        disabled={toggleLoading}
-        style={{ minHeight: 64 }}
-        className={`w-full rounded-2xl font-bold text-lg flex items-center justify-center gap-3 transition-all shadow-lg ${
-          isOnline
-            ? 'bg-[#E85D24] text-white shadow-[#E85D24]/20'
-            : 'bg-[#333] text-white/60'
-        }`}
-      >
-        {toggleLoading
-          ? <Loader2 size={22} className="animate-spin" />
-          : (
-            <>
-              <span className={`w-3 h-3 rounded-full ${isOnline ? 'bg-white animate-pulse' : 'bg-white/20'}`} />
-              {isOnline ? 'ONLINE — Recebendo entregas' : 'OFFLINE — Toque para ficar online'}
-            </>
-          )
-        }
+    <div className="max-w-lg mx-auto space-y-4 pb-24 px-4 pt-4 font-dm">
+      <button onClick={handleToggleOnline} disabled={toggleLoading} className={`w-full h-16 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all ${isOnline ? 'bg-apollo-orange text-white shadow-lg' : 'bg-zinc-800 text-white/40'}`}>
+         {toggleLoading ? <Loader2 className="animate-spin" /> : <><span className={`w-3 h-3 rounded-full ${isOnline ? 'bg-white animate-pulse' : 'bg-white/10'}`} /> {isOnline ? 'ONLINE' : 'OFFLINE'}</>}
       </button>
 
-      {permissionError && (
-        <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 flex items-center gap-2 text-red-400 text-xs">
-          <AlertTriangle size={14} />
-          Permissão de localização negada. Ative o GPS para rastrear.
-        </div>
-      )}
-
-      {!isOnline ? (
-        <div className="flex flex-col items-center justify-center py-24 text-white/20">
-          <span className="text-6xl mb-4">🛵</span>
-          <p className="font-bold text-white/40">Você está offline</p>
-        </div>
-      ) : loadingOrders ? (
-        <div className="flex items-center justify-center py-16">
-          <Loader2 size={32} className="text-[#E85D24] animate-spin" />
-        </div>
-      ) : orders.length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-white/20">
-          <span className="text-5xl mb-4">✅</span>
-          <p className="text-white/40 font-bold">Sem entregas atribuídas</p>
-          <button onClick={fetchOrders} className="mt-4 flex items-center gap-2 text-xs text-[#E85D24] font-bold">
-            <RefreshCw size={14} /> Atualizar
-          </button>
-        </div>
+      {orders.length === 0 ? (
+        <div className="py-20 text-center text-white/20"><p>Nenhuma entrega no momento</p></div>
       ) : (
         <div className="space-y-4">
-          {orders.map((order, idx) => {
-            const etaInfo = eta[order.id]
-            const addr = order.address
-            const itemsSummary = order.items
-              ?.map((i: any) => `${i.quantity}× ${i.product?.name || 'Item'}`)
-              .join(', ')
-
-            return (
-              <div key={order.id} className="bg-[#0D0D0D] rounded-2xl p-5 border border-white/5 space-y-4">
-                {/* Header */}
-                <div className="flex items-center justify-between">
-                  <span className="text-[#E85D24] text-xl font-bold">
-                    #{order.id.slice(-4).toUpperCase()}
-                  </span>
-                  {idx === 0 && position && (
-                    <span className="text-[10px] text-white/30 bg-white/5 px-2 py-1 rounded-full">
-                      GPS ativo
-                    </span>
-                  )}
-                </div>
-
-                {/* Address */}
-                <div className="flex items-start gap-2">
-                  <MapPin size={16} className="text-[#E85D24] mt-0.5 flex-shrink-0" />
-                  <div className="text-sm text-white/80">
-                    {addr ? (
-                      <>
-                        <p className="font-bold">{addr.street}, {addr.number}</p>
-                        <p className="text-white/50 text-xs">{addr.neighborhood}{addr.complement ? ` • ${addr.complement}` : ''}</p>
-                      </>
-                    ) : (
-                      <p className="text-white/40 italic">{order.delivery_instructions || 'Endereço não informado'}</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Items */}
-                {itemsSummary && (
-                  <p className="text-xs text-white/40 line-clamp-2">{itemsSummary}</p>
-                )}
-
-                {/* ETA row */}
-                {etaInfo && (
-                  <div className="bg-white/5 rounded-xl px-3 py-2 flex items-center gap-2 text-xs text-white/60">
-                    <Navigation size={12} className="text-[#E85D24]" />
-                    ~{etaInfo.km} km · ~{etaInfo.min} min
-                  </div>
-                )}
-
-                {/* Actions */}
-                <div className="grid grid-cols-2 gap-3">
-                  {addr?.lat && addr?.lng && (
-                    <a
-                      href={`https://www.google.com/maps/dir/?api=1&destination=${addr.lat},${addr.lng}&travelmode=driving`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="bg-[#1C1C1C] border border-white/10 text-white font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-2 hover:border-[#E85D24] transition-colors"
-                    >
-                      <Navigation size={14} /> Navegar
-                    </a>
-                  )}
-
-                  <button
-                    onClick={() => setConfirmOrder(order)}
-                    className="bg-[#E85D24] text-white font-bold py-3 rounded-xl text-xs flex items-center justify-center gap-2"
-                  >
-                    ✓ Confirmar entrega
-                  </button>
-
-                  <button
-                    onClick={() => setProblemOrder(order)}
-                    className="col-span-2 bg-transparent border border-amber-500/30 text-amber-400 font-bold py-2 rounded-xl text-xs flex items-center justify-center gap-2 hover:bg-amber-500/10 transition-colors"
-                  >
-                    <AlertTriangle size={12} /> Reportar problema
-                  </button>
-                </div>
+          {orders.map((order) => (
+            <div key={order.id} className="bg-[#1C1C1C] rounded-3xl p-6 border border-white/5 space-y-5">
+              <div className="flex justify-between items-start">
+                 <span className="text-2xl font-bold text-apollo-orange italic">#{order.id.slice(-4).toUpperCase()}</span>
+                 <div className="text-right">
+                    <p className="text-[10px] text-white/40 uppercase font-bold tracking-widest">Valor</p>
+                    <p className="text-lg font-bold">R$ {order.total_amount.toFixed(2).replace('.', ',')}</p>
+                 </div>
               </div>
-            )
-          })}
+
+              <div className="flex items-start gap-3">
+                 <MapPin className="text-apollo-orange mt-1 shrink-0" size={20} />
+                 <div>
+                    <p className="font-bold text-white/90">{order.address?.street}, {order.address?.number}</p>
+                    <p className="text-sm text-white/50">{order.address?.neighborhood}</p>
+                 </div>
+              </div>
+
+              <div className="flex gap-2">
+                 {['cash', 'debit_card', 'credit_card'].includes(order.payment_method) ? (
+                   <span className="bg-apollo-orange/10 border border-apollo-orange text-apollo-orange px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter">COBRAR {order.payment_method === 'cash' ? 'DINHEIRO' : 'CARTÃO'}</span>
+                 ) : (
+                   <span className="bg-green-500/10 border border-green-500 text-green-500 px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-tighter">PAGO PIX</span>
+                 )}
+                 {order.distanceTo != null && <span className="bg-white/5 px-3 py-1 rounded-full text-[10px] font-bold text-white/40">~{(order.distanceTo / 1000).toFixed(1)} km</span>}
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 pt-2">
+                 <a href={`https://www.google.com/maps/dir/?api=1&destination=${order.address?.lat},${order.address?.lng}&travelmode=driving`} target="_blank" rel="noopener noreferrer" className="bg-zinc-800 text-white font-bold py-4 rounded-2xl text-xs flex items-center justify-center gap-2 hover:bg-zinc-700 transition-all"><Navigation size={14} /> NAVEGAR</a>
+                 <button onClick={() => setConfirmOrder(order)} className="bg-apollo-orange text-white font-bold py-4 rounded-2xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-apollo-orange/20 transition-all">✓ ENTREGUE</button>
+              </div>
+            </div>
+          ))}
         </div>
       )}
 
-      {confirmOrder && (
-        <ConfirmModal
-          orderId={confirmOrder.id}
-          deliveryId={user!.id}
-          position={position}
-          onClose={() => setConfirmOrder(null)}
-          onConfirmed={handleDeliveryConfirmed}
-        />
-      )}
-
-      {problemOrder && (
-        <ProblemModal
-          orderId={problemOrder.id}
-          deliveryId={user!.id}
-          position={position}
-          onClose={() => setProblemOrder(null)}
-          onReported={handleProblemReported}
-        />
-      )}
+      {confirmOrder && <ConfirmModal orderId={confirmOrder.id} deliveryId={user!.id} position={position} onClose={() => setConfirmOrder(null)} onConfirmed={() => { setConfirmOrder(null); void fetchOrders(); }} />}
     </div>
   )
 }

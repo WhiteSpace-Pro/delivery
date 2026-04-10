@@ -1,13 +1,12 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
+import { X, ArrowRight, ArrowLeft, Mail, Phone, Lock, User, Loader2,   } from 'lucide-react'
 import { useRouter } from 'next/navigation'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { createClient } from '@/lib/supabase/client'
 
-import { motion, AnimatePresence } from 'framer-motion'
-import { Loader2, ArrowRight, ArrowLeft, User, Lock, Mail, Phone } from 'lucide-react'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
 
 interface LoginModalProps {
   isOpen: boolean
@@ -16,52 +15,46 @@ interface LoginModalProps {
   redirectToCheckout?: boolean
 }
 
-const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
-const supabase = createClient()
-
-function maskPhone(value: string): string {
-  const d = value.replace(/\D/g, '').slice(0, 11)
-  if (d.length <= 2) return `(${d}`
-  if (d.length <= 7) return `(${d.slice(0, 2)}) ${d.slice(2)}`
-  return `(${d.slice(0, 2)}) ${d.slice(2, 7)}-${d.slice(7)}`
-}
-
 type Step = 'identify' | 'found' | 'notFound'
-
-const slideVariants = {
-  enter: (dir: number) => ({ x: dir > 0 ? '100%' : '-100%', opacity: 0 }),
-  center: { x: 0, opacity: 1 },
-  exit: (dir: number) => ({ x: dir > 0 ? '-100%' : '100%', opacity: 0 }),
-}
 
 export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: LoginModalProps) {
   const router = useRouter()
+  const supabase = createClient()
+
   const [step, setStep] = useState<Step>('identify')
   const [direction, setDirection] = useState(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Step 1
+  // Identify state
   const [identifier, setIdentifier] = useState('')
-  // Step 2 — found
+  const isEmail = identifier.includes('@')
+  const isPhone = !isEmail && identifier.replace(/\D/g, '').length >= 10
+
+  // Sign in state
+  const [password, setPassword] = useState('')
   const [foundName, setFoundName] = useState('')
+  const [foundPhone, setFoundPhone] = useState('')
   const [foundInitial, setFoundInitial] = useState('')
   const [loginEmail, setLoginEmail] = useState('')
-  const [password, setPassword] = useState('')
-  // Step 2 — not found (registration)
+
+  // Register state
   const [regFullName, setRegFullName] = useState('')
   const [regEmail, setRegEmail] = useState('')
   const [regPhone, setRegPhone] = useState('')
   const [regPassword, setRegPassword] = useState('')
   const [regConfirm, setRegConfirm] = useState('')
 
-  const isPhone = !identifier.includes('@') && identifier.replace(/\D/g, '').length > 0
-  const isEmail = identifier.includes('@')
+  const maskPhone = (v: string) => {
+    const digits = v.replace(/\D/g, '')
+    if (digits.length <= 10) return digits.replace(/(\d{2})(\d{4})(\d{4})/, '() -')
+    return digits.replace(/(\d{2})(\d{5})(\d{4})/, '() -')
+  }
 
   const goTo = (next: Step, dir: number) => {
     setDirection(dir)
-    setError(null)
     setStep(next)
+    setError(null)
   }
 
   const handleSuccess = () => {
@@ -76,6 +69,7 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
     setIdentifier('')
     setPassword('')
     setFoundName('')
+    setFoundPhone('')
     setFoundInitial('')
     setLoginEmail('')
     setRegFullName('')
@@ -85,6 +79,12 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
     setRegConfirm('')
     setError(null)
   }
+
+  useEffect(() => {
+    if (!isOpen) {
+      setTimeout(resetAll, 300)
+    }
+  }, [isOpen])
 
   // Step 1: identify
   const handleIdentify = async (e: React.FormEvent) => {
@@ -101,14 +101,13 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
       const data = await res.json()
       if (data.found) {
         setFoundName(data.name)
+        setFoundPhone(data.phone || '')
         setFoundInitial(data.avatar_initial)
         setLoginEmail(data.loginEmail)
-        // Pre-fill phone field for registration fallback (in case they go back)
         if (isPhone) setRegPhone(identifier)
         if (isEmail) setRegEmail(identifier)
         goTo('found', 1)
       } else {
-        // Pre-fill known info
         if (isEmail) setRegEmail(identifier)
         if (isPhone) setRegPhone(identifier)
         goTo('notFound', 1)
@@ -120,7 +119,7 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
     }
   }
 
-  // Step 2a: sign in (found user)
+  // Step 2a: sign in (found)
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
@@ -148,68 +147,83 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
     e.preventDefault()
     if (regPassword !== regConfirm) { setError('As senhas não coincidem.'); return }
     if (regPassword.length < 6) { setError('Senha deve ter pelo menos 6 caracteres.'); return }
-
-    const emailToUse = isEmail ? identifier.trim() : regEmail.trim()
-    if (!emailToUse || !emailToUse.includes('@')) {
-      setError('Informe um e-mail válido para criar sua conta.')
-      return
-    }
-
     setLoading(true)
     setError(null)
+
     try {
-      const { data: authData, error: signUpError } = await supabase.auth.signUp({
-        email: emailToUse,
+      const { data, error: signUpError } = await supabase.auth.signUp({
+        email: regEmail || `${regPhone.replace(/\D/g, '')}@apollo.pizzaria.com`,
         password: regPassword,
         options: {
           data: {
             full_name: regFullName,
             phone: regPhone,
             role: 'customer',
-            tenant_id: TENANT_ID,
-          },
-        },
+            tenant_id: '496c5a35-6843-4061-b3ab-159d15a0cbc6'
+          }
+        }
       })
+
       if (signUpError) throw signUpError
-      if (authData.user) {
-        await fetch('/api/auth/create-profile', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            user_id: authData.user.id,
-            full_name: regFullName,
-            phone: regPhone || null,
-            tenant_id: TENANT_ID,
-          }),
-        })
+
+      if (data.user) {
+         // Create profile explicitly
+         await fetch('/api/auth/create-profile', {
+           method: 'POST',
+           headers: { 'Content-Type': 'application/json' },
+           body: JSON.stringify({
+             id: data.user.id,
+             full_name: regFullName,
+             phone: regPhone,
+             tenant_id: '496c5a35-6843-4061-b3ab-159d15a0cbc6'
+           })
+         })
+         handleSuccess()
       }
-      handleSuccess()
     } catch (err: any) {
-      setError(
-        err.message?.includes('already registered')
-          ? 'Este e-mail já está cadastrado.'
-          : err.message
-      )
+      setError(err.message)
     } finally {
       setLoading(false)
     }
   }
 
-  const inputCls = 'w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl pl-12 pr-4 py-3 text-sm focus:outline-none focus:border-apollo-orange transition-colors'
+  const slideVariants = {
+    enter: (direction: number) => ({
+      x: direction > 0 ? 100 : -100,
+      opacity: 0
+    }),
+    center: {
+      zIndex: 1,
+      x: 0,
+      opacity: 1
+    },
+    exit: (direction: number) => ({
+      zIndex: 0,
+      x: direction < 0 ? 100 : -100,
+      opacity: 0
+    })
+  }
+
+  const inputCls = "w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 pl-12 text-sm focus:outline-none focus:border-apollo-orange transition-all placeholder:text-white/20"
 
   return (
-    <Dialog open={isOpen} onOpenChange={(open) => { if (!open) { onClose(); resetAll() } }}>
-      <DialogContent className="max-w-[400px] bg-[#141414] border-[#2A2A2A] text-white p-0 overflow-hidden">
-        <DialogHeader className="p-6 pb-0">
-          <DialogTitle className="text-2xl font-playfair font-bold italic text-apollo-orange">
-            {step === 'identify' && 'Identificação'}
-            {step === 'found' && 'Bem-vindo de volta!'}
-            {step === 'notFound' && 'Criar conta'}
-          </DialogTitle>
-        </DialogHeader>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="p-0 bg-[#1C1C1C] border-[#2A2A2A] max-w-sm sm:rounded-3xl overflow-hidden shadow-2xl">
+        <div className="relative">
+          <button
+            onClick={onClose}
+            className="absolute right-4 top-4 z-10 p-2 hover:bg-white/5 rounded-full text-white/40 hover:text-white transition-colors"
+          >
+            <X size={20} />
+          </button>
 
-        <div className="overflow-hidden">
-          <AnimatePresence mode="wait" custom={direction}>
+          <div className="p-6 pb-0 pt-8">
+            <h2 className="text-2xl font-playfair font-bold text-apollo-orange italic mb-1">
+              Olá! Que bom ver você.
+            </h2>
+          </div>
+
+          <AnimatePresence initial={false} custom={direction} mode="wait">
             {step === 'identify' && (
               <motion.div
                 key="identify"
@@ -236,7 +250,6 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
                       value={identifier}
                       onChange={e => {
                         const v = e.target.value
-                        // If only digits/phone chars, apply mask
                         if (!v.includes('@') && v.replace(/\D/g, '').length === v.replace(/[() -]/g, '').length) {
                           const digits = v.replace(/\D/g, '')
                           if (digits.length > 0 && !v.includes('@')) {
@@ -267,10 +280,6 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
                     }
                   </button>
                 </form>
-
-                <p className="text-center text-[10px] text-white/40 uppercase tracking-widest font-bold mt-4">
-                  🔒 Checkout 100% Seguro
-                </p>
               </motion.div>
             )}
 
@@ -285,7 +294,6 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
                 transition={{ duration: 0.25, ease: 'easeInOut' }}
                 className="px-6 pb-6 pt-4"
               >
-                {/* User avatar */}
                 <div className="flex items-center gap-4 mb-5 p-4 bg-[#0D0D0D] rounded-xl border border-[#2A2A2A]">
                   <div className="w-12 h-12 rounded-full bg-apollo-orange flex items-center justify-center text-white text-xl font-bold flex-shrink-0">
                     {foundInitial}
@@ -295,6 +303,7 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
                       Encontramos seu cadastro!
                     </p>
                     <p className="font-bold text-white">{foundName}</p>
+                    {foundPhone && <p className="text-xs text-white/30">{maskPhone(foundPhone)}</p>}
                   </div>
                 </div>
 
@@ -366,7 +375,6 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
                     />
                   </div>
 
-                  {/* If identifier is phone, ask for email too */}
                   {isPhone && (
                     <div className="relative">
                       <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
@@ -381,7 +389,6 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
                     </div>
                   )}
 
-                  {/* If identifier is email, show phone field */}
                   {isEmail && (
                     <div className="relative">
                       <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />

@@ -24,7 +24,7 @@ export default function AdminLayout({
 
   const menuItems = [
     { name: 'Dashboard', icon: LayoutDashboard, href: '/admin' },
-    { name: 'Cardápio', icon: Utensils, href: '/admin/menu' },
+    { name: 'Cardápio', icon: Utensils, href: '/cardapio' },
     { name: 'Motoboys', icon: Truck, href: '/admin/delivery' },
     { name: 'Relatórios', icon: BarChart3, href: '/admin/reports' },
     { name: 'Configurações', icon: Settings, href: '/admin/settings' },
@@ -127,9 +127,9 @@ export default function AdminLayout({
         </header>
 
         {/* Content */}
-        <main className="p-4 md:p-8">
+        <div className="p-0">
           {children}
-        </main>
+        </div>
       </div>
     </div>
   )

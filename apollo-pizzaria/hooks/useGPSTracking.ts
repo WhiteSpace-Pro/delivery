@@ -36,6 +36,7 @@ export function useGPSTracking({ orderId, deliveryId, enabled }: TrackingConfig)
 
     lastInsertRef.current = now
 
+    // Update history
     await supabase
       .from('delivery_tracking')
       .insert({
@@ -48,10 +49,23 @@ export function useGPSTracking({ orderId, deliveryId, enabled }: TrackingConfig)
         speed: coords.speed ?? null,
         heading: coords.heading ?? null,
         altitude: coords.altitude ?? null,
-        battery_level: null,
-        is_charging: null,
         timestamp: new Date().toISOString(),
-      } as never)
+      } as any)
+
+    // Update current location
+    await supabase
+      .from('delivery_current_location')
+      .upsert({
+        order_id: orderId,
+        tenant_id: TENANT_ID,
+        delivery_id: deliveryId,
+        lat: Number(coords.latitude),
+        lng: Number(coords.longitude),
+        accuracy: coords.accuracy,
+        speed: coords.speed ?? null,
+        heading: coords.heading ?? null,
+        updated_at: new Date().toISOString(),
+      } as any, { onConflict: 'order_id' })
   }, [orderId, deliveryId])
 
   useEffect(() => {
@@ -77,14 +91,12 @@ export function useGPSTracking({ orderId, deliveryId, enabled }: TrackingConfig)
       },
       (err) => {
         if (err.code === 1) {
-          // Permission denied — stop watching
           setPermissionError(true)
           if (watchIdRef.current !== null) {
             navigator.geolocation.clearWatch(watchIdRef.current)
             watchIdRef.current = null
           }
         }
-        // codes 2 (unavailable) and 3 (timeout) — keep trying
       },
       { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
     )

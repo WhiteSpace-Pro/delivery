@@ -30,10 +30,9 @@ export async function getDriversWithStats() {
   today.setHours(0, 0, 0, 0)
   const todayISO = today.toISOString()
 
-  // Fetch drivers with new vehicle columns using any to bypass local outdated types
   const { data: drivers, error: driversError } = await supabaseAdmin
     .from('profiles')
-    .select('id, full_name, phone, role, is_active, created_at, vehicle_type, vehicle_color, vehicle_plate' as any)
+    .select('id, full_name, phone, role, is_active, created_at, vehicle_type, vehicle_color, vehicle_plate, vehicle_brand, vehicle_model' as any)
     .eq('role', 'delivery')
     .eq('tenant_id', TENANT_ID)
 
@@ -44,7 +43,6 @@ export async function getDriversWithStats() {
 
   const typedDrivers = (drivers || []) as any[]
 
-  // Fetch today's delivered orders for these drivers
   const { data: orders, error: ordersError } = await supabaseAdmin
     .from('orders')
     .select('assigned_delivery_id')
@@ -57,12 +55,7 @@ export async function getDriversWithStats() {
     throw new Error('Failed to fetch driver stats')
   }
 
-  // Fetch emails from auth.users
-  const { data: authUsers, error: authError } = await supabaseAdmin.auth.admin.listUsers()
-
-  if (authError) {
-    console.error('Error fetching auth users:', authError)
-  }
+  const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers()
 
   const stats = typedDrivers.map(driver => {
     const ordersCount = orders?.filter(o => o.assigned_delivery_id === driver.id).length || 0
@@ -77,6 +70,8 @@ export async function getDriversWithStats() {
       vehicle_type: driver.vehicle_type,
       vehicle_color: driver.vehicle_color,
       vehicle_plate: driver.vehicle_plate,
+      vehicle_brand: driver.vehicle_brand,
+      vehicle_model: driver.vehicle_model,
       email: authUser?.email || 'N/A',
       ordersToday: ordersCount
     }
@@ -93,10 +88,11 @@ export async function createDriver(formData: {
   vehicle_type: string;
   vehicle_color: string;
   vehicle_plate: string;
+  vehicle_brand: string;
+  vehicle_model: string;
 }) {
   await requireAdmin()
 
-  // 1. Create user in Auth
   const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
     email: formData.email,
     password: formData.password_temp,
@@ -108,12 +104,8 @@ export async function createDriver(formData: {
     }
   })
 
-  if (authError) {
-    console.error('Error creating driver auth:', authError)
-    throw new Error(authError.message)
-  }
+  if (authError) throw new Error(authError.message)
 
-  // 2. Profile update (role 'delivery', tenant_id, and new columns)
   const { error: profileError } = await supabaseAdmin
     .from('profiles')
     .update({
@@ -124,13 +116,13 @@ export async function createDriver(formData: {
       vehicle_type: formData.vehicle_type,
       vehicle_color: formData.vehicle_color,
       vehicle_plate: formData.vehicle_plate,
+      vehicle_brand: formData.vehicle_brand,
+      vehicle_model: formData.vehicle_model,
       is_active: false
     } as any)
     .eq('id', authData.user.id)
 
-  if (profileError) {
-    console.error('Error updating driver profile:', profileError)
-  }
+  if (profileError) console.error(profileError)
 
   revalidatePath('/admin/delivery')
   return { success: true }
@@ -138,17 +130,20 @@ export async function createDriver(formData: {
 
 export async function toggleDriverStatus(driverId: string, currentStatus: boolean) {
   await requireAdmin()
-
-  const { error } = await supabaseAdmin
+  await supabaseAdmin
     .from('profiles')
     .update({ is_active: !currentStatus } as any)
     .eq('id', driverId)
-    .eq('tenant_id', TENANT_ID)
-
-  if (error) {
-    console.error('Error toggling driver status:', error)
-    throw new Error('Failed to toggle status')
-  }
-
   revalidatePath('/admin/delivery')
+}
+
+export async function resetDriverPassword(email: string) {
+  await requireAdmin()
+  const { data, error } = await supabaseAdmin.auth.admin.generateLink({
+    type: 'recovery',
+    email,
+    options: { redirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth/confirm?next=/minha-conta/senha` }
+  })
+  if (error) throw new Error(error.message)
+  return data.properties.action_link
 }

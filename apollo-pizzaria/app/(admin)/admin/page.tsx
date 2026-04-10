@@ -35,20 +35,28 @@ export default async function AdminDashboard() {
   today.setHours(0, 0, 0, 0)
   const todayISO = today.toISOString()
 
-  // Initial fetch for metrics
+  // Group 3.1 & 5: Correct Dashboard counts
   const { data: ordersToday } = await supabase
     .from('orders')
     .select('total_amount, payment_status, status')
     .eq('tenant_id', TENANT_ID)
     .gte('created_at', todayISO)
 
-  const ordersCount = ordersToday?.length || 0
+  const confirmedOrdersToday = ordersToday?.filter(o => !['pending', 'cancelled'].includes(o.status)) || []
+  const ordersCount = confirmedOrdersToday.length
+
+  // Faturamento hoje: payment_status IN ('paid', 'awaiting_collection', 'collected') AND status NOT IN ('pending', 'cancelled')
   const totalRevenue = ordersToday
-    ?.filter(o => o.payment_status === 'paid')
+    ?.filter(o =>
+       ['paid', 'awaiting_collection', 'collected'].includes(o.payment_status as any) &&
+       !['pending', 'cancelled'].includes(o.status)
+    )
     .reduce((sum, o) => sum + (o.total_amount || 0), 0) || 0
+
   const averageTicket = ordersCount > 0 ? totalRevenue / ordersCount : 0
+
   const inProgressCount = ordersToday
-    ?.filter(o => !['delivered', 'cancelled'].includes(o.status))
+    ?.filter(o => ['confirmed', 'preparing', 'ready', 'out_for_delivery'].includes(o.status) && o.payment_status !== 'pending')
     .length || 0
 
   const hours = new Date().getHours()
@@ -60,6 +68,7 @@ export default async function AdminDashboard() {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
+    year: 'numeric'
   }).format(new Date())
 
   return (
@@ -71,7 +80,7 @@ export default async function AdminDashboard() {
           </h1>
           <p className="text-[#666] capitalize">{formattedDate}</p>
         </div>
-        <StoreStatusToggle isActive={tenant?.is_active ?? false} />
+        <StoreStatusToggle isActive={(tenant as any)?.is_active ?? false} />
       </header>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">

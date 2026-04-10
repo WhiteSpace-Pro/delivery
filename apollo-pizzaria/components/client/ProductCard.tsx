@@ -1,10 +1,11 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Image from "next/image";
 import { Product } from "@/types";
 import { Playfair_Display } from "next/font/google";
 import { cn } from "@/lib/utils";
+import { createClient } from "@/lib/supabase/client";
 
 const playfair = Playfair_Display({ subsets: ["latin"], weight: ["700"] });
 
@@ -15,6 +16,17 @@ interface ProductCardProps {
 
 export function ProductCard({ product, onAdd }: ProductCardProps) {
   const [imgError, setImgError] = useState(false);
+  const [isStoreOpen, setIsStoreOpen] = useState(true);
+  const supabase = createClient();
+
+  useEffect(() => {
+    async function checkStoreStatus() {
+      const tenantId = process.env.NEXT_PUBLIC_TENANT_ID_APOLLO || '496c5a35-6843-4061-b3ab-159d15a0cbc6';
+      const { data } = await supabase.from('tenants').select('is_active').eq('id', tenantId).single();
+      if (data) setIsStoreOpen(!!(data as any)?.is_active);
+    }
+    checkStoreStatus();
+  }, [supabase]);
 
   const formatPrice = (price: number | null) => {
     if (price === null) return "—";
@@ -23,10 +35,18 @@ export function ProductCard({ product, onAdd }: ProductCardProps) {
 
   const isPizza = product.type === 'pizza';
 
+  const handleAdd = () => {
+    if (!isStoreOpen) return;
+    onAdd(product);
+  };
+
   return (
     <div
-      className="group bg-[#1C1C1C] border border-white/5 rounded-2xl p-4 transition-all duration-300 hover:border-[#D4941A] cursor-pointer h-full flex flex-col"
-      onClick={() => onAdd(product)}
+      className={cn(
+        "group bg-[#1C1C1C] border border-white/5 rounded-2xl p-4 transition-all duration-300 hover:border-[#D4941A] cursor-pointer h-full flex flex-col",
+        !isStoreOpen && "opacity-80 grayscale-[0.5]"
+      )}
+      onClick={handleAdd}
     >
       {/* Image / Fallback Placeholder */}
       <div className="relative aspect-[4/3] rounded-lg overflow-hidden mb-4 bg-zinc-800 flex items-center justify-center">
@@ -40,6 +60,11 @@ export function ProductCard({ product, onAdd }: ProductCardProps) {
           />
         ) : (
           <div className="text-4xl">🍕</div>
+        )}
+        {!isStoreOpen && (
+          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+            <span className="text-white font-bold text-xs uppercase tracking-widest bg-apollo-orange px-3 py-1 rounded">Fechado</span>
+          </div>
         )}
       </div>
 
@@ -66,11 +91,15 @@ export function ProductCard({ product, onAdd }: ProductCardProps) {
           )}
 
           <button
+            disabled={!isStoreOpen}
             onClick={(e) => {
               e.stopPropagation();
-              onAdd(product);
+              handleAdd();
             }}
-            className="w-9 h-9 bg-[#E85D24] hover:bg-[#D15420] text-white rounded-full flex items-center justify-center transition-colors shadow-lg"
+            className={cn(
+              "w-9 h-9 text-white rounded-full flex items-center justify-center transition-colors shadow-lg",
+              isStoreOpen ? "bg-[#E85D24] hover:bg-[#D15420]" : "bg-zinc-700 cursor-not-allowed"
+            )}
           >
             <span className="text-xl font-bold">+</span>
           </button>

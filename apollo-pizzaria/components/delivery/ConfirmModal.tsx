@@ -3,7 +3,7 @@
 
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Camera, CheckCircle2, Loader2, X } from 'lucide-react'
+import { Camera, Loader2, Wallet, Check } from 'lucide-react'
 
 const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 const supabase = createClient()
@@ -20,6 +20,7 @@ export function ConfirmModal({ orderId, deliveryId, position, onClose, onConfirm
   const [photo, setPhoto] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
+  const [step, setStep] = useState(1) // 1: photo, 2: collection confirmation
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -31,8 +32,11 @@ export function ConfirmModal({ orderId, deliveryId, position, onClose, onConfirm
     setPreview(url)
   }
 
-  const handleConfirm = async () => {
-    if (!photo) return
+  const handlePhotoSubmit = () => {
+    if (photo) setStep(2)
+  }
+
+  const handleFinalConfirm = async (received: boolean) => {
     setLoading(true)
     setError(null)
 
@@ -42,14 +46,14 @@ export function ConfirmModal({ orderId, deliveryId, position, onClose, onConfirm
       const path = `${TENANT_ID}/${orderId}/${timestamp}.jpg`
       const { error: uploadError } = await supabase.storage
         .from('delivery-photos')
-        .upload(path, photo, { contentType: photo.type, upsert: false })
+        .upload(path, photo!, { contentType: photo!.type, upsert: false })
       if (uploadError) throw new Error('Erro ao enviar foto.')
 
       const { data: urlData } = supabase.storage.from('delivery-photos').getPublicUrl(path)
       const photoUrl = urlData.publicUrl
 
       // 2. INSERT delivery_checkin
-      await supabase.from('delivery_checkins' as any).insert({
+      await supabase.from('delivery_checkins').insert({
         order_id: orderId,
         delivery_id: deliveryId,
         tenant_id: TENANT_ID,
@@ -57,21 +61,14 @@ export function ConfirmModal({ orderId, deliveryId, position, onClose, onConfirm
         lat: position?.lat ?? null,
         lng: position?.lng ?? null,
         photo_url: photoUrl,
-      } as never)
+      } as any)
 
-      // 3. UPDATE order status via API (needs supabaseAdmin server-side)
-      await fetch('/api/orders/confirm-delivery', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order_id: orderId }),
-      })
+      // 3. Update order status and payment status if received
+      const updateData: any = { status: 'delivered', delivered_at: new Date().toISOString() }
+      if (received) updateData.payment_status = 'collected'
 
-      // 4. Notify next
-      await fetch('/api/notify-next', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ order_id: orderId, delivery_id: deliveryId }),
-      })
+      const { error: orderError } = await supabase.from('orders').update(updateData).eq('id', orderId)
+      if (orderError) throw orderError
 
       onConfirmed()
     } catch (err: any) {
@@ -82,63 +79,35 @@ export function ConfirmModal({ orderId, deliveryId, position, onClose, onConfirm
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end">
-      <div className="absolute inset-0 bg-black/70" onClick={onClose} />
-      <div className="relative w-full bg-[#1A1A1A] rounded-t-3xl p-6 space-y-5 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-bold text-white">Confirmar Entrega</h2>
-          <button onClick={onClose} className="p-2 text-white/40 hover:text-white transition-colors">
-            <X size={20} />
-          </button>
-        </div>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative w-full max-w-sm bg-[#141414] rounded-3xl p-8 border border-white/10 shadow-2xl">
+        {step === 1 ? (
+           <div className="space-y-6 text-center">
+              <h2 className="text-xl font-bold text-white italic">Foto da Entrega</h2>
+              <input ref={inputRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handlePhotoChange} />
+              <div onClick={() => inputRef.current?.click()} className="h-64 rounded-2xl border-2 border-dashed border-white/10 flex items-center justify-center cursor-pointer hover:border-apollo-orange transition-all overflow-hidden bg-black/20">
+                 {preview ? <img src={preview} className="w-full h-full object-cover" alt="Preview" /> : <div className="flex flex-col items-center text-white/40"><Camera size={48} /><p className="mt-2 text-xs font-bold uppercase tracking-widest">Tirar Foto</p></div>}
+              </div>
+              <button onClick={handlePhotoSubmit} disabled={!photo} className="w-full h-14 bg-apollo-orange disabled:opacity-30 text-white font-bold rounded-2xl shadow-xl shadow-apollo-orange/20">Avançar</button>
+           </div>
+        ) : (
+           <div className="space-y-6 text-center">
+              <div className="w-16 h-16 bg-apollo-orange/10 rounded-full flex items-center justify-center mx-auto"><Wallet className="text-apollo-orange" size={32} /></div>
+              <h2 className="text-xl font-bold text-white italic">Você recebeu o pagamento?</h2>
+              <p className="text-white/40 text-sm italic">Confirme se o cliente efetuou o pagamento em dinheiro ou cartão.</p>
 
-        {/* Photo capture */}
-        <div>
-          <input
-            ref={inputRef}
-            type="file"
-            accept="image/*"
-            capture="environment"
-            className="hidden"
-            onChange={handlePhotoChange}
-          />
-
-          {preview ? (
-            <div className="relative rounded-2xl overflow-hidden">
-              <img src={preview} alt="Preview" className="w-full h-52 object-cover" />
-              <button
-                onClick={() => { setPhoto(null); setPreview(null) }}
-                className="absolute top-2 right-2 bg-black/60 rounded-full p-1.5"
-              >
-                <X size={16} className="text-white" />
-              </button>
-            </div>
-          ) : (
-            <button
-              onClick={() => inputRef.current?.click()}
-              className="w-full h-40 rounded-2xl border-2 border-dashed border-white/20 flex flex-col items-center justify-center gap-3 text-white/40 hover:border-apollo-orange hover:text-apollo-orange transition-colors"
-            >
-              <Camera size={36} />
-              <span className="text-sm font-bold">Tirar foto da entrega</span>
-              <span className="text-xs">Obrigatório para confirmar</span>
-            </button>
-          )}
-        </div>
-
-        {error && (
-          <p className="text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-xl p-3">{error}</p>
+              <div className="grid grid-cols-1 gap-3">
+                 <button onClick={() => handleFinalConfirm(true)} disabled={loading} className="w-full h-14 bg-green-600 text-white font-bold rounded-2xl flex items-center justify-center gap-2 transition-all hover:bg-green-500">
+                    {loading ? <Loader2 className="animate-spin" /> : <><Check /> Sim, recebi</>}
+                 </button>
+                 <button onClick={() => handleFinalConfirm(false)} disabled={loading} className="w-full h-14 bg-zinc-800 text-white font-bold rounded-2xl transition-all hover:bg-zinc-700">
+                    Não recebi / PIX
+                 </button>
+              </div>
+           </div>
         )}
-
-        <button
-          onClick={handleConfirm}
-          disabled={!photo || loading}
-          className="w-full bg-[#E85D24] disabled:opacity-40 text-white font-bold py-4 rounded-2xl flex items-center justify-center gap-2 text-sm transition-all"
-        >
-          {loading
-            ? <><Loader2 size={18} className="animate-spin" /> Confirmando...</>
-            : <><CheckCircle2 size={18} /> Confirmar entrega</>
-          }
-        </button>
+        {error && <p className="text-red-500 text-xs mt-4 font-bold">{error}</p>}
       </div>
     </div>
   )
