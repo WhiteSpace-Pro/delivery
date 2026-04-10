@@ -1,47 +1,44 @@
 import { NextRequest, NextResponse } from 'next/server'
+import QRCode from 'qrcode'
+import { generateBrCode } from '@/lib/pix/brcode'
 import { supabaseAdmin } from '@/lib/supabase/admin'
-
-const TENANT_ID = process.env.NEXT_PUBLIC_TENANT_ID_APOLLO || '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
-  const valor = searchParams.get('valor')
-  const txid = searchParams.get('txid')
+  const valor = parseFloat(searchParams.get('valor') ?? '0')
+  const txid = searchParams.get('txid') ?? 'APOLLO'
   const saida = searchParams.get('saida') ?? 'br'
 
-  try {
-    // Buscar chave Pix do tenant
-    const { data: tenant } = await supabaseAdmin
-      .from('tenants')
-      .select('*')
-      .eq('id', TENANT_ID)
-      .single()
+  // Buscar chave Pix do tenant
+  const { data: tenant } = await supabaseAdmin
+    .from('tenants')
+    .select('pix_key, name' as any)
+    .eq('id', process.env.NEXT_PUBLIC_TENANT_ID_APOLLO!)
+    .single()
 
-    const pixKey = (tenant as any)?.pix_key || '+5531985375524'
-    const cleanPixKey = pixKey.replace(/\s/g, '')
+  const brcode = generateBrCode({
+    chave: (tenant as any)?.pix_key ?? '+5531985375524',
+    nome: (tenant as any)?.name ?? 'Apollo Pizzaria',
+    cidade: 'Belo Horizonte',
+    valor,
+    txid
+  })
 
-    const url = new URL('https://gerarqrcodepix.com.br/api/v1')
-    url.searchParams.set('nome', (tenant as any)?.name || 'Apollo Pizzaria')
-    url.searchParams.set('cidade', 'Belo Horizonte')
-    url.searchParams.set('chave', cleanPixKey)
-    url.searchParams.set('valor', valor ?? '0')
-    url.searchParams.set('txid', txid ?? 'APOLLO')
-    url.searchParams.set('saida', saida)
-    url.searchParams.set('tamanho', '300')
-
-    const response = await fetch(url.toString())
-
-    if (saida === 'qr') {
-      const buffer = await response.arrayBuffer()
-      return new NextResponse(buffer, {
-        headers: { 'Content-Type': 'image/png' }
-      })
-    } else {
-      const text = await response.text()
-      return NextResponse.json({ brcode: text })
-    }
-  } catch (error) {
-    console.error('PIX Proxy Error:', error)
-    return NextResponse.json({ error: 'Failed to generate PIX' }, { status: 500 })
+  if (saida === 'qr') {
+    // Gerar imagem PNG do QR Code
+    const buffer = await QRCode.toBuffer(brcode, {
+      errorCorrectionLevel: 'M',
+      width: 300,
+      margin: 2,
+      color: { dark: '#000000', light: '#FFFFFF' }
+    })
+    
+    // Convert Buffer to Uint8Array to satisfy NextResponse type
+    const response = new NextResponse(new Uint8Array(buffer), {
+      headers: { 'Content-Type': 'image/png' }
+    })
+    return response
+  } else {
+    return NextResponse.json({ brcode })
   }
 }
