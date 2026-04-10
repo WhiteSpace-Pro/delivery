@@ -47,37 +47,27 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
 
     const { data: ordersData } = await supabase
       .from('orders')
-      .select('*, order_items(*, products:products!order_items_product_id_fkey(name, type)), customer:profiles!orders_customer_id_fkey(*)')
+      .select('*, order_items(*, products(*)), profiles(*)')
       .eq('tenant_id', tenantId)
       .gte('created_at', today.toISOString())
       .neq('status', 'cancelled')
       .order('created_at', { ascending: true })
 
     if (ordersData) {
-      // Group 3.2: Filter phantom PIX orders (> 2h) for NOVO column
-      // Group 3.3: Move cash/card orders directly to CONFIRMED column if status was pending
-      const processedOrders = (ordersData as unknown as OrderWithItems[]).map(o => {
-          if (o.status === 'pending' && (o.payment_method === 'cash' || o.payment_method === 'credit_card' || o.payment_method === 'debit_card')) {
-             // In a real app we would update the DB too, but here we fix the view.
-             // Usually those should be created as 'confirmed' already by the checkout logic.
-             // We'll fix checkout logic too.
-             return o;
-          }
-          return o;
-      }).filter(o => {
+      const filtered = (ordersData as any[]).filter(o => {
         if (o.status === 'pending' && o.payment_method === 'pix' && o.payment_status === 'pending') {
-          return new Date(o.created_at || "").getTime() >= new Date(twoHoursAgo).getTime()
+          return new Date(o.created_at).getTime() >= new Date(twoHoursAgo).getTime()
         }
         return true
       })
-      setOrders(processedOrders)
+      setOrders(filtered)
     }
 
     const { data: notifications } = await supabase
       .from('notifications')
       .select('order_id' as any)
       .eq('tenant_id', tenantId)
-      .eq('type' as any, 'order_status')
+      .in('type' as any, ['order_status', 'delivery_approaching'])
       .eq('is_read' as any, false)
 
     if (notifications) {
@@ -97,12 +87,12 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
       }, async (payload) => {
         const { data } = await supabase
           .from('orders')
-          .select('*, order_items(*, products:products!order_items_product_id_fkey(name, type)), customer:profiles!orders_customer_id_fkey(*)')
+          .select('*, order_items(*, products(*)), profiles(*)')
           .eq('id', payload.new.id)
           .single()
 
         if (data) {
-          setOrders(prev => [...prev, data as unknown as OrderWithItems])
+          setOrders(prev => [...prev, data as any])
           if (data.status === 'pending' || data.status === 'confirmed') playNotificationSound()
         }
       })

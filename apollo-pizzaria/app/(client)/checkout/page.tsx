@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Check, Loader2, Camera } from 'lucide-react'
+import { ArrowLeft, Check, Loader2, Camera, Copy, MapPin } from 'lucide-react'
 import { useCart } from '@/contexts/CartContext'
 import { useUser } from '@/hooks/useUser'
 import { createClient } from '@/lib/supabase/client'
@@ -46,6 +46,8 @@ export default function CheckoutPage() {
   const [pixReceipt, setPixReceipt] = useState<File | null>(null)
   const [pixReceiptPreview, setPixReceiptPreview] = useState<string | null>(null)
   const [orderId, setOrderId] = useState<string | null>(null)
+  const [pixData, setPixData] = useState({ qrCode: '', brCode: '', amount: 0, pixKey: '31985375524' })
+  const [copiedBrCode, setCopiedBrCode] = useState(false)
 
   const [addressForm, setAddressForm] = useState({
     label: '',
@@ -76,6 +78,7 @@ export default function CheckoutPage() {
         if (data.orderId && data.paymentMethod === 'pix') {
           setOrderId(data.orderId)
           setShowPixScreen(true)
+          if (data.pixData) setPixData(data.pixData)
         }
       } catch (e) { console.error(e) }
     }
@@ -83,11 +86,11 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (showPixScreen && orderId) {
-      localStorage.setItem('apollo-checkout-pix', JSON.stringify({ orderId, paymentMethod: 'pix' }))
+      localStorage.setItem('apollo-checkout-pix', JSON.stringify({ orderId, paymentMethod: 'pix', pixData }))
     } else {
       localStorage.removeItem('apollo-checkout-pix')
     }
-  }, [showPixScreen, orderId])
+  }, [showPixScreen, orderId, pixData])
 
   useEffect(() => {
     async function checkStoreStatus() {
@@ -138,6 +141,7 @@ export default function CheckoutPage() {
           ...prev,
           street: data.logradouro,
           neighborhood: data.bairro,
+          fee: 0 // Group 2: reset fee on zip change
         }))
       }
     } catch (e) {
@@ -231,6 +235,13 @@ export default function CheckoutPage() {
 
       if (paymentMethod === 'pix') {
         setOrderId(generatedOrderId)
+        // Group 7: Generate Pix Data
+        const qrUrl = `https://gerarqrcodepix.com.br/api/v1?nome=Apollo%20Pizzaria&cidade=Belo%20Horizonte&valor=${finalTotal.toFixed(2)}&chave=31985375524&txid=APOLLO${generatedOrderId.slice(-6).toUpperCase()}&saida=qr&tamanho=300`
+        const brUrl = qrUrl.replace('saida=qr', 'saida=br')
+        const brRes = await fetch(brUrl)
+        const brCode = await brRes.text()
+
+        setPixData({ qrCode: qrUrl, brCode, amount: finalTotal, pixKey: '31985375524' })
         setShowPixScreen(true)
       } else {
         clearCart()
@@ -259,7 +270,8 @@ export default function CheckoutPage() {
     setLoading(true)
     try {
       const fileExt = pixReceipt.name.split('.').pop()
-      const fileName = `${TENANT_ID}/comprovantes/${orderId}/${Date.now()}.${fileExt}`
+      const timestamp = Date.now()
+      const fileName = `${TENANT_ID}/comprovantes/${orderId}/${timestamp}.${fileExt}`
       const { error } = await supabase.storage.from('delivery-photos').upload(fileName, pixReceipt)
 
       if (error) throw error
@@ -269,8 +281,8 @@ export default function CheckoutPage() {
 
       await supabase.from('orders').update({
         pix_receipt_note: publicUrl,
-        status: ('pending' as any),
-        payment_status: ('pending' as any)
+        status: 'pending',
+        payment_status: 'pending'
       } as any).eq('id', orderId)
 
       clearCart()
@@ -284,21 +296,36 @@ export default function CheckoutPage() {
     }
   }
 
+  const copyBrCode = () => {
+    navigator.clipboard.writeText(pixData.brCode)
+    setCopiedBrCode(true)
+    setTimeout(() => setCopiedBrCode(false), 2000)
+  }
+
   if (userLoading) return <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-center"><Loader2 size={40} className="text-apollo-orange animate-spin" /></div>
 
   if (showPixScreen) {
     return (
       <div className="min-h-screen bg-[#0D0D0D] text-white font-dm p-4 flex items-center justify-center">
-        <div className="max-w-md w-full bg-[#1C1C1C] rounded-3xl p-8 border border-white/5 shadow-2xl">
+        <div className="max-w-md w-full bg-[#1C1C1C] rounded-3xl p-8 border border-white/5 shadow-2xl overflow-y-auto max-h-screen">
           <h1 className="text-2xl font-playfair font-bold text-apollo-orange mb-6 text-center italic">Pagamento PIX</h1>
+
           <div className="bg-[#0D0D0D] rounded-2xl p-6 mb-6 text-center space-y-4">
-            <p className="text-sm text-white/60">Escaneie o QR Code ou copie a chave</p>
-            <div className="w-48 h-48 bg-white mx-auto rounded-xl flex items-center justify-center">
-              <span className="text-black text-xs">[QR CODE]</span>
-            </div>
-            <div className="p-3 bg-white/5 rounded-xl text-xs font-mono break-all border border-white/10">
-              00020126330014BR.GOV.BCB.PIX011112345678901
-            </div>
+             <div className="flex justify-between text-xs font-bold text-white/40 uppercase mb-2">
+                <span>Valor a pagar</span>
+                <span className="text-apollo-orange">R$ {pixData.amount.toFixed(2).replace('.', ',')}</span>
+             </div>
+             <div className="w-64 h-64 bg-white mx-auto rounded-xl flex items-center justify-center overflow-hidden">
+                <img src={pixData.qrCode} alt="PIX QR Code" className="w-full h-full" />
+             </div>
+             <p className="text-[10px] text-white/40 uppercase font-bold tracking-widest mt-4">Copia e Cola</p>
+             <div className="flex gap-2">
+                <input readOnly value={pixData.brCode} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-[10px] font-mono focus:outline-none" />
+                <button onClick={copyBrCode} className="p-2 bg-apollo-orange rounded-xl hover:bg-apollo-orange/80 transition-colors">
+                   {copiedBrCode ? <Check size={16} /> : <Copy size={16} />}
+                </button>
+             </div>
+             <p className="text-[10px] text-white/40 font-bold mt-2">Chave: {pixData.pixKey} (Telefone)</p>
           </div>
 
           <div className="space-y-4">
@@ -313,7 +340,7 @@ export default function CheckoutPage() {
                 ) : (
                   <div className="flex flex-col items-center gap-2 text-white/40">
                     <Camera size={32} />
-                    <span className="text-xs">Foto ou PDF</span>
+                    <span className="text-xs font-bold">Tirar Foto ou Escolher PDF</span>
                   </div>
                 )}
               </div>
@@ -322,9 +349,9 @@ export default function CheckoutPage() {
             <button
               onClick={handleConfirmPix}
               disabled={!pixReceipt || loading}
-              className="w-full bg-apollo-orange hover:bg-apollo-orange/90 disabled:opacity-50 h-14 rounded-xl font-bold flex items-center justify-center gap-2 transition-all"
+              className="w-full bg-apollo-orange hover:bg-apollo-orange/90 disabled:opacity-50 h-14 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg"
             >
-              {loading ? <Loader2 className="animate-spin" /> : <><Check size={20} /> Confirmar Pagamento</>}
+              {loading ? <Loader2 className="animate-spin" /> : <><Check size={20} /> Enviar Comprovante</>}
             </button>
 
             <button
@@ -354,16 +381,22 @@ export default function CheckoutPage() {
           <section className="bg-[#1C1C1C] rounded-2xl p-6 border border-[#2A2A2A]">
              <h2 className="text-lg font-bold mb-6">1. Identificação</h2>
              <div className="grid md:grid-cols-2 gap-4">
-               <input required value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Nome" />
-               <input required value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Telefone" />
+               <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Nome Completo</label>
+                  <input required value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:border-apollo-orange outline-none transition-all" placeholder="Seu nome" />
+               </div>
+               <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Telefone</label>
+                  <input required value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:border-apollo-orange outline-none transition-all" placeholder="(31) 99999-9999" />
+               </div>
              </div>
           </section>
 
           <section className="bg-[#1C1C1C] rounded-2xl p-6 border border-[#2A2A2A]">
              <h2 className="text-lg font-bold mb-6">2. Entrega</h2>
-             <div className="flex bg-[#0D0D0D] rounded-xl p-1 mb-6">
-               <button type="button" onClick={() => setDeliveryType('delivery')} className={cn("flex-1 py-3 rounded-lg text-sm font-bold", deliveryType === 'delivery' ? "bg-apollo-orange text-white" : "text-white/40")}>Entrega</button>
-               <button type="button" onClick={() => setDeliveryType('pickup')} className={cn("flex-1 py-3 rounded-lg text-sm font-bold", deliveryType === 'pickup' ? "bg-apollo-orange text-white" : "text-white/40")}>Retirada</button>
+             <div className="flex bg-[#0D0D0D] rounded-xl p-1 mb-6 border border-white/5">
+               <button type="button" onClick={() => setDeliveryType('delivery')} className={cn("flex-1 py-3 rounded-lg text-sm font-bold transition-all", deliveryType === 'delivery' ? "bg-apollo-orange text-white" : "text-white/40")}>Entrega</button>
+               <button type="button" onClick={() => setDeliveryType('pickup')} className={cn("flex-1 py-3 rounded-lg text-sm font-bold transition-all", deliveryType === 'pickup' ? "bg-apollo-orange text-white" : "text-white/40")}>Retirada</button>
              </div>
 
              {deliveryType === 'delivery' && (
@@ -382,19 +415,39 @@ export default function CheckoutPage() {
 
                  {selectedAddressId === 'new' && (
                    <div className="space-y-4">
-                     <input value={addressForm.zipcode} onChange={e => setAddressForm(prev => ({...prev, zipcode: e.target.value}))} onBlur={handleCEPBlur} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="CEP" />
-                     <div className="grid grid-cols-4 gap-2">
-                        <input className="col-span-3 bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Rua" value={addressForm.street} readOnly />
-                        <input className="col-span-1 bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm text-center" placeholder="Nº" value={addressForm.number} onChange={e => setAddressForm(prev => ({...prev, number: e.target.value}))} />
+                     <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-white/40 ml-1">CEP</label>
+                        <input value={addressForm.zipcode} onChange={e => setAddressForm(prev => ({...prev, zipcode: e.target.value, fee: 0}))} onBlur={handleCEPBlur} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="00000-000" />
                      </div>
-                     <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Bairro" value={addressForm.neighborhood} readOnly />
-                     <button type="button" onClick={handleCalculateFee} className="w-full py-3 bg-white/5 border border-white/10 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-all">Calcular Frete</button>
+                     <div className="grid grid-cols-4 gap-2">
+                        <div className="col-span-3 space-y-1">
+                           <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Rua</label>
+                           <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Rua" value={addressForm.street} readOnly />
+                        </div>
+                        <div className="col-span-1 space-y-1">
+                           <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Nº</label>
+                           <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm text-center" placeholder="123" value={addressForm.number} onChange={e => setAddressForm(prev => ({...prev, number: e.target.value, fee: 0}))} />
+                        </div>
+                     </div>
+                     <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Bairro</label>
+                        <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Bairro" value={addressForm.neighborhood} readOnly />
+                     </div>
+                     <button type="button" onClick={handleCalculateFee} className="w-full py-4 bg-white/5 border border-white/10 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-all">Calcular Frete</button>
 
-                     {calculatingFee && <div className="text-center text-xs text-apollo-orange animate-pulse">Calculando...</div>}
-                     {addressForm.fee > 0 && <div className="bg-apollo-orange/10 p-3 rounded-xl text-center text-apollo-orange font-bold text-sm">Taxa de entrega: R$ {addressForm.fee.toFixed(2).replace('.', ',')}</div>}
+                     {calculatingFee && <div className="text-center text-xs text-apollo-orange animate-pulse">Calculando distância real...</div>}
+                     {addressForm.fee > 0 && <div className="bg-apollo-orange/10 p-4 rounded-xl text-center text-apollo-orange font-bold text-sm border border-apollo-orange/20 animate-in zoom-in">Taxa de entrega: R$ {addressForm.fee.toFixed(2).replace('.', ',')}</div>}
                    </div>
                  )}
                </div>
+             )}
+
+             {deliveryType === 'pickup' && (
+                <div className="bg-[#0D0D0D] p-6 rounded-2xl border border-dashed border-apollo-orange/30 text-center">
+                   <MapPin className="mx-auto text-apollo-orange mb-2" size={32} />
+                   <h3 className="font-bold text-sm">Retirada na Loja</h3>
+                   <p className="text-xs text-white/40">Av. Jequitinhonha, 218 - Vera Cruz</p>
+                </div>
              )}
           </section>
 
@@ -402,26 +455,27 @@ export default function CheckoutPage() {
              <h2 className="text-lg font-bold mb-6">3. Pagamento</h2>
              <div className="grid grid-cols-2 gap-2">
                {['pix', 'cash', 'credit_card', 'debit_card'].map(m => (
-                 <button key={m} type="button" onClick={() => setPaymentMethod(m as any)} className={cn("p-4 rounded-xl border text-sm font-bold uppercase transition-all", paymentMethod === m ? "bg-apollo-orange border-apollo-orange shadow-lg" : "bg-[#0D0D0D] border-[#2A2A2A] text-white/40")}>
-                   {m === 'pix' ? '⚡ PIX' : m === 'cash' ? '💵 Dinheiro' : '💳 Cartão'}
+                 <button key={m} type="button" onClick={() => setPaymentMethod(m as any)} className={cn("p-4 rounded-xl border text-xs font-bold uppercase transition-all flex flex-col items-center gap-2", paymentMethod === m ? "bg-apollo-orange border-apollo-orange shadow-lg" : "bg-[#0D0D0D] border-[#2A2A2A] text-white/40")}>
+                   <span className="text-xl">{m === 'pix' ? '⚡' : m === 'cash' ? '💵' : '💳'}</span>
+                   <span>{m === 'pix' ? 'PIX' : m === 'cash' ? 'Dinheiro' : m === 'credit_card' ? 'Crédito' : 'Débito'}</span>
                  </button>
                ))}
              </div>
              {paymentMethod === 'cash' && (
                 <div className="mt-4 space-y-1.5">
-                  <label className="text-[10px] uppercase font-bold text-white/40">Troco para quanto?</label>
-                  <input type="number" value={changeFor} onChange={e => setChangeFor(e.target.value)} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3 text-sm" placeholder="Ex: 50" />
+                  <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Troco para quanto?</label>
+                  <input type="number" value={changeFor} onChange={e => setChangeFor(e.target.value)} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3 text-sm focus:border-apollo-orange outline-none transition-all" placeholder="Ex: 50" />
                 </div>
              )}
           </section>
 
           <div className="bg-[#1C1C1C] rounded-2xl p-6 border border-[#2A2A2A] sticky bottom-4 shadow-2xl">
              <div className="flex justify-between items-center mb-6">
-               <span className="text-lg font-bold">Total</span>
-               <span className="text-2xl font-playfair font-bold text-apollo-orange italic">R$ {finalTotal.toFixed(2).replace('.', ',')}</span>
+               <span className="text-lg font-bold">Total do Pedido</span>
+               <span className="text-3xl font-playfair font-bold text-apollo-orange italic">R$ {finalTotal.toFixed(2).replace('.', ',')}</span>
              </div>
-             <button type="submit" disabled={loading || !isStoreOpen} className="w-full bg-apollo-orange h-14 rounded-xl font-bold shadow-xl shadow-apollo-orange/20 transition-all disabled:opacity-50">
-               {loading ? 'Processando...' : 'Finalizar Pedido'}
+             <button type="submit" disabled={loading || !isStoreOpen} className="w-full bg-apollo-orange h-16 rounded-xl font-bold text-lg shadow-xl shadow-apollo-orange/20 transition-all disabled:opacity-50 active:scale-[0.98]">
+               {loading ? <Loader2 className="animate-spin mx-auto" /> : 'Finalizar Pedido'}
              </button>
           </div>
         </form>

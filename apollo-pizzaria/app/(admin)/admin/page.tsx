@@ -35,29 +35,26 @@ export default async function AdminDashboard() {
   today.setHours(0, 0, 0, 0)
   const todayISO = today.toISOString()
 
-  // Initial fetch for metrics
-  // Group 3.1: Dashboard counts
+  // Group 3.1 & 5: Correct Dashboard counts
   const { data: ordersToday } = await supabase
     .from('orders')
     .select('total_amount, payment_status, status')
     .eq('tenant_id', TENANT_ID)
     .gte('created_at', todayISO)
 
-  // Pedidos hoje: contar apenas status != 'pending' (PIX não confirmado)
-  // No prompt consolidado diz: excluir PIX não confirmado. Mas PIX confirmado vira confirmed.
-  // Então status != 'pending' é o filtro correto.
-  const confirmedOrdersToday = ordersToday?.filter(o => o.status !== 'pending') || []
+  const confirmedOrdersToday = ordersToday?.filter(o => !['pending', 'cancelled'].includes(o.status)) || []
   const ordersCount = confirmedOrdersToday.length
 
-  // Faturamento hoje: SUM(total_amount) WHERE payment_status = 'paid'
+  // Faturamento hoje: payment_status IN ('paid', 'awaiting_collection', 'collected') AND status NOT IN ('pending', 'cancelled')
   const totalRevenue = ordersToday
-    ?.filter(o => o.payment_status === 'paid')
+    ?.filter(o =>
+       ['paid', 'awaiting_collection', 'collected'].includes(o.payment_status as any) &&
+       !['pending', 'cancelled'].includes(o.status)
+    )
     .reduce((sum, o) => sum + (o.total_amount || 0), 0) || 0
 
-  // Ticket médio: faturamento / pedidos confirmados
   const averageTicket = ordersCount > 0 ? totalRevenue / ordersCount : 0
 
-  // Em andamento: status IN ('confirmed','preparing','ready','out_for_delivery') AND payment_status != 'pending'
   const inProgressCount = ordersToday
     ?.filter(o => ['confirmed', 'preparing', 'ready', 'out_for_delivery'].includes(o.status) && o.payment_status !== 'pending')
     .length || 0
@@ -67,7 +64,6 @@ export default async function AdminDashboard() {
   if (hours >= 0 && hours < 12) greeting = 'Bom dia'
   else if (hours >= 12 && hours < 18) greeting = 'Boa tarde'
 
-  // Group 3.7: Data no dashboard com ano
   const formattedDate = new Intl.DateTimeFormat('pt-BR', {
     weekday: 'long',
     day: 'numeric',

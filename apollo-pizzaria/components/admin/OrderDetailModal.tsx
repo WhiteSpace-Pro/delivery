@@ -9,7 +9,8 @@ import {
   Phone,
   User,
   Receipt,
-  Loader2
+  Loader2,
+  Check
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { OrderWithItems } from '@/types'
@@ -34,13 +35,9 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
         .from('orders')
         .select(`
           *,
-          order_items (
-            *,
-            product:products!order_items_product_id_fkey (*),
-            half_product:products!order_items_half_product_id_fkey (*),
-            edge:edge_options (*)
-          ),
-          address:addresses (*)
+          order_items(*, products(*)),
+          address:addresses(*),
+          profiles(*)
         `)
         .eq('id', order.id)
         .single()
@@ -89,6 +86,9 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
     paid: 'Pago'
   }
 
+  const customerName = details?.customer_name || details?.profiles?.full_name || 'Cliente'
+  const customerPhone = details?.customer_phone || details?.profiles?.phone || 'N/A'
+
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
@@ -111,8 +111,8 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
               <section className="space-y-4">
                 <h3 className="font-bold flex items-center gap-2"><User size={18} className="text-apollo-orange" /> Cliente</h3>
                 <div className="bg-[#F8F7F5] p-4 rounded-xl space-y-1 border border-[#E5E7EB]">
-                   <p className="font-bold text-lg">{details.customer_name || 'Cliente'}</p>
-                   <p className="text-sm text-[#666] flex items-center gap-2"><Phone size={14} /> {details.customer_phone}</p>
+                   <p className="font-bold text-lg">{customerName}</p>
+                   <p className="text-sm text-[#666] flex items-center gap-2"><Phone size={14} /> {customerPhone}</p>
                    <div className="pt-2 mt-2 border-t border-[#E5E7EB] flex gap-2">
                       <MapPin size={16} className="text-apollo-orange shrink-0 mt-0.5" />
                       <div className="text-sm">
@@ -127,12 +127,12 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
               <section className="space-y-4">
                  <h3 className="font-bold">Itens</h3>
                  <div className="space-y-3">
-                    {details.order_items.map((item: any) => (
+                    {details.order_items?.map((item: any) => (
                       <div key={item.id} className="flex justify-between items-start text-sm">
                         <div className="flex gap-3">
                            <span className="font-bold text-apollo-orange">{item.quantity}×</span>
                            <div>
-                              <p className="font-bold">{item.is_half ? `${item.product?.name} / ${item.half_product?.name}` : item.product?.name}</p>
+                              <p className="font-bold">{item.is_half ? `${item.products?.name} / ${item.half_product?.name}` : item.products?.name}</p>
                               <p className="text-[10px] text-[#666] font-bold uppercase">{item.size} {item.edge ? `• Borda ${item.edge.name}` : ''}</p>
                               {item.observations && <p className="text-xs text-apollo-orange italic mt-1 font-medium">{item.observations}</p>}
                            </div>
@@ -161,14 +161,25 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
                  </div>
               </section>
 
-              {details.pix_receipt_note && (
-                <section className="space-y-4">
-                   <h3 className="font-bold flex items-center gap-2"><Receipt size={18} className="text-apollo-orange" /> Comprovante PIX</h3>
-                   <div className="rounded-xl overflow-hidden border border-[#E5E7EB]">
-                      <img src={details.pix_receipt_note} alt="Comprovante" className="w-full h-auto cursor-pointer" onClick={() => window.open(details.pix_receipt_note, '_blank')} />
-                   </div>
-                   {details.payment_status === 'pending' && (
-                     <button onClick={handleConfirmPix} disabled={isUpdating} className="w-full py-4 bg-apollo-orange text-white font-bold rounded-xl shadow-lg">Confirmar Pagamento</button>
+              {details.payment_method === 'pix' && (
+                <section className="space-y-4 border-t border-[#E5E7EB] pt-6">
+                   <h3 className="font-bold flex items-center gap-2"><Receipt size={18} className="text-apollo-orange" /> Confirmação de Pagamento PIX</h3>
+
+                   {details.pix_receipt_note ? (
+                     <div className="space-y-4">
+                        <div className="rounded-xl overflow-hidden border border-[#E5E7EB] bg-zinc-50 p-2">
+                           <img src={details.pix_receipt_note} alt="Comprovante" className="w-full h-auto cursor-pointer rounded-lg shadow-sm" onClick={() => window.open(details.pix_receipt_note, '_blank')} />
+                        </div>
+                        {details.payment_status === 'pending' && (
+                          <button onClick={handleConfirmPix} disabled={isUpdating} className="w-full py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
+                             {isUpdating ? <Loader2 className="animate-spin" /> : <><Check size={20} /> Confirmar Pagamento</>}
+                          </button>
+                        )}
+                     </div>
+                   ) : (
+                     <div className="p-6 bg-yellow-50 border border-yellow-100 rounded-xl text-center">
+                        <p className="text-sm text-yellow-800 font-medium italic">Aguardando envio do comprovante pelo cliente...</p>
+                     </div>
                    )}
                 </section>
               )}
