@@ -43,24 +43,31 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
   const fetchInitialData = useCallback(async () => {
     const today = new Date()
     today.setHours(0, 0, 0, 0)
+    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
 
     const { data: ordersData } = await supabase
       .from('orders')
-      .select('*, order_items(*), profiles!orders_customer_id_fkey(*)')
+      .select('*, order_items(*, products(*)), profiles(*)')
       .eq('tenant_id', tenantId)
       .gte('created_at', today.toISOString())
       .neq('status', 'cancelled')
       .order('created_at', { ascending: true })
 
     if (ordersData) {
-      setOrders(ordersData as unknown as OrderWithItems[])
+      const filtered = (ordersData as any[]).filter(o => {
+        if (o.status === 'pending' && o.payment_method === 'pix' && o.payment_status === 'pending') {
+          return new Date(o.created_at).getTime() >= new Date(twoHoursAgo).getTime()
+        }
+        return true
+      })
+      setOrders(filtered)
     }
 
     const { data: notifications } = await supabase
       .from('notifications')
       .select('order_id' as any)
       .eq('tenant_id', tenantId)
-      .eq('type' as any, 'receipt_uploaded')
+      .in('type' as any, ['order_status', 'delivery_approaching'])
       .eq('is_read' as any, false)
 
     if (notifications) {
@@ -80,13 +87,13 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
       }, async (payload) => {
         const { data } = await supabase
           .from('orders')
-          .select('*, order_items(*), profiles!orders_customer_id_fkey(*)')
+          .select('*, order_items(*, products(*)), profiles(*)')
           .eq('id', payload.new.id)
           .single()
 
         if (data) {
-          setOrders(prev => [...prev, data as unknown as OrderWithItems])
-          if (data.status === 'pending') playNotificationSound()
+          setOrders(prev => [...prev, data as any])
+          if (data.status === 'pending' || data.status === 'confirmed') playNotificationSound()
         }
       })
       .on('postgres_changes', {
@@ -99,22 +106,8 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
       })
       .subscribe()
 
-    const notificationsChannel = supabase.channel(`notifications:${tenantId}`)
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'notifications',
-        filter: `tenant_id=eq.${tenantId}`
-      }, (payload) => {
-        if (payload.new.type === 'receipt_uploaded') {
-          setPendingReceipts(prev => new Set(prev).add(payload.new.order_id))
-        }
-      })
-      .subscribe()
-
     return () => {
       supabase.removeChannel(ordersChannel)
-      supabase.removeChannel(notificationsChannel)
     }
   }, [tenantId, supabase, fetchInitialData])
 
@@ -148,13 +141,13 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
   )
 
   return (
-    <div className="overflow-x-auto pb-4">
+    <div className="overflow-x-auto pb-4 scrollbar-thin scrollbar-thumb-zinc-300">
       <DndContext
         sensors={sensors}
         collisionDetection={closestCorners}
         onDragEnd={handleDragEnd}
       >
-        <div className="flex gap-4 min-w-max">
+        <div className="flex gap-4 min-w-max p-1">
           {COLUMNS.map(col => (
             <DroppableColumn
               key={col.key}
@@ -165,7 +158,8 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
               pendingReceipts={pendingReceipts}
               onOpenDetail={setSelectedOrder}
               onMoveToNext={(orderToMove) => {
-                 const nextStatusIdx = COLUMNS.findIndex(c => c.key === orderToMove.status) + 1;
+                 const currentIdx = COLUMNS.findIndex(c => c.key === orderToMove.status);
+                 const nextStatusIdx = currentIdx + 1;
                  if (nextStatusIdx < COLUMNS.length) {
                    const nextStatus = COLUMNS[nextStatusIdx].key;
                    if (nextStatus === 'out_for_delivery') {
