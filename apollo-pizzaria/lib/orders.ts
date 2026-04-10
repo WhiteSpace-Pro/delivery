@@ -29,7 +29,8 @@ export async function handlePlaceOrder(
         payment_method: orderData.payment_method,
         subtotal: subtotal,
         total_amount: subtotal,
-        status: 'pending',
+        status: orderData.payment_method === 'pix' ? 'pending' : 'confirmed',
+        payment_status: orderData.payment_method === 'pix' ? 'pending' : 'awaiting_collection',
         delivery_instructions: orderData.address,
         change_for: orderData.change_for,
       } as any)

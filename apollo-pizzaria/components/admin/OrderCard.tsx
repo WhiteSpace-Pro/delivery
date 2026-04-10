@@ -75,7 +75,7 @@ export function OrderCard({ order, hasPendingReceipt, onOpenDetail, onMoveToNext
 
   const itemsSummary = order.order_items
     ?.map(item => {
-      const productName = item.products?.name || "Produto"
+      const productName = item.products?.name ?? `Item #${item.product_id?.slice(-4)}`
       return `${item.quantity}× ${productName}${item.size ? ' ' + item.size : ''}`
     })
     .join(', ')

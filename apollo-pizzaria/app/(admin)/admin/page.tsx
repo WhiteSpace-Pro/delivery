@@ -42,7 +42,7 @@ export default async function AdminDashboard() {
     .eq('tenant_id', TENANT_ID)
     .gte('created_at', todayISO)
 
-  const confirmedOrdersToday = ordersToday?.filter(o => !['pending', 'cancelled'].includes(o.status)) || []
+  const confirmedOrdersToday = ordersToday?.filter(o => o.status !== 'cancelled' && !(o.status === 'pending' && o.payment_status === 'pending')) || []
   const ordersCount = confirmedOrdersToday.length
 
   // Faturamento hoje: payment_status IN ('paid', 'awaiting_collection', 'collected') AND status NOT IN ('pending', 'cancelled')
