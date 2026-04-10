@@ -46,7 +46,7 @@ export default function CheckoutPage() {
   const [pixReceipt, setPixReceipt] = useState<File | null>(null)
   const [pixReceiptPreview, setPixReceiptPreview] = useState<string | null>(null)
   const [orderId, setOrderId] = useState<string | null>(null)
-  const [pixData, setPixData] = useState({ qrCode: '', brCode: '', amount: 0, pixKey: '31985375524' })
+  const [pixData, setPixData] = useState({ qrCode: '', brCode: '', amount: 0, pixKey: '+5531985375524' })
   const [copiedBrCode, setCopiedBrCode] = useState(false)
 
   const [addressForm, setAddressForm] = useState({
@@ -141,7 +141,7 @@ export default function CheckoutPage() {
           ...prev,
           street: data.logradouro,
           neighborhood: data.bairro,
-          fee: 0 // Group 2: reset fee on zip change
+          fee: 0
         }))
       }
     } catch (e) {
@@ -235,13 +235,12 @@ export default function CheckoutPage() {
 
       if (paymentMethod === 'pix') {
         setOrderId(generatedOrderId)
-        // Group 7: Generate Pix Data
         const qrUrl = `/api/pix/qrcode?valor=${finalTotal.toFixed(2)}&txid=APOLLO${generatedOrderId.slice(-6).toUpperCase()}&saida=qr`
         const brUrl = `/api/pix/qrcode?valor=${finalTotal.toFixed(2)}&txid=APOLLO${generatedOrderId.slice(-6).toUpperCase()}&saida=br`
         const brRes = await fetch(brUrl)
         const { brcode: brCode } = await brRes.json()
 
-        setPixData({ qrCode: qrUrl, brCode, amount: finalTotal, pixKey: '31985375524' })
+        setPixData({ qrCode: qrUrl, brCode, amount: finalTotal, pixKey: '+5531985375524' })
         setShowPixScreen(true)
       } else {
         clearCart()
@@ -470,9 +469,22 @@ export default function CheckoutPage() {
           </section>
 
           <div className="bg-[#1C1C1C] rounded-2xl p-6 border border-[#2A2A2A] sticky bottom-4 shadow-2xl">
-             <div className="flex justify-between items-center mb-6">
-               <span className="text-lg font-bold">Total do Pedido</span>
-               <span className="text-3xl font-playfair font-bold text-apollo-orange italic">R$ {finalTotal.toFixed(2).replace('.', ',')}</span>
+             <div className="space-y-3 mb-6">
+                <div className="flex justify-between text-sm">
+                   <span className="text-white/40">Subtotal</span>
+                   <span className="font-bold">R$ {subtotal.toFixed(2).replace('.', ',')}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                   <span className="text-white/40">Taxa de Entrega</span>
+                   <span className="text-apollo-orange font-bold">
+                      {deliveryType === 'pickup' ? 'Grátis' : (deliveryFee > 0 ? `+ R$ ${deliveryFee.toFixed(2).replace('.', ',')}` : 'Calcule o frete')}
+                   </span>
+                </div>
+                <div className="h-px bg-white/5 my-2" />
+                <div className="flex justify-between items-center">
+                   <span className="text-lg font-bold">Total do Pedido</span>
+                   <span className="text-3xl font-playfair font-bold text-apollo-orange italic">R$ {finalTotal.toFixed(2).replace('.', ',')}</span>
+                </div>
              </div>
              <button type="submit" disabled={loading || !isStoreOpen} className="w-full bg-apollo-orange h-16 rounded-xl font-bold text-lg shadow-xl shadow-apollo-orange/20 transition-all disabled:opacity-50 active:scale-[0.98]">
                {loading ? <Loader2 className="animate-spin mx-auto" /> : 'Finalizar Pedido'}
