@@ -1,76 +1,53 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
+import { ArrowLeft, Check, Loader2, Camera, Copy, MapPin } from 'lucide-react'
 import { useCart } from '@/contexts/CartContext'
 import { useUser } from '@/hooks/useUser'
 import { createClient } from '@/lib/supabase/client'
-import { placeOrder } from './actions/checkout-actions'
-import { LoginModal } from '@/components/client/LoginModal'
-import { MapPin, Truck, ShoppingBag, Check, Loader2, ArrowLeft, Search, AlertCircle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { placeOrder } from './actions/checkout-actions'
+import { calculateDeliveryFee } from '@/lib/maps/distance'
+import Image from 'next/image'
 
 const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
-const supabase = createClient()
 
-const STORE_LAT = -19.9077
-const STORE_LNG = -43.8948
-// Apollo Pizzaria — Av. Jequitinhonha, 218, Vera Cruz, BH
-
-function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
-  const R = 6371
-  const dLat = (lat2 - lat1) * Math.PI / 180
-  const dLng = (lng2 - lng1) * Math.PI / 180
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
-
-function calcFee(distKm: number): number {
-  return Math.max(2, Math.ceil(distKm))
-}
-
-function calcTime(distKm: number): number {
-  return Math.max(20, Math.round(distKm * 3))
-}
-
-interface SavedAddress {
+interface Address {
   id: string
-  label: string | null
+  label: string
   street: string
   number: string
+  complement: string
   neighborhood: string
-  complement: string | null
-  delivery_fee: number | null
-  zipcode: string | null
-  delivery_region_id: string | null
-}
-
-interface DeliveryRegion {
-  id: string
-  name: string
-  fee: number
-  estimated_time: number
+  zipcode: string
+  delivery_fee: number
+  lat: number
+  lng: number
 }
 
 export default function CheckoutPage() {
   const router = useRouter()
   const { items, clearCart } = useCart()
   const { user, profile, isLoading: userLoading } = useUser()
+  const supabase = createClient()
 
-  const [loading, setLoading] = useState(false)
-  const [calculatingFee, setCalculatingFee] = useState(false)
-  const [isLoginModalOpen, setIsLoginModalOpen] = useState(false)
-  const [savedAddresses, setSavedAddresses] = useState<SavedAddress[]>([])
-  const [regions, setRegions] = useState<DeliveryRegion[]>([])
-
+  const [deliveryType, setDeliveryType] = useState<'delivery' | 'pickup'>('delivery')
   const [customerName, setCustomerName] = useState('')
   const [customerPhone, setCustomerPhone] = useState('')
-  const [deliveryType, setDeliveryType] = useState<'delivery' | 'pickup'>('delivery')
-  const [selectedAddressId, setSelectedAddressId] = useState<string | 'new'>('new')
-  const [showNewAddressForm, setShowNewAddressForm] = useState(false)
+  const [selectedAddressId, setSelectedAddressId] = useState<string>('')
+  const [savedAddresses, setSavedAddresses] = useState<Address[]>([])
+  const [calculatingFee, setCalculatingFee] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [isStoreOpen, setIsStoreOpen] = useState(true)
+
+  // PIX State
+  const [showPixScreen, setShowPixScreen] = useState(false)
+  const [pixReceipt, setPixReceipt] = useState<File | null>(null)
+  const [pixReceiptPreview, setPixReceiptPreview] = useState<string | null>(null)
+  const [orderId, setOrderId] = useState<string | null>(null)
+  const [pixData, setPixData] = useState({ qrCode: '', brCode: '', amount: 0, pixKey: '+5531985375524' })
+  const [copiedBrCode, setCopiedBrCode] = useState(false)
 
   const [addressForm, setAddressForm] = useState({
     label: '',
@@ -81,7 +58,6 @@ export default function CheckoutPage() {
     neighborhood: '',
     regionId: '',
     fee: 0,
-    estimatedTime: 0,
     lat: 0,
     lng: 0,
     instructions: '',
@@ -94,191 +70,143 @@ export default function CheckoutPage() {
 
   const subtotal = items.reduce((acc, item) => acc + item.total_price, 0)
 
-  // Redirect if not authenticated after loading
+  useEffect(() => {
+    const saved = localStorage.getItem('apollo-checkout-pix')
+    if (saved) {
+      try {
+        const data = JSON.parse(saved)
+        if (data.orderId && data.paymentMethod === 'pix') {
+          setOrderId(data.orderId)
+          setShowPixScreen(true)
+          if (data.pixData) setPixData(data.pixData)
+        }
+      } catch (e) { console.error(e) }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (showPixScreen && orderId) {
+      localStorage.setItem('apollo-checkout-pix', JSON.stringify({ orderId, paymentMethod: 'pix', pixData }))
+    } else {
+      localStorage.removeItem('apollo-checkout-pix')
+    }
+  }, [showPixScreen, orderId, pixData])
+
+  useEffect(() => {
+    async function checkStoreStatus() {
+      const { data } = await supabase.from('tenants').select('is_active').eq('id', TENANT_ID).single()
+      if (data) setIsStoreOpen(!!(data as any)?.is_active)
+    }
+    void checkStoreStatus()
+  }, [supabase])
+
   useEffect(() => {
     if (!userLoading && !user) {
       router.push('/')
     }
   }, [user, userLoading, router])
 
-  // Prefill name/phone from profile
   useEffect(() => {
     if (profile) {
       setCustomerName(profile.full_name || '')
-      setCustomerPhone((profile as any).phone || '')
+      setCustomerPhone((profile as any).phone || (profile as any).customer_phone || '')
     }
   }, [profile])
 
   const fetchData = useCallback(async () => {
     if (!user) return
-
-    // Fetch saved addresses
     const res = await fetch('/api/addresses')
     if (res.ok) {
       const data = await res.json()
       setSavedAddresses(data)
       if (data.length > 0) {
         setSelectedAddressId(data[0].id)
-        setShowNewAddressForm(false)
       } else {
         setSelectedAddressId('new')
-        setShowNewAddressForm(true)
       }
     }
-
-    // Fetch delivery regions
-    const { data: regionsData } = await supabase
-      .from('delivery_regions')
-      .select('id, name, fee, estimated_time')
-      .eq('tenant_id', TENANT_ID)
-      .eq('is_active', true)
-      .order('fee', { ascending: true })
-
-    if (regionsData) setRegions(regionsData as DeliveryRegion[])
   }, [user])
 
   useEffect(() => {
-    fetchData()
+    void fetchData()
   }, [fetchData])
 
-  // Lookup region by neighborhood name
-  const lookupRegion = useCallback((neighborhood: string) => {
-    if (!neighborhood) return
-    const normalized = neighborhood.toLowerCase().trim()
-    const match = regions.find(r =>
-      r.name.toLowerCase().includes(normalized) || normalized.includes(r.name.toLowerCase())
-    )
-    if (match) {
-      setAddressForm(prev => ({
-        ...prev,
-        regionId: match.id,
-        fee: match.fee,
-        estimatedTime: match.estimated_time,
-        regionNotFound: false,
-      }))
-    } else {
-      setAddressForm(prev => ({
-        ...prev,
-        regionId: '',
-        fee: 0,
-        estimatedTime: 0,
-        regionNotFound: neighborhood.length > 2,
-      }))
-    }
-  }, [regions])
-
-  const handleZipcodeSearch = async () => {
+  const searchZipcode = async () => {
     const cep = addressForm.zipcode.replace(/\D/g, '')
-    if (cep.length < 8) return
-    setCalculatingFee(true)
     try {
-      // 1. ViaCEP — fill address fields
-      const viacepRes = await fetch(`https://viacep.com.br/ws/${cep}/json/`)
-      const viacep = await viacepRes.json()
-      if (viacep.erro) {
-        setAddressForm(prev => ({ ...prev, regionNotFound: true, fee: 0, estimatedTime: 0 }))
-        return
-      }
-
-      const street = viacep.logradouro || ''
-      const neighborhood = viacep.bairro || ''
-      const city = viacep.localidade || 'Belo Horizonte'
-      const uf = viacep.uf || 'MG'
-
-      setAddressForm(prev => ({ ...prev, street, neighborhood }))
-
-      // 2. Geocode — pass all address parts separately for precise query
-      // number comes from the form field, not ViaCEP
-      const currentNumber = addressForm.number
-      const params = new URLSearchParams({
-        street,
-        number: currentNumber,
-        neighborhood,
-        city,
-        state: uf,
-      })
-      const geocodeRes = await fetch(`/api/geocode?${params.toString()}`)
-      const geocode = await geocodeRes.json()
-
-      if (geocode.lat != null && geocode.lng != null) {
-        // 3. Haversine distance
-        const distKm = haversineKm(STORE_LAT, STORE_LNG, geocode.lat, geocode.lng)
-        console.log('[checkout] distância km:', distKm.toFixed(2))
-        const fee = calcFee(distKm)
-        const estimatedTime = calcTime(distKm)
-
-        // 4. Coverage check: compare against max fee in delivery_regions
-        const maxRegionFee = regions.length > 0
-          ? Math.max(...regions.map(r => r.fee))
-          : 15
-
-        if (fee > maxRegionFee) {
-          setAddressForm(prev => ({
-            ...prev,
-            street,
-            neighborhood,
-            regionId: '',
-            fee: 0,
-            estimatedTime: 0,
-            lat: geocode.lat,
-            lng: geocode.lng,
-            regionNotFound: true,
-          }))
-          return
-        }
-
-        // Find nearest region for ID reference (optional)
-        const matchedRegion = regions.find(r =>
-          r.name.toLowerCase().includes(neighborhood.toLowerCase()) ||
-          neighborhood.toLowerCase().includes(r.name.toLowerCase())
-        )
-
+      const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`)
+      const data = await res.json()
+      if (!data.erro) {
         setAddressForm(prev => ({
           ...prev,
-          street,
-          neighborhood,
-          regionId: matchedRegion?.id || '',
-          fee,
-          estimatedTime,
-          lat: geocode.lat,
-          lng: geocode.lng,
-          regionNotFound: false,
+          street: data.logradouro,
+          neighborhood: data.bairro,
+          fee: 0
         }))
-      } else {
-        // 5. Geocoding failed — fallback to neighborhood lookup in delivery_regions
-        setAddressForm(prev => ({ ...prev, street, neighborhood }))
-        lookupRegion(neighborhood)
       }
-    } catch {
-      console.error('Erro ao buscar CEP')
-    } finally {
-      setCalculatingFee(false)
+    } catch (e) {
+      console.error(e)
     }
   }
 
-  const deliveryFee = deliveryType === 'pickup'
-    ? 0
-    : selectedAddressId === 'new' || showNewAddressForm
-      ? addressForm.fee
-      : (savedAddresses.find(a => a.id === selectedAddressId)?.delivery_fee ?? 0)
-
-  const finalTotal = subtotal + deliveryFee
-
-  const getActiveAddress = (): SavedAddress | null => {
-    if (selectedAddressId === 'new' || showNewAddressForm) return null
-    return savedAddresses.find(a => a.id === selectedAddressId) ?? null
+  const handleCEPBlur = async () => {
+    if (addressForm.zipcode.replace(/\D/g, '').length === 8) {
+      await searchZipcode()
+    }
   }
+
+  const handleCalculateFee = async () => {
+    if (!addressForm.street || !addressForm.number || !addressForm.neighborhood) {
+      alert('Preencha rua, número e bairro para calcular o frete.')
+      return
+    }
+
+    setCalculatingFee(true)
+    const fullAddress = `${addressForm.street}, ${addressForm.number}, ${addressForm.neighborhood}, Belo Horizonte, MG`
+    const result = await calculateDeliveryFee(fullAddress)
+
+    if (result.coords) {
+      setAddressForm(prev => ({
+        ...prev,
+        fee: result.fee,
+        lat: result.coords!.lat,
+        lng: result.coords!.lng,
+        regionNotFound: result.fee === 0
+      }))
+    } else {
+      setAddressForm(prev => ({ ...prev, regionNotFound: true, fee: 0 }))
+    }
+    setCalculatingFee(false)
+  }
+
+  const getActiveAddress = () => {
+    if (selectedAddressId === 'new') return null
+    return savedAddresses.find(a => a.id === selectedAddressId)
+  }
+
+  const deliveryFee = deliveryType === 'pickup' ? 0 : (selectedAddressId === 'new' ? addressForm.fee : (getActiveAddress()?.delivery_fee || 0))
+  const finalTotal = subtotal + deliveryFee
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!isStoreOpen) {
+      alert("A loja está fechada.");
+      return;
+    }
     if (items.length === 0 || !user) return
+
+    if (deliveryType === 'delivery' && selectedAddressId === 'new' && addressForm.fee === 0) {
+      alert('Calcule o frete antes de finalizar.')
+      return
+    }
+
     setLoading(true)
 
     try {
       const activeAddress = getActiveAddress()
-      const isNewAddress = selectedAddressId === 'new' || showNewAddressForm
+      const isNewAddress = selectedAddressId === 'new'
 
-      const orderId = await placeOrder({
+      const generatedOrderId = await placeOrder({
         customer_id: user.id,
         customer_name: customerName || null,
         customer_phone: customerPhone || null,
@@ -298,398 +226,272 @@ export default function CheckoutPage() {
           complement: addressForm.complement,
           neighborhood: addressForm.neighborhood,
           zipcode: addressForm.zipcode,
-          delivery_region_id: addressForm.regionId || null,
+          delivery_region_id: null,
           delivery_fee: addressForm.fee,
           lat: addressForm.lat || undefined,
           lng: addressForm.lng || undefined,
         } : null,
       })
 
-      clearCart()
-      router.push(`/order/${orderId}`)
-    } catch (err: any) {
-      alert(err.message)
+      if (paymentMethod === 'pix') {
+        setOrderId(generatedOrderId)
+        const qrUrl = `/api/pix/qrcode?valor=${finalTotal.toFixed(2)}&txid=APOLLO${generatedOrderId.slice(-6).toUpperCase()}&saida=qr`
+        const brUrl = `/api/pix/qrcode?valor=${finalTotal.toFixed(2)}&txid=APOLLO${generatedOrderId.slice(-6).toUpperCase()}&saida=br`
+        const brRes = await fetch(brUrl)
+        const { brcode: brCode } = await brRes.json()
+
+        setPixData({ qrCode: qrUrl, brCode, amount: finalTotal, pixKey: '+5531985375524' })
+        setShowPixScreen(true)
+      } else {
+        clearCart()
+        router.push(`/order/${generatedOrderId}`)
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro'
+      alert(msg)
     } finally {
       setLoading(false)
     }
   }
 
-  if (userLoading) {
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setPixReceipt(file)
+      const reader = new FileReader()
+      reader.onloadend = () => setPixReceiptPreview(reader.result as string)
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleConfirmPix = async () => {
+    if (!pixReceipt || !orderId) return
+    setLoading(true)
+    try {
+      const fileExt = pixReceipt.name.split('.').pop()
+      const timestamp = Date.now()
+      const fileName = `${TENANT_ID}/comprovantes/${orderId}/${timestamp}.${fileExt}`
+      const { error } = await supabase.storage.from('delivery-photos').upload(fileName, pixReceipt)
+
+      if (error) throw error
+
+      const { data: urlData } = supabase.storage.from('delivery-photos').getPublicUrl(fileName)
+      const publicUrl = urlData.publicUrl
+
+      await supabase.from('orders').update({
+        pix_receipt_note: publicUrl,
+        status: 'pending',
+        payment_status: 'pending'
+      } as any).eq('id', orderId)
+
+      clearCart()
+      localStorage.removeItem('apollo-checkout-pix')
+      router.push(`/order/${orderId}`)
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro'
+      alert('Erro ao enviar comprovante: ' + msg)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const copyBrCode = () => {
+    navigator.clipboard.writeText(pixData.brCode)
+    setCopiedBrCode(true)
+    setTimeout(() => setCopiedBrCode(false), 2000)
+  }
+
+  if (userLoading) return <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-center"><Loader2 size={40} className="text-apollo-orange animate-spin" /></div>
+
+  if (showPixScreen) {
     return (
-      <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-center">
-        <Loader2 size={40} className="text-apollo-orange animate-spin" />
+      <div className="min-h-screen bg-[#0D0D0D] text-white font-dm p-4 flex items-center justify-center">
+        <div className="max-w-md w-full bg-[#1C1C1C] rounded-3xl p-8 border border-white/5 shadow-2xl overflow-y-auto max-h-screen">
+          <h1 className="text-2xl font-playfair font-bold text-apollo-orange mb-6 text-center italic">Pagamento PIX</h1>
+
+          <div className="bg-[#0D0D0D] rounded-2xl p-6 mb-6 text-center space-y-4">
+             <div className="flex justify-between text-xs font-bold text-white/40 uppercase mb-2">
+                <span>Valor a pagar</span>
+                <span className="text-apollo-orange">R$ {pixData.amount.toFixed(2).replace('.', ',')}</span>
+             </div>
+             <div className="w-64 h-64 bg-white mx-auto rounded-xl flex items-center justify-center overflow-hidden">
+                <img src={pixData.qrCode} alt="PIX QR Code" className="w-full h-full" />
+             </div>
+             <p className="text-[10px] text-white/40 uppercase font-bold tracking-widest mt-4">Copia e Cola</p>
+             <div className="flex gap-2">
+                <input readOnly value={pixData.brCode} className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-2 text-[10px] font-mono focus:outline-none" />
+                <button onClick={copyBrCode} className="p-2 bg-apollo-orange rounded-xl hover:bg-apollo-orange/80 transition-colors">
+                   {copiedBrCode ? <Check size={16} /> : <Copy size={16} />}
+                </button>
+             </div>
+             <p className="text-[10px] text-white/40 font-bold mt-2">Chave: {pixData.pixKey} (Telefone)</p>
+          </div>
+
+          <div className="space-y-4">
+            <label className="block">
+              <span className="text-xs font-bold uppercase text-white/40 mb-2 block">Upload do Comprovante</span>
+              <div className="relative border-2 border-dashed border-white/10 rounded-2xl p-8 text-center hover:border-apollo-orange transition-colors cursor-pointer">
+                <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={handleFileChange} accept="image/*,.pdf" />
+                {pixReceiptPreview ? (
+                  <div className="relative w-full aspect-video">
+                     <Image src={pixReceiptPreview} alt="Preview" fill className="object-contain" />
+                  </div>
+                ) : (
+                  <div className="flex flex-col items-center gap-2 text-white/40">
+                    <Camera size={32} />
+                    <span className="text-xs font-bold">Tirar Foto ou Escolher PDF</span>
+                  </div>
+                )}
+              </div>
+            </label>
+
+            <button
+              onClick={handleConfirmPix}
+              disabled={!pixReceipt || loading}
+              className="w-full bg-apollo-orange hover:bg-apollo-orange/90 disabled:opacity-50 h-14 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-lg"
+            >
+              {loading ? <Loader2 className="animate-spin" /> : <><Check size={20} /> Enviar Comprovante</>}
+            </button>
+
+            <button
+              onClick={() => { setShowPixScreen(false); setOrderId(null); }}
+              className="w-full text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest py-2"
+            >
+              Trocar forma de pagamento
+            </button>
+          </div>
+        </div>
       </div>
     )
   }
-
-  if (!user) return null
-
-  if (items.length === 0) {
-    return (
-      <div className="min-h-screen bg-[#0D0D0D] flex flex-col items-center justify-center p-4">
-        <ShoppingBag size={64} className="text-white/20 mb-4" />
-        <h2 className="text-xl font-bold text-white mb-2">Seu carrinho está vazio</h2>
-        <button onClick={() => router.push('/cardapio')} className="text-apollo-orange font-bold underline">
-          Voltar ao cardápio
-        </button>
-      </div>
-    )
-  }
-
-  const showingNewForm = selectedAddressId === 'new' || showNewAddressForm || savedAddresses.length === 0
 
   return (
     <div className="min-h-screen bg-[#0D0D0D] text-white font-dm pb-32">
-      <div className="max-w-xl mx-auto p-4 md:p-6">
+       <div className="max-w-xl mx-auto p-4 md:p-6">
         <header className="mb-8">
-          <button
-            onClick={() => router.back()}
-            className="flex items-center gap-2 text-white/40 hover:text-white transition-colors mb-4 text-xs font-bold uppercase tracking-widest"
-          >
+          <button onClick={() => router.back()} className="flex items-center gap-2 text-white/40 hover:text-white transition-colors mb-4 text-xs font-bold uppercase tracking-widest">
             <ArrowLeft size={14} /> Voltar
           </button>
           <h1 className="text-3xl font-playfair font-bold text-apollo-orange italic mb-1">Checkout</h1>
-          <p className="text-white/60 text-sm">Quase lá! Complete os dados para finalizar.</p>
+          {!isStoreOpen && <div className="bg-red-500/10 border border-red-500/20 text-red-500 p-3 rounded-xl text-sm font-bold mb-4">A LOJA ESTÁ FECHADA NO MOMENTO</div>}
         </header>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* SEÇÃO 1: IDENTIFICAÇÃO */}
-          <section className="bg-[#1C1C1C] rounded-2xl p-6 border border-[#2A2A2A] shadow-xl">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-8 h-8 rounded-full bg-apollo-orange/20 flex items-center justify-center text-apollo-orange font-bold text-sm">1</div>
-              <h2 className="text-lg font-bold">Identificação</h2>
-            </div>
-            <div className="grid md:grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">Nome Completo</label>
-                <input
-                  required
-                  value={customerName}
-                  onChange={e => setCustomerName(e.target.value)}
-                  className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:border-apollo-orange transition-all"
-                  placeholder="Seu nome"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">Telefone</label>
-                <input
-                  required
-                  value={customerPhone}
-                  onChange={e => setCustomerPhone(e.target.value)}
-                  className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:border-apollo-orange transition-all"
-                  placeholder="(99) 99999-9999"
-                />
-              </div>
-            </div>
+          <section className="bg-[#1C1C1C] rounded-2xl p-6 border border-[#2A2A2A]">
+             <h2 className="text-lg font-bold mb-6">1. Identificação</h2>
+             <div className="grid md:grid-cols-2 gap-4">
+               <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Nome Completo</label>
+                  <input required value={customerName} onChange={e => setCustomerName(e.target.value)} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:border-apollo-orange outline-none transition-all" placeholder="Seu nome" />
+               </div>
+               <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Telefone</label>
+                  <input required value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:border-apollo-orange outline-none transition-all" placeholder="(31) 99999-9999" />
+               </div>
+             </div>
           </section>
 
-          {/* SEÇÃO 2: ENTREGA */}
-          <section className="bg-[#1C1C1C] rounded-2xl p-6 border border-[#2A2A2A] shadow-xl">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-8 h-8 rounded-full bg-apollo-orange/20 flex items-center justify-center text-apollo-orange font-bold text-sm">2</div>
-              <h2 className="text-lg font-bold">Entrega</h2>
-            </div>
+          <section className="bg-[#1C1C1C] rounded-2xl p-6 border border-[#2A2A2A]">
+             <h2 className="text-lg font-bold mb-6">2. Entrega</h2>
+             <div className="flex bg-[#0D0D0D] rounded-xl p-1 mb-6 border border-white/5">
+               <button type="button" onClick={() => setDeliveryType('delivery')} className={cn("flex-1 py-3 rounded-lg text-sm font-bold transition-all", deliveryType === 'delivery' ? "bg-apollo-orange text-white" : "text-white/40")}>Entrega</button>
+               <button type="button" onClick={() => setDeliveryType('pickup')} className={cn("flex-1 py-3 rounded-lg text-sm font-bold transition-all", deliveryType === 'pickup' ? "bg-apollo-orange text-white" : "text-white/40")}>Retirada</button>
+             </div>
 
-            <div className="flex bg-[#0D0D0D] rounded-2xl p-1 mb-8 border border-white/5">
-              {(['delivery', 'pickup'] as const).map(type => (
-                <button
-                  key={type}
-                  type="button"
-                  onClick={() => setDeliveryType(type)}
-                  className={cn(
-                    'flex-1 flex items-center justify-center gap-3 py-3.5 text-sm font-bold rounded-xl transition-all duration-300',
-                    deliveryType === type ? 'bg-apollo-orange text-white shadow-lg shadow-apollo-orange/20' : 'text-white/40 hover:text-white'
-                  )}
-                >
-                  {type === 'delivery' ? <><Truck size={20} /> Entrega</> : <><ShoppingBag size={20} /> Retirada</>}
-                </button>
-              ))}
-            </div>
+             {deliveryType === 'delivery' && (
+               <div className="space-y-4">
+                 {savedAddresses.length > 0 && (
+                   <div className="grid grid-cols-1 gap-2">
+                     {savedAddresses.map(addr => (
+                       <button key={addr.id} type="button" onClick={() => setSelectedAddressId(addr.id)} className={cn("p-4 rounded-xl border text-left transition-all", selectedAddressId === addr.id ? "border-apollo-orange bg-apollo-orange/5" : "border-white/5 bg-[#0D0D0D]")}>
+                         <p className="text-sm font-bold">{addr.label}</p>
+                         <p className="text-xs text-white/60">{addr.street}, {addr.number}</p>
+                       </button>
+                     ))}
+                     <button type="button" onClick={() => setSelectedAddressId('new')} className={cn("p-4 rounded-xl border border-dashed text-sm font-bold", selectedAddressId === 'new' ? "border-apollo-orange text-apollo-orange" : "border-white/20 text-white/40")}>+ Novo Endereço</button>
+                   </div>
+                 )}
 
-            {deliveryType === 'delivery' ? (
-              <div className="space-y-4">
-                {/* Saved address cards */}
-                {savedAddresses.length > 0 && (
-                  <div className="space-y-2">
-                    <p className="text-[10px] uppercase tracking-widest text-white/40 font-bold">Endereços Salvos</p>
-                    {savedAddresses.map(addr => (
-                      <label
-                        key={addr.id}
-                        onClick={() => { setSelectedAddressId(addr.id); setShowNewAddressForm(false) }}
-                        className={cn(
-                          'flex items-center justify-between p-4 rounded-xl border transition-all cursor-pointer',
-                          selectedAddressId === addr.id && !showNewAddressForm
-                            ? 'bg-apollo-orange/10 border-apollo-orange'
-                            : 'bg-[#0D0D0D] border-[#2A2A2A] hover:border-white/10'
-                        )}
-                      >
-                        <div className="flex gap-3 items-start">
-                          <MapPin size={18} className={cn(selectedAddressId === addr.id && !showNewAddressForm ? 'text-apollo-orange' : 'text-white/20')} />
-                          <div>
-                            {addr.label && <p className="text-[10px] uppercase tracking-widest text-white/40 font-bold mb-0.5">{addr.label}</p>}
-                            <p className="text-sm font-bold">{addr.street}, {addr.number}</p>
-                            <p className="text-xs text-white/40">{addr.neighborhood}{addr.complement ? ` • ${addr.complement}` : ''}</p>
-                          </div>
+                 {selectedAddressId === 'new' && (
+                   <div className="space-y-4">
+                     <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-white/40 ml-1">CEP</label>
+                        <input value={addressForm.zipcode} onChange={e => setAddressForm(prev => ({...prev, zipcode: e.target.value, fee: 0}))} onBlur={handleCEPBlur} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="00000-000" />
+                     </div>
+                     <div className="grid grid-cols-4 gap-2">
+                        <div className="col-span-3 space-y-1">
+                           <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Rua</label>
+                           <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Rua" value={addressForm.street} readOnly />
                         </div>
-                        <div className={cn(
-                          'w-5 h-5 rounded-full border-2 flex-shrink-0 flex items-center justify-center',
-                          selectedAddressId === addr.id && !showNewAddressForm ? 'border-apollo-orange' : 'border-white/10'
-                        )}>
-                          {selectedAddressId === addr.id && !showNewAddressForm && <div className="w-2.5 h-2.5 rounded-full bg-apollo-orange" />}
+                        <div className="col-span-1 space-y-1">
+                           <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Nº</label>
+                           <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm text-center" placeholder="123" value={addressForm.number} onChange={e => setAddressForm(prev => ({...prev, number: e.target.value, fee: 0}))} />
                         </div>
-                      </label>
-                    ))}
+                     </div>
+                     <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Bairro</label>
+                        <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Bairro" value={addressForm.neighborhood} readOnly />
+                     </div>
+                     <button type="button" onClick={handleCalculateFee} className="w-full py-4 bg-white/5 border border-white/10 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-all">Calcular Frete</button>
 
-                    <button
-                      type="button"
-                      onClick={() => { setSelectedAddressId('new'); setShowNewAddressForm(true) }}
-                      className={cn(
-                        'w-full text-center py-3.5 text-xs font-bold border-2 border-dashed rounded-xl transition-all',
-                        showNewAddressForm
-                          ? 'border-apollo-orange text-apollo-orange bg-apollo-orange/5'
-                          : 'border-[#2A2A2A] text-white/20 hover:border-white/10 hover:text-white/40'
-                      )}
-                    >
-                      + Usar novo endereço
-                    </button>
-                  </div>
-                )}
+                     {calculatingFee && <div className="text-center text-xs text-apollo-orange animate-pulse">Calculando distância real...</div>}
+                     {addressForm.fee > 0 && <div className="bg-apollo-orange/10 p-4 rounded-xl text-center text-apollo-orange font-bold text-sm border border-apollo-orange/20 animate-in zoom-in">Taxa de entrega: R$ {addressForm.fee.toFixed(2).replace('.', ',')}</div>}
+                   </div>
+                 )}
+               </div>
+             )}
 
-                {/* New address form */}
-                {showingNewForm && (
-                  <div className="space-y-4 animate-in fade-in slide-in-from-top-2 duration-300">
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">Label (ex: Casa, Trabalho)</label>
-                      <input
-                        value={addressForm.label}
-                        onChange={e => setAddressForm(prev => ({ ...prev, label: e.target.value }))}
-                        className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-apollo-orange transition-all"
-                        placeholder="Casa"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">CEP</label>
-                      <div className="flex gap-2">
-                        <input
-                          required={showingNewForm && deliveryType === 'delivery'}
-                          value={addressForm.zipcode}
-                          onChange={e => {
-                            const v = e.target.value.replace(/\D/g, '').slice(0, 8)
-                            setAddressForm(prev => ({ ...prev, zipcode: v.length > 5 ? `${v.slice(0, 5)}-${v.slice(5)}` : v }))
-                          }}
-                          className="flex-1 bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:border-apollo-orange transition-all"
-                          placeholder="00000-000"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleZipcodeSearch}
-                          disabled={calculatingFee || addressForm.zipcode.replace(/\D/g, '').length < 8}
-                          className="bg-apollo-orange hover:bg-apollo-orange/80 disabled:opacity-40 px-4 rounded-xl transition-all flex items-center gap-2 text-xs font-bold whitespace-nowrap"
-                        >
-                          {calculatingFee
-                            ? <><Loader2 size={16} className="animate-spin" /><span className="hidden sm:inline">Calculando...</span></>
-                            : <Search size={20} />
-                          }
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-4 gap-3">
-                      <div className="col-span-3 space-y-1.5">
-                        <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">Rua</label>
-                        <input
-                          required={showingNewForm && deliveryType === 'delivery'}
-                          value={addressForm.street}
-                          onChange={e => setAddressForm(prev => ({ ...prev, street: e.target.value }))}
-                          className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:border-apollo-orange transition-all"
-                          placeholder="Av. Amazonas"
-                        />
-                      </div>
-                      <div className="col-span-1 space-y-1.5">
-                        <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">Nº</label>
-                        <input
-                          required={showingNewForm && deliveryType === 'delivery'}
-                          value={addressForm.number}
-                          onChange={e => setAddressForm(prev => ({ ...prev, number: e.target.value }))}
-                          className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm text-center focus:outline-none focus:border-apollo-orange transition-all"
-                          placeholder="123"
-                        />
-                      </div>
-                    </div>
-
-                    <div className="grid md:grid-cols-2 gap-3">
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">Bairro</label>
-                        <input
-                          required={showingNewForm && deliveryType === 'delivery'}
-                          value={addressForm.neighborhood}
-                          onChange={e => {
-                            setAddressForm(prev => ({ ...prev, neighborhood: e.target.value }))
-                            lookupRegion(e.target.value)
-                          }}
-                          className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:border-apollo-orange transition-all"
-                          placeholder="Seu bairro"
-                        />
-                      </div>
-                      <div className="space-y-1.5">
-                        <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">Complemento</label>
-                        <input
-                          value={addressForm.complement}
-                          onChange={e => setAddressForm(prev => ({ ...prev, complement: e.target.value }))}
-                          className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:border-apollo-orange transition-all"
-                          placeholder="Apto, bloco..."
-                        />
-                      </div>
-                    </div>
-
-                    {/* Delivery fee feedback */}
-                    {calculatingFee && (
-                      <div className="bg-white/5 border border-white/5 rounded-xl p-3 flex items-center gap-2">
-                        <Loader2 size={16} className="text-apollo-orange animate-spin" />
-                        <span className="text-xs text-white/50">Calculando taxa de entrega...</span>
-                      </div>
-                    )}
-                    {!calculatingFee && addressForm.fee > 0 && (
-                      <div className="bg-apollo-orange/10 border border-apollo-orange/20 rounded-xl p-3 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Truck size={16} className="text-apollo-orange" />
-                          <span className="text-xs text-white/70">~{addressForm.estimatedTime} min</span>
-                        </div>
-                        <span className="text-sm font-bold text-apollo-orange">Taxa: R$ {addressForm.fee.toFixed(2).replace('.', ',')}</span>
-                      </div>
-                    )}
-                    {!calculatingFee && addressForm.regionNotFound && (
-                      <div className="flex items-center gap-2 bg-red-500/10 border border-red-500/20 rounded-xl p-3">
-                        <AlertCircle size={16} className="text-red-400 flex-shrink-0" />
-                        <span className="text-xs text-red-400">Fora da área de entrega.</span>
-                      </div>
-                    )}
-
-                    <div className="space-y-1.5">
-                      <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">Instruções (Opcional)</label>
-                      <textarea
-                        value={addressForm.instructions}
-                        onChange={e => setAddressForm(prev => ({ ...prev, instructions: e.target.value }))}
-                        className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:border-apollo-orange min-h-[80px] resize-none transition-all"
-                        placeholder="Ex: Porteiro, interfone..."
-                      />
-                    </div>
-
-                    <label className="flex items-center gap-3 cursor-pointer group pt-2">
-                      <div className={cn(
-                        'w-5 h-5 rounded border-2 flex items-center justify-center transition-all',
-                        addressForm.shouldSave ? 'bg-apollo-orange border-apollo-orange' : 'border-white/10 group-hover:border-white/30'
-                      )}>
-                        {addressForm.shouldSave && <Check size={12} className="text-white" />}
-                      </div>
-                      <span className="text-xs font-bold text-white/50 group-hover:text-white transition-colors">Salvar este endereço para próximas compras</span>
-                      <input
-                        type="checkbox"
-                        className="hidden"
-                        checked={addressForm.shouldSave}
-                        onChange={e => setAddressForm(prev => ({ ...prev, shouldSave: e.target.checked }))}
-                      />
-                    </label>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="bg-[#0D0D0D] border border-dashed border-apollo-orange/30 rounded-2xl p-8 text-center">
-                <div className="w-16 h-16 bg-apollo-orange/10 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <MapPin size={32} className="text-apollo-orange" />
+             {deliveryType === 'pickup' && (
+                <div className="bg-[#0D0D0D] p-6 rounded-2xl border border-dashed border-apollo-orange/30 text-center">
+                   <MapPin className="mx-auto text-apollo-orange mb-2" size={32} />
+                   <h3 className="font-bold text-sm">Retirada na Loja</h3>
+                   <p className="text-xs text-white/40">Av. Jequitinhonha, 218 - Vera Cruz</p>
                 </div>
-                <h3 className="font-bold text-lg mb-1">Retirada na Loja</h3>
-                <p className="text-sm text-white/80 mb-1">Av. Jequitinhonha 218, Vera Cruz</p>
-                <p className="text-xs text-apollo-orange font-bold">Pronto em aproximadamente 15-20 min.</p>
-              </div>
-            )}
+             )}
           </section>
 
-          {/* SEÇÃO 3: PAGAMENTO */}
-          <section className="bg-[#1C1C1C] rounded-2xl p-6 border border-[#2A2A2A] shadow-xl">
-            <div className="flex items-center gap-3 mb-6">
-              <div className="w-8 h-8 rounded-full bg-apollo-orange/20 flex items-center justify-center text-apollo-orange font-bold text-sm">3</div>
-              <h2 className="text-lg font-bold">Forma de Pagamento</h2>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
-              {([
-                { id: 'pix', label: 'PIX', icon: '⚡' },
-                { id: 'cash', label: 'Dinheiro', icon: '💵' },
-                { id: 'credit_card', label: 'Crédito', icon: '💳' },
-                { id: 'debit_card', label: 'Débito', icon: '🏦' },
-              ] as const).map(method => (
-                <button
-                  key={method.id}
-                  type="button"
-                  onClick={() => setPaymentMethod(method.id)}
-                  className={cn(
-                    'flex flex-col items-center gap-3 p-4 rounded-xl border transition-all duration-300',
-                    paymentMethod === method.id ? 'bg-apollo-orange border-apollo-orange shadow-lg' : 'bg-[#0D0D0D] border-[#2A2A2A] text-white/40 hover:text-white hover:border-white/10'
-                  )}
-                >
-                  <span className="text-2xl">{method.icon}</span>
-                  <span className="text-xs font-bold uppercase tracking-widest">{method.label}</span>
-                </button>
-              ))}
-            </div>
-            {paymentMethod === 'cash' && (
-              <div className="space-y-1.5">
-                <label className="text-[10px] uppercase tracking-widest text-white/40 font-bold ml-1">Troco para quanto?</label>
-                <input
-                  type="number"
-                  value={changeFor}
-                  onChange={e => setChangeFor(e.target.value)}
-                  className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:outline-none focus:border-apollo-orange transition-all"
-                  placeholder="Ex: 50"
-                />
-              </div>
-            )}
+          <section className="bg-[#1C1C1C] rounded-2xl p-6 border border-[#2A2A2A]">
+             <h2 className="text-lg font-bold mb-6">3. Pagamento</h2>
+             <div className="grid grid-cols-2 gap-2">
+               {['pix', 'cash', 'credit_card', 'debit_card'].map(m => (
+                 <button key={m} type="button" onClick={() => setPaymentMethod(m as any)} className={cn("p-4 rounded-xl border text-xs font-bold uppercase transition-all flex flex-col items-center gap-2", paymentMethod === m ? "bg-apollo-orange border-apollo-orange shadow-lg" : "bg-[#0D0D0D] border-[#2A2A2A] text-white/40")}>
+                   <span className="text-xl">{m === 'pix' ? '⚡' : m === 'cash' ? '💵' : '💳'}</span>
+                   <span>{m === 'pix' ? 'PIX' : m === 'cash' ? 'Dinheiro' : m === 'credit_card' ? 'Crédito' : 'Débito'}</span>
+                 </button>
+               ))}
+             </div>
+             {paymentMethod === 'cash' && (
+                <div className="mt-4 space-y-1.5">
+                  <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Troco para quanto?</label>
+                  <input type="number" value={changeFor} onChange={e => setChangeFor(e.target.value)} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3 text-sm focus:border-apollo-orange outline-none transition-all" placeholder="Ex: 50" />
+                </div>
+             )}
           </section>
 
-          {/* RESUMO */}
-          <div className="bg-[#1C1C1C] rounded-2xl p-6 border border-[#2A2A2A] shadow-2xl sticky bottom-4">
-            <div className="space-y-2 mb-6">
-              <div className="flex justify-between text-sm">
-                <span className="text-white/40">Subtotal</span>
-                <span className="font-bold">R$ {subtotal.toFixed(2).replace('.', ',')}</span>
-              </div>
-              {deliveryType === 'delivery' && (
+          <div className="bg-[#1C1C1C] rounded-2xl p-6 border border-[#2A2A2A] sticky bottom-4 shadow-2xl">
+             <div className="space-y-3 mb-6">
                 <div className="flex justify-between text-sm">
-                  <span className="text-white/40">Taxa de Entrega</span>
-                  <span className="text-apollo-orange font-bold">+ R$ {deliveryFee.toFixed(2).replace('.', ',')}</span>
+                   <span className="text-white/40">Subtotal</span>
+                   <span className="font-bold">R$ {subtotal.toFixed(2).replace('.', ',')}</span>
                 </div>
-              )}
-              <div className="h-px bg-white/5 my-2" />
-              <div className="flex justify-between items-center">
-                <span className="text-lg font-bold">Total</span>
-                <span className="text-2xl font-playfair font-bold text-apollo-orange italic">R$ {finalTotal.toFixed(2).replace('.', ',')}</span>
-              </div>
-            </div>
-
-            <button
-              type="submit"
-              disabled={
-                loading ||
-                (deliveryType === 'delivery' && showingNewForm && addressForm.regionNotFound) ||
-                (deliveryType === 'delivery' && showingNewForm && !addressForm.street)
-              }
-              className="w-full bg-apollo-orange hover:bg-apollo-orange/90 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-xl shadow-xl shadow-apollo-orange/20 transition-all flex items-center justify-center gap-3"
-            >
-              {loading ? (
-                <><Loader2 className="animate-spin" size={20} /> Processando...</>
-              ) : (
-                <><Check size={20} /> Finalizar Pedido</>
-              )}
-            </button>
+                <div className="flex justify-between text-sm">
+                   <span className="text-white/40">Taxa de Entrega</span>
+                   <span className="text-apollo-orange font-bold">
+                      {deliveryType === 'pickup' ? 'Grátis' : (deliveryFee > 0 ? `+ R$ ${deliveryFee.toFixed(2).replace('.', ',')}` : 'Calcule o frete')}
+                   </span>
+                </div>
+                <div className="h-px bg-white/5 my-2" />
+                <div className="flex justify-between items-center">
+                   <span className="text-lg font-bold">Total do Pedido</span>
+                   <span className="text-3xl font-playfair font-bold text-apollo-orange italic">R$ {finalTotal.toFixed(2).replace('.', ',')}</span>
+                </div>
+             </div>
+             <button type="submit" disabled={loading || !isStoreOpen} className="w-full bg-apollo-orange h-16 rounded-xl font-bold text-lg shadow-xl shadow-apollo-orange/20 transition-all disabled:opacity-50 active:scale-[0.98]">
+               {loading ? <Loader2 className="animate-spin mx-auto" /> : 'Finalizar Pedido'}
+             </button>
           </div>
         </form>
-      </div>
-
-      <LoginModal
-        isOpen={isLoginModalOpen}
-        onClose={() => setIsLoginModalOpen(false)}
-      />
+       </div>
     </div>
   )
 }
