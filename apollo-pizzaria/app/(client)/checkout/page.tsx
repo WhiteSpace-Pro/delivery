@@ -109,7 +109,7 @@ export default function CheckoutPage() {
   useEffect(() => {
     if (profile) {
       setCustomerName(profile.full_name || '')
-      setCustomerPhone((profile as any).phone || '')
+      setCustomerPhone((profile as any).phone || (profile as any).customer_phone || '')
     }
   }, [profile])
 
@@ -236,10 +236,10 @@ export default function CheckoutPage() {
       if (paymentMethod === 'pix') {
         setOrderId(generatedOrderId)
         // Group 7: Generate Pix Data
-        const qrUrl = `https://gerarqrcodepix.com.br/api/v1?nome=Apollo%20Pizzaria&cidade=Belo%20Horizonte&valor=${finalTotal.toFixed(2)}&chave=31985375524&txid=APOLLO${generatedOrderId.slice(-6).toUpperCase()}&saida=qr&tamanho=300`
-        const brUrl = qrUrl.replace('saida=qr', 'saida=br')
+        const qrUrl = `/api/pix/qrcode?valor=${finalTotal.toFixed(2)}&txid=APOLLO${generatedOrderId.slice(-6).toUpperCase()}&saida=qr`
+        const brUrl = `/api/pix/qrcode?valor=${finalTotal.toFixed(2)}&txid=APOLLO${generatedOrderId.slice(-6).toUpperCase()}&saida=br`
         const brRes = await fetch(brUrl)
-        const brCode = await brRes.text()
+        const { brcode: brCode } = await brRes.json()
 
         setPixData({ qrCode: qrUrl, brCode, amount: finalTotal, pixKey: '31985375524' })
         setShowPixScreen(true)

@@ -5,23 +5,25 @@ const TENANT_ID = process.env.NEXT_PUBLIC_TENANT_ID_APOLLO ?? '496c5a35-6843-406
 
 export async function POST(req: NextRequest) {
   try {
-    const { user_id, full_name, phone, tenant_id } = await req.json()
+    const body = await req.json()
+    const { id, user_id, full_name, phone, tenant_id } = body
+    const finalId = id || user_id
 
-    if (!user_id) {
-      return NextResponse.json({ error: 'user_id required' }, { status: 400 })
+    if (!finalId) {
+      return NextResponse.json({ error: 'id required' }, { status: 400 })
     }
 
     const { error } = await supabaseAdmin
       .from('profiles')
       .upsert(
         {
-          id: user_id,
+          id: finalId,
           tenant_id: tenant_id ?? TENANT_ID,
           role: 'customer',
           full_name: full_name ?? null,
           phone: phone ?? null,
           is_active: true,
-        } as never,
+        } as any,
         { onConflict: 'id' }
       )
 

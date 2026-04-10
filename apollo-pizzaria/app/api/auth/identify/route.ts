@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
 
       const { data: profile } = await supabaseAdmin
         .from('profiles')
-        .select('full_name')
+        .select('full_name, phone')
         .eq('id', authUser.id)
         .maybeSingle()
 
@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         found: true,
         name,
+        phone: profile?.phone || '',
         avatar_initial: name.charAt(0).toUpperCase(),
         loginEmail: authUser.email!.toLowerCase(),
       })
@@ -43,7 +44,7 @@ export async function POST(req: NextRequest) {
 
       const { data: profile } = await supabaseAdmin
         .from('profiles')
-        .select('id, full_name')
+        .select('id, full_name, phone')
         .eq('phone', normalized)
         .maybeSingle()
 
@@ -56,6 +57,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({
         found: true,
         name,
+        phone: profile.phone || '',
         avatar_initial: name.charAt(0).toUpperCase(),
         loginEmail: authData.user.email.toLowerCase(),
       })
