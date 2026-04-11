@@ -21,7 +21,7 @@ export default async function MyOrdersPage() {
     const { data, error } = await supabaseAdmin
       .from('orders')
       .select(`
-        *,
+        *, display_id,
         order_items(
           *,
           products!order_items_product_id_fkey(name)
@@ -111,7 +111,7 @@ export default async function MyOrdersPage() {
                   <div className="flex justify-between items-start mb-4">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-black/40 rounded-xl flex items-center justify-center border border-white/5">
-                        <span className="text-xs font-bold text-apollo-orange">#{order.id.slice(-4)}</span>
+                        <span className="text-xs font-bold text-apollo-orange">#{order.display_id}</span>
                       </div>
                       <div>
                         <p className="text-xs font-bold text-white/40 uppercase tracking-widest">{date} • {time}</p>
