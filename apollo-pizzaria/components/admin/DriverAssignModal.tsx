@@ -1,8 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClient } from '@/lib/supabase/client'
-import { assignDriverAndSend } from '@/app/(admin)/actions/order-actions'
+import { assignDriverAndSend, getAvailableDrivers } from '@/app/(admin)/actions/order-actions'
 import { OrderWithItems, Profile } from '@/types'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 
@@ -12,28 +11,28 @@ interface DriverAssignModalProps {
   onClose: () => void
 }
 
-export function DriverAssignModal({ order, tenantId, onClose }: DriverAssignModalProps) {
+export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
   const [drivers, setDrivers] = useState<Profile[]>([])
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
-
-  const supabase = createClient()
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     async function fetchDrivers() {
-      const { data } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('tenant_id', tenantId)
-        .eq('role', 'delivery')
-        .eq('is_available' as any, true)
-
-      if (data) setDrivers(data)
+      try {
+        const data = await getAvailableDrivers()
+        if (data) setDrivers(data as any)
+      } catch (error) {
+        console.error('Failed to fetch drivers:', error)
+      } finally {
+        setIsLoading(false)
+      }
     }
     fetchDrivers()
-  }, [tenantId, supabase])
+  }, [])
 
   const handleConfirm = async () => {
+    if (!selectedDriverId) return
     setIsSubmitting(true)
     try {
       await assignDriverAndSend(order.id, selectedDriverId)
@@ -55,7 +54,11 @@ export function DriverAssignModal({ order, tenantId, onClose }: DriverAssignModa
         </DialogHeader>
 
         <div className="py-4 space-y-3">
-          {drivers.length > 0 ? (
+          {isLoading ? (
+            <p className="text-center py-4 text-[#666] text-sm animate-pulse">
+              Carregando motoboys...
+            </p>
+          ) : drivers.length > 0 ? (
             drivers.map(driver => (
               <label
                 key={driver.id}
@@ -76,7 +79,7 @@ export function DriverAssignModal({ order, tenantId, onClose }: DriverAssignModa
               </label>
             ))
           ) : (
-            <p className="text-center py-4 text-[#666] text-sm">
+            <p className="text-center py-4 text-[#666] text-sm font-medium">
               Nenhum motoboy online no momento.
             </p>
           )}
@@ -91,7 +94,7 @@ export function DriverAssignModal({ order, tenantId, onClose }: DriverAssignModa
           </button>
           <button
             onClick={handleConfirm}
-            disabled={isSubmitting}
+            disabled={isSubmitting || !selectedDriverId}
             className="flex-1 py-3 text-sm font-bold bg-[#E85D24] text-white rounded-xl hover:bg-[#D14D1B] disabled:opacity-50 transition-colors"
           >
             {isSubmitting ? 'Confirmando...' : 'Confirmar saída'}

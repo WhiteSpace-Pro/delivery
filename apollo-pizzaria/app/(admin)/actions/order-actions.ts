@@ -104,7 +104,6 @@ export async function markNotificationAsRead(orderId: string) {
 export async function getKanbanOrders() {
   await requireAdmin()
 
-  // Buscar últimas 24h (mais simples e resolve problemas de timezone do dia)
   const startOfPeriod = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
   const { data, error } = await supabaseAdmin
@@ -124,6 +123,51 @@ export async function getKanbanOrders() {
   if (error) {
     console.error("Error fetching kanban orders:", error)
     throw new Error(`Failed to fetch orders: ${error.message}`)
+  }
+
+  return data
+}
+
+export async function getOrderDetails(orderId: string) {
+  await requireAdmin()
+
+  const { data, error } = await supabaseAdmin
+    .from('orders')
+    .select(`
+      *,
+      order_items(*,
+        products!order_items_product_id_fkey(name, type),
+        half_product:products!order_items_half_product_id_fkey(name),
+        edge:edge_options(name)
+      ),
+      addresses(*),
+      customer:profiles!orders_customer_id_fkey(full_name, phone),
+      delivery:profiles!orders_assigned_delivery_id_fkey(full_name, phone)
+    `)
+    .eq('id', orderId)
+    .single()
+
+  if (error) {
+    console.error("Error fetching order details:", error)
+    throw new Error(`Failed to fetch order details: ${error.message}`)
+  }
+
+  return data
+}
+
+export async function getAvailableDrivers() {
+  await requireAdmin()
+
+  const { data, error } = await supabaseAdmin
+    .from('profiles')
+    .select('id, full_name, phone')
+    .eq('role', 'delivery')
+    .eq('is_active', true)
+    .eq('tenant_id', TENANT_ID)
+
+  if (error) {
+    console.error("Error fetching available drivers:", error)
+    throw new Error(`Failed to fetch drivers: ${error.message}`)
   }
 
   return data

@@ -14,6 +14,7 @@ import {
   Truck
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
+import { getOrderDetails } from '@/app/(admin)/actions/order-actions'
 import { OrderWithItems } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -32,29 +33,18 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
 
   useEffect(() => {
     async function fetchFullDetails() {
-      // Use explicit foreign key hints for profiles
-      const { data } = await supabase
-        .from('orders')
-        .select(`
-          *,
-          order_items(*,
-            products!order_items_product_id_fkey(name, type),
-            products!order_items_half_product_id_fkey(name),
-            edge_options(name)
-          ),
-          addresses(*),
-          customer:profiles!orders_customer_id_fkey(full_name, phone),
-          delivery:profiles!orders_assigned_delivery_id_fkey(full_name, phone)
-        `)
-        .eq('id', order.id)
-        .single()
-
-      if (data) setDetails(data)
-      setLoading(false)
+      try {
+        const data = await getOrderDetails(order.id)
+        if (data) setDetails(data)
+      } catch (error) {
+        console.error('Error fetching order details:', error)
+      } finally {
+        setLoading(false)
+      }
     }
 
     void fetchFullDetails()
-  }, [order.id, supabase])
+  }, [order.id])
 
   const handleUpdatePaymentStatus = async (newStatus: string) => {
     setIsUpdating(true)
@@ -149,10 +139,10 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
               <section className="space-y-4">
                  <h3 className="font-bold">Itens</h3>
                  <div className="space-y-3">
-                    {details.order_items?.map((item: any) => {
-                      const mainProd = item['products!order_items_product_id_fkey']
-                      const halfProd = item['products!order_items_half_product_id_fkey']
-                      const edge = item.edge_options
+                    {details?.order_items?.map((item: any) => {
+                      const mainProd = item['products!order_items_product_id_fkey'] || item.products
+                      const halfProd = item['products!order_items_half_product_id_fkey'] || item.half_product
+                      const edge = item.edge || item.edge_options
 
                       return (
                         <div key={item.id} className="flex justify-between items-start text-sm">
@@ -174,24 +164,24 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
               </section>
 
               <section className="bg-[#F8F7F5] p-6 rounded-2xl border border-[#E5E7EB] space-y-3">
-                 <div className="flex justify-between text-sm"><span className="text-[#666]">Subtotal</span><span className="font-bold">R$ {Number(details.subtotal).toFixed(2).replace('.', ',')}</span></div>
-                 <div className="flex justify-between text-sm"><span className="text-[#666]">Taxa de entrega</span><span className="font-bold">R$ {Number(details.delivery_fee).toFixed(2).replace('.', ',')}</span></div>
+                 <div className="flex justify-between text-sm"><span className="text-[#666]">Subtotal</span><span className="font-bold">R$ {Number(details?.subtotal || 0).toFixed(2).replace('.', ',')}</span></div>
+                 <div className="flex justify-between text-sm"><span className="text-[#666]">Taxa de entrega</span><span className="font-bold">R$ {Number(details?.delivery_fee || 0).toFixed(2).replace('.', ',')}</span></div>
                  <div className="h-px bg-[#E5E7EB] my-2" />
                  <div className="flex justify-between items-center">
                     <span className="font-bold">Total</span>
-                    <span className="text-2xl font-bold text-apollo-orange italic">R$ {Number(details.total_amount).toFixed(2).replace('.', ',')}</span>
+                    <span className="text-2xl font-bold text-apollo-orange italic">R$ {Number(details?.total_amount || 0).toFixed(2).replace('.', ',')}</span>
                  </div>
                  <div className="pt-4 flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                       <p className="text-xs font-bold text-[#666] uppercase">{details.payment_method === 'pix' ? '⚡ PIX' : details.payment_method === 'cash' ? '💵 Dinheiro' : '💳 Cartão'}</p>
-                       <span className={cn("text-[10px] font-bold px-2 py-1 rounded uppercase", details.payment_status === 'paid' ? "bg-green-100 text-green-700" : "bg-zinc-100 text-zinc-600")}>
-                          {paymentStatusLabels[details.payment_status] || details.payment_status}
+                       <p className="text-xs font-bold text-[#666] uppercase">{details?.payment_method === 'pix' ? '⚡ PIX' : details?.payment_method === 'cash' ? '💵 Dinheiro' : '💳 Cartão'}</p>
+                       <span className={cn("text-[10px] font-bold px-2 py-1 rounded uppercase", details?.payment_status === 'paid' ? "bg-green-100 text-green-700" : "bg-zinc-100 text-zinc-600")}>
+                          {paymentStatusLabels[details?.payment_status] || details?.payment_status}
                        </span>
                     </div>
                  </div>
               </section>
 
-              {details.payment_method === 'pix' && (
+              {details?.payment_method === 'pix' && (
                 <section className="space-y-4 border-t border-[#E5E7EB] pt-6">
                    <h3 className="font-bold flex items-center gap-2"><Receipt size={18} className="text-apollo-orange" /> Confirmação de Pagamento PIX</h3>
 
@@ -214,10 +204,10 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
                 </section>
               )}
 
-              {details.payment_status === ('awaiting_collection' as any) && details.status === 'delivered' && (
+              {details?.payment_status === ('awaiting_collection' as any) && details?.status === 'delivered' && (
                 <button onClick={() => handleUpdatePaymentStatus('collected')} disabled={isUpdating} className="w-full py-4 bg-blue-500 text-white font-bold rounded-xl">Confirmar Recebimento (Motoboy)</button>
               )}
-              {details.payment_status === ('collected' as any) && (
+              {details?.payment_status === ('collected' as any) && (
                 <button onClick={() => handleUpdatePaymentStatus('paid')} disabled={isUpdating} className="w-full py-4 bg-green-500 text-white font-bold rounded-xl">Dar Baixa (Caixa)</button>
               )}
             </>
