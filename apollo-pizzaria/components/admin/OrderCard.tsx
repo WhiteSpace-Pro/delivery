@@ -10,12 +10,12 @@ import { Clock, ChevronRight } from 'lucide-react'
 
 interface OrderCardProps {
   order: OrderWithItems
-  hasPendingReceipt: boolean
+
   onOpenDetail: () => void
   onMoveToNext: () => void
 }
 
-export function OrderCard({ order, hasPendingReceipt, onOpenDetail, onMoveToNext }: OrderCardProps) {
+export function OrderCard({ order, onOpenDetail, onMoveToNext }: OrderCardProps) {
   const [totalMinutes, setTotalMinutes] = useState(0)
   const [stageMinutes, setStageMinutes] = useState(0)
 
@@ -103,7 +103,7 @@ export function OrderCard({ order, hasPendingReceipt, onOpenDetail, onMoveToNext
     >
       <div className="flex justify-between items-start mb-2">
         <span className="font-bold text-[#0D0D0D] text-base" {...attributes} {...listeners}>
-          #{order.id.slice(-4)}
+          {(order as any).display_id || order.id.slice(-4)}
         </span>
         <div className="flex flex-col items-end">
            <div className="flex items-center gap-1 text-[#666] text-[10px]">
@@ -117,7 +117,12 @@ export function OrderCard({ order, hasPendingReceipt, onOpenDetail, onMoveToNext
       </div>
 
       <div className="flex flex-wrap gap-1 mb-2">
-         {(isPixPending || hasPendingReceipt) && (
+         {isPixPending && (order as any).pix_receipt_note && (
+           <span className="bg-orange-100 text-orange-800 text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
+             PIX — Comprovante enviado
+           </span>
+         )}
+         {isPixPending && !(order as any).pix_receipt_note && (
            <span className="bg-yellow-100 text-yellow-800 text-[9px] font-bold px-1.5 py-0.5 rounded flex items-center gap-1">
              PIX — Aguardando comprovante
            </span>
