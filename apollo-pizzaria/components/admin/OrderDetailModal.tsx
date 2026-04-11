@@ -221,7 +221,7 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
                    {details.pix_receipt_note ? (
                      <div className="space-y-4">
                         <div className="rounded-xl overflow-hidden border border-[#E5E7EB] bg-zinc-50 p-2">
-                           <img src={details.pix_receipt_note || ""} alt="Comprovante" className="w-full h-auto cursor-pointer rounded-lg shadow-sm" onClick={() => details.pix_receipt_note && window.open(details.pix_receipt_note, '_blank')} />
+                           <img src={receiptUrl || ""} alt="Comprovante" className="w-full h-auto cursor-pointer rounded-lg shadow-sm" onClick={() => receiptUrl && window.open(receiptUrl, '_blank')} />
                         </div>
                         {details.payment_status === 'pending' && (
                           <button onClick={handleConfirmPix} disabled={isUpdating} className="w-full py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">

@@ -83,7 +83,7 @@ export async function toggleStoreStatus(currentStatus: boolean) {
 
 export async function getReceiptSignedUrl(receiptPath: string) {
   const supabase = createClient()
-  const { data, error } = await supabase.storage.from('receipts').createSignedUrl(receiptPath, 60)
+  const { data, error } = await supabase.storage.from('delivery-photos').createSignedUrl(receiptPath, 60)
   if (error) throw new Error('Failed to get receipt URL')
   return data.signedUrl
 }
