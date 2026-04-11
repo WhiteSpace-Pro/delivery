@@ -8,19 +8,23 @@ import { createClient } from '@/lib/supabase/client'
 import { useCart } from '@/contexts/CartContext'
 import { cn } from '@/lib/utils'
 
+const supabase = createClient()
+
 export default function OrderSuccessPage() {
   const params = useParams()
   const id = params?.id as string
   const { clearCart } = useCart()
   const [order, setOrder] = useState<any>(null)
   const [loading, setLoading] = useState(true)
-  const supabase = createClient()
 
   useEffect(() => {
     clearCart()
+  }, [])
+
+  useEffect(() => {
+    if (!id) return
 
     async function fetchOrder() {
-      if (!id) return
       const { data } = await supabase
         .from('orders')
         .select('*, addresses(*)')
@@ -33,20 +37,23 @@ export default function OrderSuccessPage() {
 
     void fetchOrder()
 
-    if (id) {
-      const channel = supabase
-        .channel(`order-${id}`)
-        .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'orders', filter: `id=eq.${id}` },
-        (payload) => {
-          setOrder(payload.new)
-        })
-        .subscribe()
+    const channel = supabase
+      .channel(`order-${id}`)
+      .on('postgres_changes', {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'orders',
+        filter: `id=eq.${id}`
+      },
+      (payload) => {
+        setOrder(payload.new)
+      })
+      .subscribe()
 
-      return () => {
-        void supabase.removeChannel(channel)
-      }
+    return () => {
+      void supabase.removeChannel(channel)
     }
-  }, [id, clearCart, supabase])
+  }, [id])
 
   if (loading) return <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-center"><Loader2 size={40} className="text-apollo-orange animate-spin" /></div>
   if (!order) return <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-center text-white">Pedido não encontrado</div>
