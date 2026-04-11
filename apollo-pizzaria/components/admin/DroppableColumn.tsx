@@ -10,12 +10,12 @@ interface DroppableColumnProps {
   title: string
   color: string
   orders: OrderWithItems[]
-  pendingReceipts: Set<string>
+
   onOpenDetail: (order: OrderWithItems) => void
   onMoveToNext: (order: OrderWithItems) => void
 }
 
-export function DroppableColumn({ id, title, color, orders, pendingReceipts, onOpenDetail, onMoveToNext }: DroppableColumnProps) {
+export function DroppableColumn({ id, title, color, orders, onOpenDetail, onMoveToNext }: DroppableColumnProps) {
   const { setNodeRef } = useDroppable({ id })
 
   return (
@@ -37,7 +37,6 @@ export function DroppableColumn({ id, title, color, orders, pendingReceipts, onO
             <OrderCard
               key={order.id}
               order={order}
-              hasPendingReceipt={pendingReceipts.has(order.id)}
               onOpenDetail={() => onOpenDetail(order)}
               onMoveToNext={() => onMoveToNext(order)}
             />

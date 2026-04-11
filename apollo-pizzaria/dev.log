@@ -1,0 +1,30 @@
+
+> apollo-pizzaria@0.1.0 dev
+> next dev
+
+  ▲ Next.js 14.2.10
+  - Local:        http://localhost:3000
+
+ ✓ Starting...
+ ✓ Ready in 1903ms
+ ○ Compiling /middleware ...
+ ✓ Compiled /middleware in 1146ms (124 modules)
+ ○ Compiling / ...
+ ✓ Compiled / in 10.3s (1730 modules)
+NEXT_PUBLIC_TENANT_ID_APOLLO is not defined in environment variables. Using fallback tenant ID.
+Error fetching products: {
+  message: 'TypeError: fetch failed',
+  details: 'TypeError: fetch failed\n' +
+    '\n' +
+    'Caused by: AggregateError:  (ECONNREFUSED)\n' +
+    'AggregateError [ECONNREFUSED]: \n' +
+    '    at internalConnectMultiple (node:net:1134:18)\n' +
+    '    at afterConnectMultiple (node:net:1715:7)\n' +
+    '    at TCPConnectWrap.callbackTrampoline (node:internal/async_hooks:130:17)',
+  hint: '',
+  code: ''
+}
+ HEAD / 200 in 11276ms
+ ✓ Compiled in 1089ms (831 modules)
+ ✓ Compiled in 260ms (817 modules)
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (215kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)

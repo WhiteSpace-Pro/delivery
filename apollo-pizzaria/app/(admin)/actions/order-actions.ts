@@ -110,7 +110,7 @@ export async function getKanbanOrders() {
     .from("orders")
     .select(`
       *,
-      order_items(*, products!order_items_product_id_fkey(name, type)),
+      display_id, pix_receipt_note, order_items(*, products!order_items_product_id_fkey(name, type)),
       addresses(*),
       customer:profiles!orders_customer_id_fkey(full_name, phone),
       delivery:profiles!orders_assigned_delivery_id_fkey(full_name, phone)
@@ -134,7 +134,7 @@ export async function getOrderDetails(orderId: string) {
   const { data, error } = await (supabaseAdmin
     .from('orders')
     .select(`
-      id, order_number, status, payment_method, payment_status,
+      id, order_number, display_id, status, payment_method, payment_status,
       subtotal, delivery_fee, total_amount,
       customer_name, customer_phone, pix_receipt_note,
       order_items(id, quantity, unit_price, size, is_half, observations, products!order_items_product_id_fkey(name), half_product:products!order_items_half_product_id_fkey(name), edge:pizza_options!order_items_edge_option_id_fkey(name)),

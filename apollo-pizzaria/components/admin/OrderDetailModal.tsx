@@ -127,7 +127,7 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
       <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
         <div className="p-6 border-b border-[#F3F4F6] flex items-center justify-between bg-white">
           <div>
-            <h2 className="text-xl font-bold text-[#0D0D0D]">Pedido #{details?.order_number || order.id.slice(-4).toUpperCase()}</h2>
+            <h2 className="text-xl font-bold text-[#0D0D0D]">Pedido #{details?.display_id || details?.order_number || order.id.slice(-4).toUpperCase()}</h2>
             <p className="text-sm text-[#666]">
               {new Date(order.created_at || "").toLocaleString('pt-BR')}
             </p>
