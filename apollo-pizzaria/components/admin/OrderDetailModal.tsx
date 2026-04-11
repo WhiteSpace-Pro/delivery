@@ -14,7 +14,7 @@ import {
   Truck
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { getOrderDetails } from '@/app/(admin)/actions/order-actions'
+import { getOrderDetails, getReceiptSignedUrl } from '@/app/(admin)/actions/order-actions'
 import { OrderWithItems } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -29,6 +29,7 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
   const [details, setDetails] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null)
   const supabase = createClient()
 
   useEffect(() => {
@@ -45,6 +46,29 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
 
     void fetchFullDetails()
   }, [order.id])
+
+    useEffect(() => {
+    if (!details?.pix_receipt_note) return
+
+    // Extract path if it is a full URL
+    let path = details.pix_receipt_note
+    if (path.startsWith('http')) {
+      const parts = path.split('/public/')
+      if (parts.length > 1) {
+        const bucketAndPath = parts[1]
+        const firstSlash = bucketAndPath.indexOf('/')
+        if (firstSlash !== -1) {
+          path = bucketAndPath.substring(firstSlash + 1)
+        }
+      }
+    }
+
+    getReceiptSignedUrl(path)
+      .then(setReceiptUrl)
+      .catch(() => setReceiptUrl(null))
+  }, [details?.pix_receipt_note])
+
+
 
   const handleUpdatePaymentStatus = async (newStatus: string) => {
     setIsUpdating(true)
@@ -70,6 +94,7 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
     if (!error) {
       setDetails((prev: any) => ({ ...prev, payment_status: ('paid' as any), status: 'confirmed' }))
       if (onReceiptVerified) onReceiptVerified(order.id)
+      onClose()
     }
     setIsUpdating(false)
   }
@@ -196,7 +221,7 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
                    {details.pix_receipt_note ? (
                      <div className="space-y-4">
                         <div className="rounded-xl overflow-hidden border border-[#E5E7EB] bg-zinc-50 p-2">
-                           <img src={details.pix_receipt_note} alt="Comprovante" className="w-full h-auto cursor-pointer rounded-lg shadow-sm" onClick={() => window.open(details.pix_receipt_note, '_blank')} />
+                           <img src={receiptUrl || ""} alt="Comprovante" className="w-full h-auto cursor-pointer rounded-lg shadow-sm" onClick={() => receiptUrl && window.open(receiptUrl, '_blank')} />
                         </div>
                         {details.payment_status === 'pending' && (
                           <button onClick={handleConfirmPix} disabled={isUpdating} className="w-full py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
