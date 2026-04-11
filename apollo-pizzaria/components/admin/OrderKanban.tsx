@@ -152,7 +152,6 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
               title={col.label}
               color={col.color}
               orders={orders.filter(o => o.status === col.key)}
-              pendingReceipts={pendingReceipts}
               onOpenDetail={setSelectedOrder}
               onMoveToNext={(orderToMove) => {
                  const currentIdx = COLUMNS.findIndex(c => c.key === orderToMove.status);
