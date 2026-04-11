@@ -220,9 +220,18 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
 
                    {details.pix_receipt_note ? (
                      <div className="space-y-4">
-                        <div className="rounded-xl overflow-hidden border border-[#E5E7EB] bg-zinc-50 p-2">
-                           <img src={receiptUrl || ""} alt="Comprovante" className="w-full h-auto cursor-pointer rounded-lg shadow-sm" onClick={() => receiptUrl && window.open(receiptUrl, '_blank')} />
-                        </div>
+                        {details.pix_receipt_note?.toLowerCase().endsWith('.pdf') ? (
+                          <button
+                            onClick={() => window.open(receiptUrl || details.pix_receipt_note, '_blank')}
+                            className="w-full py-6 border-2 border-dashed border-[#E5E7EB] rounded-xl flex items-center justify-center gap-3 text-apollo-orange font-bold hover:bg-orange-50 transition-colors"
+                          >
+                            📄 Comprovante PDF — Clique para abrir
+                          </button>
+                        ) : (
+                          <div className="rounded-xl overflow-hidden border border-[#E5E7EB] bg-zinc-50 p-2">
+                             <img src={receiptUrl || ""} alt="Comprovante" className="w-full h-auto cursor-pointer rounded-lg shadow-sm" onClick={() => receiptUrl && window.open(receiptUrl, '_blank')} />
+                          </div>
+                        )}
                         {details.payment_status === 'pending' && (
                           <button onClick={handleConfirmPix} disabled={isUpdating} className="w-full py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
                              {isUpdating ? <Loader2 className="animate-spin" /> : <><Check size={20} /> Confirmar Pagamento</>}

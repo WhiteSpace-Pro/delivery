@@ -27,7 +27,7 @@ export default function OrderSuccessPage() {
     async function fetchOrder() {
       const { data } = await supabase
         .from('orders')
-        .select('*, addresses(*)')
+        .select('*, display_id, addresses(*)')
         .eq('id', id)
         .single()
 
@@ -86,7 +86,7 @@ export default function OrderSuccessPage() {
              <div className="flex items-center justify-between mb-8">
                 <div>
                    <p className="text-[10px] uppercase tracking-widest text-white/40 font-bold mb-1">Pedido</p>
-                   <p className="text-lg font-mono font-bold">#{order.id.substring(0, 8)}</p>
+                   <p className="text-lg font-mono font-bold">#{order.display_id || order.id.substring(0, 8)}</p>
                 </div>
                 <div className="text-right">
                    <p className="text-[10px] uppercase tracking-widest text-white/40 font-bold mb-1">Status Atual</p>
