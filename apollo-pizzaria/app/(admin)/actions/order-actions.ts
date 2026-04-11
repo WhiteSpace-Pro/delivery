@@ -136,8 +136,8 @@ export async function getOrderDetails(orderId: string) {
     .select(`
       id, order_number, status, payment_method, payment_status,
       subtotal, delivery_fee, total_amount,
-      customer_name, customer_phone,
-      order_items(id, quantity, unit_price, products!order_items_product_id_fkey(name), half_product:products!order_items_half_product_id_fkey(name), edge:pizza_options!order_items_edge_option_id_fkey(name)),
+      customer_name, customer_phone, pix_receipt_note,
+      order_items(id, quantity, unit_price, size, is_half, observations, products!order_items_product_id_fkey(name), half_product:products!order_items_half_product_id_fkey(name), edge:pizza_options!order_items_edge_option_id_fkey(name)),
       addresses(street, number, complement, neighborhood, city),
       customer:profiles!orders_customer_id_fkey(full_name, phone),
       delivery:profiles!orders_assigned_delivery_id_fkey(full_name, phone)
