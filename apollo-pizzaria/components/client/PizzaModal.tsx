@@ -151,10 +151,41 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
           exit={{ y: "100%" }}
           className="relative w-full max-w-2xl bg-[#141414] rounded-t-3xl sm:rounded-3xl overflow-hidden flex flex-col max-h-[90vh]"
         >
-          <div className="p-6 border-b border-white/5 flex items-center justify-between">
-            <h2 className="text-xl font-bold font-playfair">{product.name}</h2>
-            <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full text-white"><X /></button>
-          </div>
+          <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-6 p-6 sm:p-8 bg-[#1A1A1A] border-b border-white/5">
+              <div className="flex-1">
+                <span className="text-[#E85D24] text-[10px] font-bold uppercase tracking-widest bg-[#E85D24]/10 px-3 py-1 rounded-full mb-3 inline-block">
+                  PIZZA ARTESANAL
+                </span>
+                <h2 className="text-2xl sm:text-[32px] font-black text-white uppercase tracking-tight leading-tight">{product.name}</h2>
+                {product.description && (
+                  <p className="text-[#8A8480] mt-3 text-sm leading-relaxed max-w-md">{product.description}</p>
+                )}
+              </div>
+
+              {isHalfAndHalf && (
+                <div className="relative w-28 h-28 sm:w-32 sm:h-32 rounded-full overflow-hidden border-2 border-white/10 shrink-0 shadow-2xl rotate-12">
+                  <div className="absolute inset-0 flex">
+                    {/* Metade 1 */}
+                    <div className="w-1/2 h-full bg-[#E85D24]/10 flex items-center justify-center p-3 text-center border-r border-white/5">
+                      <span className="text-[9px] font-black uppercase tracking-tighter leading-none opacity-40">
+                        {flavors.find(f => f.id === firstFlavorId)?.name || "Sabor 1"}
+                      </span>
+                    </div>
+                    {/* Metade 2 */}
+                    <div className="w-1/2 h-full bg-[#D4941A]/10 flex items-center justify-center p-3 text-center">
+                      <span className="text-[9px] font-black uppercase tracking-tighter leading-none opacity-40">
+                        {flavors.find(f => f.id === secondFlavorId)?.name || "Sabor 2"}
+                      </span>
+                    </div>
+                  </div>
+                  {/* Divisor Visual */}
+                  <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1px] h-full bg-white/10" />
+                  <div className="absolute inset-0 bg-gradient-to-tr from-black/20 to-transparent pointer-events-none" />
+                </div>
+              )}
+
+              <button onClick={onClose} className="absolute top-4 right-4 p-2 hover:bg-white/5 rounded-full text-white sm:relative sm:top-0 sm:right-0"><X /></button>
+            </header>
 
           <div className="flex-1 overflow-y-auto p-6 space-y-8 text-white">
             {isPizza && (

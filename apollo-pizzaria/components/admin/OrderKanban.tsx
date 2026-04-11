@@ -151,7 +151,7 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
               id={col.key}
               title={col.label}
               color={col.color}
-              orders={orders.filter(o => o.status === col.key)}
+              orders={orders.filter(o => { if (col.key === 'pending') return o.status === 'pending' && o.payment_method === 'pix'; return o.status === col.key; })}
               pendingReceipts={pendingReceipts}
               onOpenDetail={setSelectedOrder}
               onMoveToNext={(orderToMove) => {
