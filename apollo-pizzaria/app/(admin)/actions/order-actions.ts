@@ -6,7 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { OrderStatus } from '@/types/enums'
 import { revalidatePath } from 'next/cache'
 
-const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
+const TENANT_ID = process.env.NEXT_PUBLIC_TENANT_ID_APOLLO || '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 
 async function requireAdmin() {
   const supabase = createClient()
@@ -111,7 +111,7 @@ export async function getKanbanOrders() {
     .select(`
       *,
       order_items(*, products!order_items_product_id_fkey(name, type)),
-      addresses!orders_delivery_address_id_fkey(*),
+      addresses(*),
       customer:profiles!orders_customer_id_fkey(full_name, phone),
       delivery:profiles!orders_assigned_delivery_id_fkey(full_name, phone)
     `)
@@ -125,25 +125,23 @@ export async function getKanbanOrders() {
     throw new Error(`Failed to fetch orders: ${error.message}`)
   }
 
-  return data
+  return data as any
 }
 
 export async function getOrderDetails(orderId: string) {
   await requireAdmin()
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await (supabaseAdmin
     .from('orders')
     .select(`
-      *,
-      order_items(*,
-        products!order_items_product_id_fkey(name, type),
-        products!order_items_half_product_id_fkey(name),
-        pizza_options!order_items_edge_option_id_fkey(name)
-      ),
-      addresses!orders_delivery_address_id_fkey(*),
+      id, order_number, status, payment_method, payment_status,
+      subtotal, delivery_fee, total_amount,
+      customer_name, customer_phone,
+      order_items(id, quantity, unit_price, products!order_items_product_id_fkey(name), half_product:products!order_items_half_product_id_fkey(name), edge:pizza_options!order_items_edge_option_id_fkey(name)),
+      addresses(street, number, complement, neighborhood, city),
       customer:profiles!orders_customer_id_fkey(full_name, phone),
       delivery:profiles!orders_assigned_delivery_id_fkey(full_name, phone)
-    `)
+    `) as any)
     .eq('id', orderId)
     .single()
 
@@ -152,7 +150,7 @@ export async function getOrderDetails(orderId: string) {
     throw new Error(`Failed to fetch order details: ${error.message}`)
   }
 
-  return data
+  return data as any
 }
 
 export async function getAvailableDrivers() {
@@ -182,8 +180,8 @@ export async function getDeliveryOrders() {
     .from('orders')
     .select(`
       *,
-      addresses!orders_delivery_address_id_fkey(*),
-      order_items(*, products(name))
+      addresses(street, number, complement, neighborhood, city, lat, lng),
+      order_items(quantity, products!order_items_product_id_fkey(name))
     `)
     .eq('assigned_delivery_id', user.id)
     .eq('status', 'out_for_delivery')
@@ -195,7 +193,7 @@ export async function getDeliveryOrders() {
     throw new Error(`Failed to fetch deliveries: ${error.message}`)
   }
 
-  return data
+  return data as any
 }
 
 export async function cancelOrder(orderId: string) {

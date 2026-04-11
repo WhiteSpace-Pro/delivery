@@ -86,7 +86,7 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
         try {
           const data = await getOrderDetails(payload.new.id)
           if (data) {
-            setOrders(prev => [data as any, ...prev])
+            setOrders(prev => [(data as any), ...prev])
             if (data.status === 'pending' || data.status === 'confirmed') playNotificationSound()
           }
         } catch (error) {

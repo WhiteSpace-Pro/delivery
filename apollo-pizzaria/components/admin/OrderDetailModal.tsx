@@ -90,9 +90,9 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
     paid: 'Pago'
   }
 
-  // Prioritize direct order fields as requested
-  const customerName = details?.customer_name || details?.customer?.full_name || 'Cliente'
-  const customerPhone = details?.customer_phone || details?.customer?.phone || 'N/A'
+  // Mandatory Rules: Direct fields priority
+  const customerName = details?.customer_name ?? details?.customer?.full_name ?? 'Não identificado'
+  const customerPhone = details?.customer_phone ?? details?.customer?.phone ?? 'Não informado'
   const deliveryName = details?.delivery?.full_name
   const address = details?.addresses
 
@@ -102,7 +102,7 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
       <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} exit={{ scale: 0.95, opacity: 0 }} className="relative bg-white w-full max-w-2xl rounded-2xl overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
         <div className="p-6 border-b border-[#F3F4F6] flex items-center justify-between bg-white">
           <div>
-            <h2 className="text-xl font-bold text-[#0D0D0D]">Pedido #{order.id.slice(-8).toUpperCase()}</h2>
+            <h2 className="text-xl font-bold text-[#0D0D0D]">Pedido #{details?.order_number || order.id.slice(-4).toUpperCase()}</h2>
             <p className="text-sm text-[#666]">
               {new Date(order.created_at || "").toLocaleString('pt-BR')}
             </p>
@@ -150,7 +150,7 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
                     {details?.order_items?.map((item: any) => {
                       const product = item['products!order_items_product_id_fkey'] || item.products
                       const halfProduct = item['products!order_items_half_product_id_fkey'] || item.half_product
-                      const edge = item['pizza_options!order_items_edge_option_id_fkey']
+                      const edge = item['pizza_options!order_items_edge_option_id_fkey'] || item.edge
 
                       return (
                         <div key={item.id} className="flex justify-between items-start text-sm">

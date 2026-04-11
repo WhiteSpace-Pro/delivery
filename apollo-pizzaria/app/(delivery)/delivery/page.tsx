@@ -56,8 +56,11 @@ export default function DeliveryPage() {
       if (data) {
          const typedData = data.map((o: any) => ({
            ...o,
-           addresses: o['addresses!orders_delivery_address_id_fkey'] || o.addresses,
-           order_items: o.order_items
+           addresses: o['addresses'] || o.addresses, // Standardized property
+           order_items: o.order_items?.map((i: any) => ({
+             ...i,
+             products: i['products!order_items_product_id_fkey'] || i.products
+           }))
          })) as unknown as DeliveryOrder[];
 
          const destinations = typedData
@@ -130,7 +133,7 @@ export default function DeliveryPage() {
                  <span className="text-2xl font-bold text-apollo-orange italic">#{order.id.slice(-4).toUpperCase()}</span>
                  <div className="text-right">
                     <p className="text-[10px] text-white/40 uppercase font-bold tracking-widest">Valor</p>
-                    <p className="text-lg font-bold">R$ {order.total_amount.toFixed(2).replace('.', ',')}</p>
+                    <p className="text-lg font-bold">R$ {Number(order.total_amount).toFixed(2).replace('.', ',')}</p>
                  </div>
               </div>
 
