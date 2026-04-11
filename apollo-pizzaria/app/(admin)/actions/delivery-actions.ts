@@ -26,9 +26,7 @@ async function requireAdmin() {
 export async function getDriversWithStats() {
   await requireAdmin()
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const todayISO = today.toISOString()
+  const startOfPeriod = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
   const { data: drivers, error: driversError } = await supabaseAdmin
     .from('profiles')
@@ -48,7 +46,7 @@ export async function getDriversWithStats() {
     .select('assigned_delivery_id')
     .eq('tenant_id', TENANT_ID)
     .eq('status', 'delivered')
-    .gte('created_at', todayISO)
+    .gte('created_at', startOfPeriod)
 
   if (ordersError) {
     console.error('Error fetching driver orders:', ordersError)
@@ -78,6 +76,22 @@ export async function getDriversWithStats() {
   })
 
   return stats
+}
+
+export async function updateDriverStatus(isOnline: boolean) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const { error } = await supabaseAdmin
+    .from('profiles')
+    .update({ is_active: isOnline } as any)
+    .eq('id', user.id)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/delivery')
+  return { success: true }
 }
 
 export async function createDriver(formData: {

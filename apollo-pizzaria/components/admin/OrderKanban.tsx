@@ -8,7 +8,7 @@ import { OrderStatus } from '@/types/enums'
 import { OrderDetailModal } from './OrderDetailModal'
 import { DriverAssignModal } from './DriverAssignModal'
 import { playNotificationSound } from '@/lib/audio'
-import { updateOrderStatus, getKanbanOrders } from '@/app/(admin)/actions/order-actions'
+import { updateOrderStatus, getKanbanOrders, getOrderDetails } from '@/app/(admin)/actions/order-actions'
 import {
   DndContext,
   closestCorners,
@@ -47,7 +47,6 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
 
       if (ordersData) {
         const filtered = (ordersData as any[]).filter(o => {
-          // NOVO (pending): Apenas PIX com comprovante enviado (pix_receipt_note != null) ou < 2h
           if (o.status === 'pending') {
             if (o.payment_method === 'pix') {
               const isRecent = new Date(o.created_at).getTime() >= twoHoursAgo.getTime()
@@ -84,23 +83,13 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
         table: 'orders',
         filter: `tenant_id=eq.${tenantId}`
       }, async (payload) => {
-        // Fetch full order data on insert to ensure joins are present and avoid PGRST201
-        const { data, error } = await supabase
-          .from('orders')
-          .select(`
-            *,
-            order_items(*, products!order_items_product_id_fkey(name, type)),
-            addresses(*),
-            customer:profiles!orders_customer_id_fkey(full_name, phone),
-            delivery:profiles!orders_assigned_delivery_id_fkey(full_name, phone)
-          `)
-          .eq('id', payload.new.id)
-          .single()
-
-        if (data) {
-          setOrders(prev => [data as any, ...prev])
-          if (data.status === 'pending' || data.status === 'confirmed') playNotificationSound()
-        } else if (error) {
+        try {
+          const data = await getOrderDetails(payload.new.id)
+          if (data) {
+            setOrders(prev => [data as any, ...prev])
+            if (data.status === 'pending' || data.status === 'confirmed') playNotificationSound()
+          }
+        } catch (error) {
           console.error('Error fetching new order on realtime:', error)
         }
       })
@@ -110,7 +99,6 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
         table: 'orders',
         filter: `tenant_id=eq.${tenantId}`
       }, async (payload) => {
-         // Keep local consistency. Realtime updates might not include joins.
          setOrders(prev => prev.map(o => o.id === payload.new.id ? { ...o, ...payload.new } : o))
       })
       .subscribe()

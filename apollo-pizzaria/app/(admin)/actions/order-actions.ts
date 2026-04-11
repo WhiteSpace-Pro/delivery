@@ -111,7 +111,7 @@ export async function getKanbanOrders() {
     .select(`
       *,
       order_items(*, products!order_items_product_id_fkey(name, type)),
-      addresses(*),
+      addresses!orders_delivery_address_id_fkey(*),
       customer:profiles!orders_customer_id_fkey(full_name, phone),
       delivery:profiles!orders_assigned_delivery_id_fkey(full_name, phone)
     `)
@@ -137,10 +137,10 @@ export async function getOrderDetails(orderId: string) {
       *,
       order_items(*,
         products!order_items_product_id_fkey(name, type),
-        half_product:products!order_items_half_product_id_fkey(name),
-        edge:edge_options(name)
+        products!order_items_half_product_id_fkey(name),
+        pizza_options!order_items_edge_option_id_fkey(name)
       ),
-      addresses(*),
+      addresses!orders_delivery_address_id_fkey(*),
       customer:profiles!orders_customer_id_fkey(full_name, phone),
       delivery:profiles!orders_assigned_delivery_id_fkey(full_name, phone)
     `)
@@ -168,6 +168,31 @@ export async function getAvailableDrivers() {
   if (error) {
     console.error("Error fetching available drivers:", error)
     throw new Error(`Failed to fetch drivers: ${error.message}`)
+  }
+
+  return data
+}
+
+export async function getDeliveryOrders() {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const { data, error } = await supabaseAdmin
+    .from('orders')
+    .select(`
+      *,
+      addresses!orders_delivery_address_id_fkey(*),
+      order_items(*, products(name))
+    `)
+    .eq('assigned_delivery_id', user.id)
+    .eq('status', 'out_for_delivery')
+    .eq('tenant_id', TENANT_ID)
+    .order('created_at', { ascending: true })
+
+  if (error) {
+    console.error("Error fetching delivery orders:", error)
+    throw new Error(`Failed to fetch deliveries: ${error.message}`)
   }
 
   return data

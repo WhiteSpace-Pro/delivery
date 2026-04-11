@@ -76,6 +76,13 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
 
   if (!order) return null
 
+  const paymentLabels: Record<string, string> = {
+    pix: 'PIX',
+    cash: 'Dinheiro',
+    credit_card: 'Cartão de Crédito',
+    debit_card: 'Cartão de Débito'
+  }
+
   const paymentStatusLabels: Record<string, string> = {
     pending: 'Aguardando confirmação',
     awaiting_collection: 'A cobrar (motoboy)',
@@ -83,6 +90,7 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
     paid: 'Pago'
   }
 
+  // Prioritize direct order fields as requested
   const customerName = details?.customer_name || details?.customer?.full_name || 'Cliente'
   const customerPhone = details?.customer_phone || details?.customer?.phone || 'N/A'
   const deliveryName = details?.delivery?.full_name
@@ -140,9 +148,9 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
                  <h3 className="font-bold">Itens</h3>
                  <div className="space-y-3">
                     {details?.order_items?.map((item: any) => {
-                      const mainProd = item['products!order_items_product_id_fkey'] || item.products
-                      const halfProd = item['products!order_items_half_product_id_fkey'] || item.half_product
-                      const edge = item.edge || item.edge_options
+                      const product = item['products!order_items_product_id_fkey'] || item.products
+                      const halfProduct = item['products!order_items_half_product_id_fkey'] || item.half_product
+                      const edge = item['pizza_options!order_items_edge_option_id_fkey']
 
                       return (
                         <div key={item.id} className="flex justify-between items-start text-sm">
@@ -150,7 +158,7 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
                              <span className="font-bold text-apollo-orange">{item.quantity}×</span>
                              <div>
                                 <p className="font-bold">
-                                  {item.is_half ? `${mainProd?.name} / ${halfProd?.name}` : mainProd?.name}
+                                  {item.is_half ? `${product?.name} / ${halfProduct?.name}` : product?.name}
                                 </p>
                                 <p className="text-[10px] text-[#666] font-bold uppercase">{item.size} {edge ? `• Borda ${edge.name}` : ''}</p>
                                 {item.observations && <p className="text-xs text-apollo-orange italic mt-1 font-medium">{item.observations}</p>}
@@ -173,7 +181,7 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
                  </div>
                  <div className="pt-4 flex flex-col gap-2">
                     <div className="flex items-center justify-between">
-                       <p className="text-xs font-bold text-[#666] uppercase">{details?.payment_method === 'pix' ? '⚡ PIX' : details?.payment_method === 'cash' ? '💵 Dinheiro' : '💳 Cartão'}</p>
+                       <p className="text-xs font-bold text-[#666] uppercase">{paymentLabels[details?.payment_method] || details?.payment_method}</p>
                        <span className={cn("text-[10px] font-bold px-2 py-1 rounded uppercase", details?.payment_status === 'paid' ? "bg-green-100 text-green-700" : "bg-zinc-100 text-zinc-600")}>
                           {paymentStatusLabels[details?.payment_status] || details?.payment_status}
                        </span>
