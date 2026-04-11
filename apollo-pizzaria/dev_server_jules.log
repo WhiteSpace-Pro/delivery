@@ -53,3 +53,8 @@ https://supabase.com/dashboard/project/_/settings/api
 digest: "1687229566"
  ⚠ Fast Refresh had to perform a full reload due to a runtime error.
  GET /cardapio 500 in 9411ms
+ ✓ Compiled in 7.4s (830 modules)
+ ✓ Compiled in 746ms (830 modules)
+ ✓ Compiled in 345ms (830 modules)
+ ✓ Compiled in 345ms (830 modules)
+ ✓ Compiled in 612ms (830 modules)

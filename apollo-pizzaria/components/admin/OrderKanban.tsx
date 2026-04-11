@@ -84,16 +84,24 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
         table: 'orders',
         filter: `tenant_id=eq.${tenantId}`
       }, async (payload) => {
-        // Fetch full order data on insert to ensure joins are present
-        const { data } = await supabase
+        // Fetch full order data on insert to ensure joins are present and avoid PGRST201
+        const { data, error } = await supabase
           .from('orders')
-          .select('*, order_items(*, products!order_items_product_id_fkey(name, type)), addresses(*), profiles(full_name, phone)')
+          .select(`
+            *,
+            order_items(*, products!order_items_product_id_fkey(name, type)),
+            addresses(*),
+            customer:profiles!orders_customer_id_fkey(full_name, phone),
+            delivery:profiles!orders_assigned_delivery_id_fkey(full_name, phone)
+          `)
           .eq('id', payload.new.id)
           .single()
 
         if (data) {
           setOrders(prev => [data as any, ...prev])
           if (data.status === 'pending' || data.status === 'confirmed') playNotificationSound()
+        } else if (error) {
+          console.error('Error fetching new order on realtime:', error)
         }
       })
       .on('postgres_changes', {
@@ -102,8 +110,7 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
         table: 'orders',
         filter: `tenant_id=eq.${tenantId}`
       }, async (payload) => {
-         // On update, we might need full data if joins changed, but usually status is enough.
-         // However, to keep consistency, let's fetch or just update locally.
+         // Keep local consistency. Realtime updates might not include joins.
          setOrders(prev => prev.map(o => o.id === payload.new.id ? { ...o, ...payload.new } : o))
       })
       .subscribe()

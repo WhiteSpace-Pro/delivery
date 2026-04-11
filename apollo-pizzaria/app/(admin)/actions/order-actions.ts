@@ -104,20 +104,26 @@ export async function markNotificationAsRead(orderId: string) {
 export async function getKanbanOrders() {
   await requireAdmin()
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  // Buscar últimas 24h (mais simples e resolve problemas de timezone do dia)
+  const startOfPeriod = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
   const { data, error } = await supabaseAdmin
     .from("orders")
-    .select("*, order_items(*, products!order_items_product_id_fkey(name, type)), addresses(*), profiles(full_name, phone)")
+    .select(`
+      *,
+      order_items(*, products!order_items_product_id_fkey(name, type)),
+      addresses(*),
+      customer:profiles!orders_customer_id_fkey(full_name, phone),
+      delivery:profiles!orders_assigned_delivery_id_fkey(full_name, phone)
+    `)
     .eq("tenant_id", TENANT_ID)
-    .gte("created_at", today.toISOString())
+    .gte("created_at", startOfPeriod)
     .neq("status", "cancelled")
     .order("created_at", { ascending: false })
 
   if (error) {
     console.error("Error fetching kanban orders:", error)
-    throw new Error("Failed to fetch orders")
+    throw new Error(`Failed to fetch orders: ${error.message}`)
   }
 
   return data

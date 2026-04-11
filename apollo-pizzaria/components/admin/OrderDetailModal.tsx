@@ -10,7 +10,8 @@ import {
   User,
   Receipt,
   Loader2,
-  Check
+  Check,
+  Truck
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { OrderWithItems } from '@/types'
@@ -31,9 +32,20 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
 
   useEffect(() => {
     async function fetchFullDetails() {
+      // Use explicit foreign key hints for profiles
       const { data } = await supabase
         .from('orders')
-        .select('*, order_items(*, products!order_items_product_id_fkey(name, type), half_product:products!order_items_half_product_id_fkey(name), edge:edge_options(name)), addresses(*), profiles(full_name, phone)')
+        .select(`
+          *,
+          order_items(*,
+            products!order_items_product_id_fkey(name, type),
+            products!order_items_half_product_id_fkey(name),
+            edge_options(name)
+          ),
+          addresses(*),
+          customer:profiles!orders_customer_id_fkey(full_name, phone),
+          delivery:profiles!orders_assigned_delivery_id_fkey(full_name, phone)
+        `)
         .eq('id', order.id)
         .single()
 
@@ -81,8 +93,9 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
     paid: 'Pago'
   }
 
-  const customerName = details?.customer_name || details?.profiles?.full_name || 'Cliente'
-  const customerPhone = details?.customer_phone || details?.profiles?.phone || 'N/A'
+  const customerName = details?.customer_name || details?.customer?.full_name || 'Cliente'
+  const customerPhone = details?.customer_phone || details?.customer?.phone || 'N/A'
+  const deliveryName = details?.delivery?.full_name
   const address = details?.addresses
 
   return (
@@ -122,22 +135,41 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
                 </div>
               </section>
 
+              {deliveryName && (
+                <section className="space-y-2">
+                  <h3 className="text-sm font-bold flex items-center gap-2 text-zinc-500 uppercase tracking-wider">
+                    <Truck size={14} /> Entregador
+                  </h3>
+                  <div className="bg-zinc-50 p-3 rounded-xl border border-zinc-200">
+                    <p className="font-bold text-zinc-700">{deliveryName}</p>
+                  </div>
+                </section>
+              )}
+
               <section className="space-y-4">
                  <h3 className="font-bold">Itens</h3>
                  <div className="space-y-3">
-                    {details.order_items?.map((item: any) => (
-                      <div key={item.id} className="flex justify-between items-start text-sm">
-                        <div className="flex gap-3">
-                           <span className="font-bold text-apollo-orange">{item.quantity}×</span>
-                           <div>
-                              <p className="font-bold">{item.is_half ? `${item.products?.name} / ${item.half_product?.name}` : item.products?.name}</p>
-                              <p className="text-[10px] text-[#666] font-bold uppercase">{item.size} {item.edge ? `• Borda ${item.edge.name}` : ''}</p>
-                              {item.observations && <p className="text-xs text-apollo-orange italic mt-1 font-medium">{item.observations}</p>}
-                           </div>
+                    {details.order_items?.map((item: any) => {
+                      const mainProd = item['products!order_items_product_id_fkey']
+                      const halfProd = item['products!order_items_half_product_id_fkey']
+                      const edge = item.edge_options
+
+                      return (
+                        <div key={item.id} className="flex justify-between items-start text-sm">
+                          <div className="flex gap-3">
+                             <span className="font-bold text-apollo-orange">{item.quantity}×</span>
+                             <div>
+                                <p className="font-bold">
+                                  {item.is_half ? `${mainProd?.name} / ${halfProd?.name}` : mainProd?.name}
+                                </p>
+                                <p className="text-[10px] text-[#666] font-bold uppercase">{item.size} {edge ? `• Borda ${edge.name}` : ''}</p>
+                                {item.observations && <p className="text-xs text-apollo-orange italic mt-1 font-medium">{item.observations}</p>}
+                             </div>
+                          </div>
+                          <span className="font-bold">R$ {(Number(item.unit_price) * item.quantity).toFixed(2).replace('.', ',')}</span>
                         </div>
-                        <span className="font-bold">R$ {(Number(item.unit_price) * item.quantity).toFixed(2).replace('.', ',')}</span>
-                      </div>
-                    ))}
+                      )
+                    })}
                  </div>
               </section>
 
