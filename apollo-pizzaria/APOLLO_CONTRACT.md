@@ -13,7 +13,7 @@
 Projeto: Apollo Pizzaria System
 Stack: Next.js 14 App Router · TypeScript strict · Tailwind · Shadcn/ui · Supabase · Vercel
 Banco: supabase-cerulean-prism (project_id: ckshypkyylmzvhjhqrzf)
-Branch ativa: security-audit-report-apollo-17637271236054896302
+Branch ativa: fix-admin-kanban-dashboard-sidebar-apollo-13662929136679408498
 URL produção: delivery-nu-weld.vercel.app
 TENANT_ID: 496c5a35-6843-4061-b3ab-159d15a0cbc6
 Repositório: franciscoqueirozdriver/delivery
@@ -39,311 +39,229 @@ user_role:        customer | admin | kitchen | delivery
 
 | Método | status ao criar | payment_status ao criar |
 |---|---|---|
-| PIX | `pending` | `pending` |
-| Dinheiro | `confirmed` | `awaiting_collection` |
-| Cartão (crédito/débito) | `confirmed` | `awaiting_collection` |
+| PIX | pending | pending |
+| Dinheiro | confirmed | awaiting_collection |
+| Cartão (crédito/débito) | confirmed | awaiting_collection |
 
-**NUNCA** criar pedido dinheiro/cartão com `status: pending` ou `payment_status: pending`.
+NUNCA criar pedido dinheiro/cartão com status: pending ou payment_status: pending.
 
 ### 2. Ciclo de vida do pagamento
 
-```
 PIX:
-  pending → (admin confirma comprovante) → paid
+  pending → (admin confirma comprovante no Kanban) → paid
 
 Dinheiro/Cartão:
   awaiting_collection → (motoboy confirma recebimento) → collected
   collected → (admin dá baixa) → paid
-```
 
 ### 3. Chave PIX da loja
-- Salva em `tenants.pix_key = '+5531985375524'`
-- Tipo: `tenants.pix_key_type = 'telefone'`
-- QR Code gerado por `app/api/pix/qrcode/route.ts` internamente via `lib/pix/brcode.ts`
-- **NUNCA** usar API externa `gerarqrcodepix.com.br` — tem CORS bloqueado
+- Salva em tenants.pix_key = '+5531985375524'
+- Tipo: tenants.pix_key_type = 'telefone'
+- QR Code gerado internamente por app/api/pix/qrcode/route.ts via lib/pix/brcode.ts
+- NUNCA usar API externa gerarqrcodepix.com.br — tem CORS bloqueado
+- Endpoint GET /api/pix/qrcode?valor=X&txid=APOLLOYYY&saida=qr → imagem PNG
+- Endpoint GET /api/pix/qrcode?valor=X&txid=APOLLOYYY&saida=br → JSON com brcode
 
 ### 4. Coordenadas da pizzaria
-- `lat: -19.9077, lng: -43.8948`
+- lat: -19.9077, lng: -43.8948
 - Endereço: Av. Jequitinhonha 218, Vera Cruz, Belo Horizonte - MG
-- Salvo em `tenants.store_lat` e `tenants.store_lng`
 
 ### 5. Cálculo de frete
-- Usar TomTom Routing API para distância real (não haversine)
-- Taxa = `Math.ceil(distanceKm) × 1.00` (arredondamento sempre para cima)
-- **NÃO** mostrar km ou distância para o cliente — apenas "Taxa de entrega: R$ X,00"
-- Calcular apenas após CEP **e número** preenchidos
-- Resetar frete se CEP ou número forem alterados
-- Frete calculado é **obrigatório** para finalizar o pedido
+- TomTom Routing API para distância real
+- Taxa = Math.ceil(distanceKm) × 1.00
+- NÃO mostrar km — apenas "Taxa de entrega: R$ X,00"
+- Calcular apenas após CEP E número preenchidos
+- Resetar frete se CEP ou número mudarem
+- Frete obrigatório para finalizar pedido
+
+### 6. Proteção de roles no banco
+- Trigger protect_admin_role_trigger em profiles
+- Impede admin/kitchen/delivery de serem rebaixados para customer
+- NÃO remover esse trigger
 
 ---
 
 ## PORTAL DO CLIENTE
 
-### Rotas públicas (sem autenticação)
-- `/` — home e cardápio
-- `/cardapio` — cardápio completo
-- `/checkout` — checkout
-- `/order/[id]` — acompanhamento do pedido
-- `/login` — login (para admin e delivery)
-
-### Header
-- Exibir "Olá, [primeiro nome]" quando logado — buscar de `profiles.full_name`
-- Se não logado: não exibir nada
-- Badge do carrinho com quantidade de itens
-- Links: Cardápio | Meus Pedidos
-
-### Checkout — fluxo obrigatório
-1. Identificação por email ou telefone (modal estilo iFood)
-   - Cliente existente → pede senha → link "Esqueci minha senha"
-   - Cliente novo → pede nome → cria conta automaticamente
-2. Endereço com ViaCEP
-   - CEP preenche rua/bairro/cidade automaticamente
-   - Aguardar número para calcular frete via TomTom
-   - Mostrar apenas taxa, não distância
-3. Pagamento
-   - PIX: exibir QR Code real + copia-e-cola + upload de comprovante
-   - Dinheiro/Cartão: criar pedido direto
-4. Confirmação
-   - Exibir número do pedido
-   - Botão "Acompanhar pedido" → `/order/[id]`
-   - Limpar carrinho
+### Máscara de telefone — obrigatória
+Aceitar 10 dígitos (fixo) e 11 dígitos (celular). NUNCA bloquear com 9.
 
 ### Tela PIX — comportamento obrigatório
-- QR Code gerado via `/api/pix/qrcode?valor=X&txid=APOLLOYYY&saida=qr`
-- Código copia-e-cola via `/api/pix/qrcode?valor=X&txid=APOLLOYYY&saida=br`
-- Upload de comprovante → Supabase Storage bucket `delivery-photos`
-  path: `{tenant_id}/comprovantes/{order_id}/{timestamp}`
-  salvar URL em `orders.pix_receipt_note`
+- QR Code: img src="/api/pix/qrcode?valor=X&txid=APOLLOYYY&saida=qr"
+- Copia-e-cola: fetch /api/pix/qrcode?saida=br → response.brcode
+- Upload comprovante → bucket delivery-photos, path: {tenant_id}/comprovantes/{order_id}/{timestamp}
+- Salvar URL em orders.pix_receipt_note
 - Botão "Trocar forma de pagamento" presente
 - Tela persiste se cliente sair (localStorage)
-- **NÃO** mostrar campo "nome do pagador"
+- NÃO mostrar campo "nome do pagador"
 
 ### Meus Pedidos
-- Buscar com `supabaseAdmin` (não cliente browser) para evitar RLS
-- Select: `orders.*, order_items(*, products(name))`
-- **NUNCA** usar alias com `:` no select do Supabase (ex: `items:order_items`) — quebra silenciosamente
-- Usar `order_items[i].products.name` (sem alias)
+- Buscar com supabaseAdmin (não cliente browser)
+- Select: *, order_items(*, products(name))
+- NUNCA usar alias com : no select — quebra silenciosamente
+- Usar order_items[i].products.name (sem alias)
 
 ---
 
 ## PORTAL ADMIN
 
-### Acesso
-- Apenas `role: admin` ou `role: kitchen`
-- Middleware redireciona para `/login` sem autenticação
-
 ### Sidebar — links corretos
-| Link | href |
-|---|---|
-| Dashboard | `/admin` |
-| Cardápio | `/cardapio` |
-| Motoboys | `/admin/delivery` |
-| Relatórios | `/admin/relatorios` (página "Em breve") |
-| Configurações | `/admin/settings` (página "Em breve") |
+- Dashboard → /admin
+- Cardápio → /cardapio
+- Motoboys → /admin/delivery
+- Relatórios → /admin/relatorios (Em breve)
+- Configurações → /admin/settings (Em breve)
 
-### Dashboard — queries corretas
+### Dashboard — timezone obrigatório
+- Sempre usar America/Sao_Paulo para datas e saudação
+- Janela de 24h: Date.now() - 86400000 (evita bug UTC/BRT)
+- Pedidos hoje: excluir status=pending AND payment_status=pending
+- Faturamento: payment_status IN (paid, awaiting_collection, collected)
+- Ticket médio: faturamento / COUNT de pedidos que geraram receita
+- Em andamento: status IN (confirmed, preparing, ready, out_for_delivery)
 
-```typescript
-// Pedidos hoje (excluir PIX não confirmado)
-COUNT(*) WHERE created_at >= CURRENT_DATE
-  AND NOT (status = 'pending' AND payment_status = 'pending')
+### Kanban — FK explícita para profiles (OBRIGATÓRIO)
 
-// Faturamento hoje
-SUM(total_amount) WHERE created_at >= CURRENT_DATE
-  AND payment_status IN ('paid', 'awaiting_collection', 'collected')
-  AND status NOT IN ('pending', 'cancelled')
+orders tem DUAS FK para profiles. SEMPRE especificar qual:
 
-// Ticket médio = faturamento / pedidos confirmados
+.select(`
+  *,
+  order_items(*, products(name, type)),
+  addresses(*),
+  customer:profiles!orders_customer_id_fkey(full_name, phone),
+  delivery:profiles!orders_assigned_delivery_id_fkey(full_name, phone)
+`)
 
-// Em andamento
-COUNT(*) WHERE status IN ('confirmed', 'preparing', 'ready', 'out_for_delivery')
-  AND payment_status != 'pending'
-```
-
-### Kanban — mapeamento de colunas
-
-| Coluna | status no banco | Quem aparece |
-|---|---|---|
-| NOVO | `pending` | Apenas PIX com comprovante enviado (pix_receipt_note != null) ou < 2h |
-| CONFIRMADO | `confirmed` | Todos |
-| PREPARANDO | `preparing` | Todos |
-| PRONTO | `ready` | Todos |
-| SAIU | `out_for_delivery` | Todos |
-| ENTREGUE | `delivered` | Todos |
-
-**Badges obrigatórios:**
-- PIX pendente: badge amarelo "PIX — Aguardando comprovante"
-- Dinheiro/Cartão em CONFIRMADO: badge azul "A cobrar"
-
-### Kanban — select obrigatório
-
-```typescript
-supabaseAdmin
-  .from('orders')
-  .select(`
-    *,
-    order_items(*, products(name, type)),
-    addresses(*),
-    profiles(full_name, phone)
-  `)
-  .eq('tenant_id', TENANT_ID)
-  .gte('created_at', startOfDay)
-  .order('created_at', { ascending: false })
-```
-
-**NUNCA** usar alias com `:` no select — usar nomes diretos das tabelas.
+NUNCA usar profiles(full_name, phone) sem FK — causa erro PGRST201.
 
 ### Modal de detalhes — campos obrigatórios
-- Nome: `order.customer_name ?? order.profiles?.full_name ?? 'Cliente'`
-- Telefone: `order.customer_phone ?? order.profiles?.phone`
-- Endereço: join com `addresses` via `delivery_address_id`
-- Itens: `order_items[i].products.name` + tamanho se pizza
-- Subtotal, taxa de entrega, total
-- Método de pagamento: ler `orders.payment_method` — **NUNCA** assumir
-- Status do pagamento com label legível:
-  - `pending` → "Aguardando confirmação"
-  - `awaiting_collection` → "A cobrar (motoboy)"
-  - `collected` → "Coletado pelo motoboy"
-  - `paid` → "Pago"
-- Comprovante PIX: se `pix_receipt_note` não nulo, exibir link
-- Botão "Confirmar pagamento" apenas para PIX com `payment_status: pending`
-- Timeline com horários: `confirmed_at`, `preparing_at`, `ready_at`, `dispatched_at`, `delivered_at`
+- Nome: order.customer_name ?? order.customer?.full_name ?? 'Não identificado'
+- Telefone: order.customer_phone ?? order.customer?.phone ?? 'Não informado'
+- Subtotal: Number(order.subtotal)
+- Taxa: Number(order.delivery_fee)
+- Total: Number(order.total_amount)
+- Itens: order.order_items?.map(i => ({ name: i.products?.name, qty: i.quantity }))
+- Método: { pix:'PIX', cash:'Dinheiro', credit_card:'Cartão de Crédito', debit_card:'Cartão de Débito' }
+- Status pagamento: { pending:'Aguardando confirmação', awaiting_collection:'A cobrar (motoboy)', collected:'Coletado pelo motoboy', paid:'Pago' }
 
-### Atribuir motoboy — comportamento obrigatório
-```typescript
-// Ao atribuir motoboy:
-UPDATE orders SET
-  assigned_delivery_id = motoboyId,
-  status = 'out_for_delivery',
-  dispatched_at = now()
-WHERE id = orderId
-```
+### Server actions para admin (bypass RLS)
+- getOrderDetails(orderId) — usa supabaseAdmin
+- getAvailableDrivers(tenantId) — usa supabaseAdmin, filtra is_active=true
+
+### Atribuir motoboy
+UPDATE orders SET assigned_delivery_id=motoboyId, status='out_for_delivery', dispatched_at=now()
 
 ---
 
 ## APP DO MOTOBOY
 
 ### Acesso
-- Apenas `role: delivery`
-- Sem autenticação → redirecionar para `/login?redirect=/delivery`
-- Após login como delivery → redirecionar para `/delivery`
-- **NUNCA** redirecionar delivery para `/` ou tela do cliente
+- Apenas role: delivery
+- Sem auth → /login?redirect=/delivery
+- Após login delivery → /delivery
+- NUNCA redirecionar para / ou tela do cliente
 
 ### Query de entregas — obrigatória
+- SEMPRE usar supabaseAdmin — RLS bloqueia sem service role
+- Filtrar: assigned_delivery_id=user.id, status=out_for_delivery, tenant_id=TENANT_ID
+- NÃO filtrar por created_at — mostrar TODOS independente da data
+- Include: addresses(street, number, complement, neighborhood, city, lat, lng)
 
-```typescript
-supabaseAdmin
-  .from('orders')
-  .select(`
-    *,
-    addresses(street, number, complement, neighborhood, city, lat, lng),
-    profiles(full_name, phone)
-  `)
-  .eq('assigned_delivery_id', user.id)
-  .eq('status', 'out_for_delivery')
-  .eq('tenant_id', TENANT_ID)
-  .order('created_at', { ascending: true })
-```
-
-### GPS tracking — regras obrigatórias
-- Throttle: 5 segundos (15s em background)
-- Filtro de precisão: descartar se `accuracy > 50m`
-- INSERT em `delivery_tracking` (append-only)
-- UPDATE em `delivery_current_location` via trigger PostgreSQL
-- `lat` e `lng` sempre como `Number()` — **NUNCA** string
-- Iniciar apenas se `isActive === true` AND `orderId` válido
+### Navegação Google Maps — com fallback
+Se lat/lng disponíveis: usar coordenadas
+Se lat/lng null mas tem endereço: usar texto encodado com cidade "Belo Horizonte, MG"
+Se nenhum dado: mostrar toast "Endereço não disponível" — NUNCA abrir Maps com dados errados
 
 ### Confirmação de entrega
-1. Foto obrigatória (câmera do celular)
-2. Pergunta: "Você recebeu o pagamento?"
-   - Sim → `payment_status = 'collected'`
-   - Não/PIX → não altera `payment_status`
-3. INSERT em `delivery_checkins`
-4. UPDATE `orders.status = 'delivered'`, `delivered_at = now()`
-5. Upload foto → bucket `delivery-photos`
-   path: `{tenant_id}/{order_id}/{timestamp}.jpg`
+1. Foto obrigatória
+2. "Recebeu pagamento?" → Sim: payment_status=collected / Não: mantém
+3. INSERT delivery_checkins
+4. UPDATE orders: status=delivered, delivered_at=now()
+5. Upload foto → delivery-photos/{tenant_id}/{order_id}/{timestamp}.jpg
+
+### GPS tracking
+- Throttle 5s (15s background), descartar accuracy > 50m
+- lat/lng SEMPRE Number() — NUNCA string
+- INSERT delivery_tracking (append-only)
+- delivery_current_location atualizado por trigger
 
 ---
 
 ## RASTREAMENTO
 
-### Regra de ouro do CQRS
-- **NUNCA** usar `delivery_tracking` para posição atual
-- **SEMPRE** usar `delivery_current_location` para posição atual
-- `delivery_tracking` = histórico append-only
-- `delivery_current_location` = snapshot atualizado por trigger
+- NUNCA usar delivery_tracking para posição atual
+- SEMPRE usar delivery_current_location (snapshot via trigger)
 
 ---
 
-## SEGURANÇA — RLS POLICIES ATIVAS
+## SEGURANÇA
 
-### orders
-- INSERT: `customer_id = auth.uid()`
-- SELECT: `customer_id = auth.uid()` OR `assigned_delivery_id = auth.uid()` OR role admin/kitchen
-- UPDATE: role admin, kitchen ou delivery
-
-### profiles
-- INSERT: apenas `role: customer` via trigger `handle_new_user`
-- SELECT/UPDATE: próprio usuário
-
-### tenants
-- SELECT: público (necessário para verificar `is_active` no portal do cliente)
-- UPDATE: apenas admin/kitchen
-
-### Storage bucket `delivery-photos`
-- INSERT: qualquer autenticado
-- SELECT: admin, kitchen, delivery + cliente dono do pedido
+### RLS ativa
+- orders INSERT: customer_id = auth.uid()
+- orders SELECT: customer_id=uid OR assigned_delivery_id=uid OR admin/kitchen
+- profiles: trigger protege rebaixamento de role
+- tenants SELECT: público (necessário para is_active no portal)
+- Storage delivery-photos INSERT: qualquer autenticado; SELECT: admin/kitchen/delivery
 
 ---
 
 ## ARMADILHAS CONHECIDAS (NÃO REPETIR)
 
-1. **Alias no select Supabase** — `items:order_items` quebra silenciosamente. Usar `order_items` direto.
-2. **`createClient()` dentro de componente React** — causa render loop. Sempre fora do componente.
-3. **`CREATE POLICY IF NOT EXISTS`** — não funciona no Supabase MCP. Usar `DROP POLICY IF EXISTS` antes.
-4. **`handle_new_user` trigger** — precisa de cast explícito `::user_role` para não falhar silenciosamente.
-5. **Vercel Hobby plan** — apenas commits de `google-labs-jules[bot]` ou `franciscoqueirozdriver` são aceitos.
-6. **Root directory Vercel** — rodar `vercel` CLI de dentro de `apollo-pizzaria/` causa path doubling.
-7. **QR Code PIX** — API `gerarqrcodepix.com.br` tem CORS bloqueado. Usar `lib/pix/brcode.ts` interno.
-8. **Frete** — calcular apenas após número preenchido. Resetar se CEP ou número mudarem.
-9. **`payment_status`** — pedidos dinheiro/cartão **nunca** começam como `pending`. Sempre `awaiting_collection`.
-10. **`supabaseAdmin`** em API routes — usar para operações que precisam bypassar RLS. **NUNCA** expor no cliente browser.
+1. Alias no select Supabase (items:order_items) — quebra silenciosamente
+2. FK ambígua profiles — SEMPRE especificar orders_customer_id_fkey ou orders_assigned_delivery_id_fkey
+3. createClient() dentro de componente React — causa render loop
+4. CREATE POLICY IF NOT EXISTS — não funciona no MCP, usar DROP antes
+5. Trigger handle_new_user — precisa cast ::user_role explícito
+6. Vercel Hobby — apenas commits de google-labs-jules[bot] ou franciscoqueirozdriver
+7. QR Code PIX — API externa tem CORS. Usar lib/pix/brcode.ts
+8. Frete — calcular só após número. Resetar se CEP/número mudarem
+9. payment_status — dinheiro/cartão nunca começam como pending
+10. supabaseAdmin — usar para admin e delivery. NUNCA expor no cliente
+11. Timezone — sempre America/Sao_Paulo. Nunca UTC direto
+12. Janela de tempo — usar 24h (Date.now()-86400000) não CURRENT_DATE
+13. Navegação Maps — verificar lat/lng antes de abrir. Fallback textual
+14. Máscara telefone — aceitar 10 e 11 dígitos, mínimo 10
+15. Roles — trigger protege admin/kitchen/delivery. Não remover
 
 ---
 
-## ESTADO ATUAL DO SISTEMA (atualizado em 10/04/2026)
+## ESTADO ATUAL (11/04/2026)
 
-### ✅ Funcionando
+### Funcionando
 - Cardápio com filtros
-- PizzaModal (tamanho, borda, observações)
-- Carrinho com persistência localStorage
-- CartDrawer
-- Checkout com ViaCEP
-- Cálculo de frete via TomTom
-- QR Code PIX gerado internamente
-- Upload de comprovante PIX
+- PizzaModal completo
+- Carrinho com persistência
+- Checkout com ViaCEP + TomTom
+- QR Code PIX interno
+- Upload comprovante PIX
 - Meus Pedidos
-- Login por role com redirecionamento correto
-- Kanban admin (estrutura)
-- Gestão de motoboys (cadastro)
-- GPS tracking (estrutura)
+- Login por role com redirecionamento
+- Header com nome do usuário
+- Kanban admin 6 colunas
+- Dashboard com métricas corretas (BRT)
+- Modal de detalhes completo
+- Gestão de motoboys
+- Atribuição de motoboy
+- App motoboy: toggle online/offline + lista de entregas
+- Sidebar com todos os links
+- Proteção de roles no banco
+- Pedidos dinheiro/cartão como confirmed/awaiting_collection
 
-### ⚠️ Parcialmente funcionando
-- Kanban: nomes dos itens mostrando código (regressão)
-- Dashboard: faturamento zerado (lógica de query incorreta)
-- Pedidos dinheiro/cartão: criados como `pending` em vez de `confirmed`
-- Modal de detalhes: regressão nos dados exibidos
-- Toggle loja aberta/fechada: não bloqueia pedidos no portal do cliente
+### Parcialmente funcionando
+- App motoboy: endereço pode ser vazio em pedidos antigos (delivery_address_id=null)
+- Máscara de telefone no checkout (fix em andamento)
 
-### ❌ Não implementado ainda
+### Não implementado
 - Meia a meia em combos
-- Rastreamento em tempo real com mapa TomTom
+- Confirmação de entrega com foto
+- Rastreamento em tempo real com mapa
 - Popup "você é o próximo"
-- Responsividade nível app nativo (bottom nav, swipe, etc)
-- Relatórios
+- Toggle loja aberta/fechada bloqueando pedidos
+- Responsividade nível app nativo
+- Relatórios reais
 - Configurações do tenant
 
 ---
 
 *Apollo Pizzaria · Banco: supabase-cerulean-prism*
-*Última atualização: 10/04/2026*
+*Última atualização: 11/04/2026*
