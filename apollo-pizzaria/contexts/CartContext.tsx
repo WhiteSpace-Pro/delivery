@@ -34,9 +34,16 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     const savedCart = localStorage.getItem('apollo_cart');
     if (savedCart) {
       try {
-        setItems(JSON.parse(savedCart));
+        const parsed = JSON.parse(savedCart);
+        const valid = Array.isArray(parsed) ? parsed.filter((item: any) =>
+          typeof item.name === 'string' &&
+          (item.half_half === undefined || item.half_half === null || typeof item.half_half === 'string') &&
+          (item.border === undefined || item.border === null || typeof item.border === 'string')
+        ) : [];
+        setItems(valid);
       } catch (e) {
         console.error("Failed to parse cart from localStorage", e);
+        setItems([]);
       }
     }
     setIsInitialized(true);

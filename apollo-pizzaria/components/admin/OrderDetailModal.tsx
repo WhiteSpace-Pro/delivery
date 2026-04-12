@@ -53,7 +53,8 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
     // Extract path if it is a full URL
     let path = details.pix_receipt_note
     if (path.startsWith('http')) {
-      const parts = path.split('/public/')
+      // Handle both public and authenticated URLs
+      const parts = path.split(/\/storage\/v1\/object\/(?:public|authenticated)\//)
       if (parts.length > 1) {
         const bucketAndPath = parts[1]
         const firstSlash = bucketAndPath.indexOf('/')
@@ -65,7 +66,10 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
 
     getReceiptSignedUrl(path)
       .then(setReceiptUrl)
-      .catch(() => setReceiptUrl(null))
+      .catch((err) => {
+        console.error('Error fetching signed URL for receipt:', err)
+        setReceiptUrl(null)
+      })
   }, [details?.pix_receipt_note])
 
 
@@ -84,6 +88,8 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
     setIsUpdating(false)
   }
 
+
+
   const handleConfirmPix = async () => {
     setIsUpdating(true)
     const { error } = await supabase
@@ -95,6 +101,19 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
       setDetails((prev: any) => ({ ...prev, payment_status: ('paid' as any), status: 'confirmed' }))
       if (onReceiptVerified) onReceiptVerified(order.id)
       onClose()
+    }
+    setIsUpdating(false)
+  }
+
+  const handleRequestResend = async () => {
+    setIsUpdating(true)
+    const { error } = await supabase
+      .from('orders')
+      .update({ pix_receipt_requested: true } as any)
+      .eq('id', order.id)
+
+    if (!error) {
+      setDetails((prev: any) => ({ ...prev, pix_receipt_requested: true }))
     }
     setIsUpdating(false)
   }
@@ -220,13 +239,34 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
 
                    {details.pix_receipt_note ? (
                      <div className="space-y-4">
-                        <div className="rounded-xl overflow-hidden border border-[#E5E7EB] bg-zinc-50 p-2">
-                           <img src={receiptUrl || ""} alt="Comprovante" className="w-full h-auto cursor-pointer rounded-lg shadow-sm" onClick={() => receiptUrl && window.open(receiptUrl, '_blank')} />
-                        </div>
+                        {details.pix_receipt_note?.toLowerCase().endsWith('.pdf') ? (
+                          <button
+                            onClick={() => window.open(receiptUrl || details.pix_receipt_note, '_blank')}
+                            className="w-full py-6 border-2 border-dashed border-[#E5E7EB] rounded-xl flex items-center justify-center gap-3 text-apollo-orange font-bold hover:bg-orange-50 transition-colors"
+                          >
+                            📄 Comprovante PDF — Clique para abrir
+                          </button>
+                        ) : (
+                          <div className="rounded-xl overflow-hidden border border-[#E5E7EB] bg-zinc-50 p-2">
+                             <img src={receiptUrl || ""} alt="Comprovante" className="w-full h-auto cursor-pointer rounded-lg shadow-sm" onClick={() => receiptUrl && window.open(receiptUrl, '_blank')} />
+                          </div>
+                        )}
                         {details.payment_status === 'pending' && (
                           <button onClick={handleConfirmPix} disabled={isUpdating} className="w-full py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
                              {isUpdating ? <Loader2 className="animate-spin" /> : <><Check size={20} /> Confirmar Pagamento</>}
                           </button>
+                        )}
+                        {details.payment_status === 'pending' && details.pix_receipt_note && (
+                          <button
+                            onClick={handleRequestResend}
+                            disabled={isUpdating || details.pix_receipt_requested}
+                            className="w-full py-3 border-2 border-dashed border-apollo-orange text-apollo-orange font-bold rounded-xl hover:bg-orange-50 transition-all flex items-center justify-center gap-2"
+                          >
+                             {isUpdating ? <Loader2 className="animate-spin" /> : (details.pix_receipt_requested ? 'Reenvio solicitado' : 'Solicitar Reenvio')}
+                          </button>
+                        )}
+                        {details.pix_receipt_requested && (
+                          <p className="text-[10px] text-apollo-orange font-bold text-center uppercase tracking-widest mt-2 animate-pulse">Aguardando novo comprovante do cliente</p>
                         )}
                      </div>
                    ) : (

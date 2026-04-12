@@ -82,9 +82,16 @@ export async function toggleStoreStatus(currentStatus: boolean) {
 }
 
 export async function getReceiptSignedUrl(receiptPath: string) {
+  await requireAdmin()
   const supabase = createClient()
   const { data, error } = await supabase.storage.from('delivery-photos').createSignedUrl(receiptPath, 60)
-  if (error) throw new Error('Failed to get receipt URL')
+
+
+  if (error) {
+    console.error('Error creating signed URL for path:', receiptPath, error)
+    throw new Error('Failed to get receipt URL')
+  }
+
   return data.signedUrl
 }
 
@@ -110,7 +117,7 @@ export async function getKanbanOrders() {
     .from("orders")
     .select(`
       *,
-      display_id, pix_receipt_note, order_items(*, products!order_items_product_id_fkey(name, type)),
+      display_id, pix_receipt_note, pix_receipt_requested, order_items(*, products!order_items_product_id_fkey(name, type)),
       addresses(*),
       customer:profiles!orders_customer_id_fkey(full_name, phone),
       delivery:profiles!orders_assigned_delivery_id_fkey(full_name, phone)
@@ -136,7 +143,7 @@ export async function getOrderDetails(orderId: string) {
     .select(`
       id, order_number, display_id, status, payment_method, payment_status,
       subtotal, delivery_fee, total_amount,
-      customer_name, customer_phone, pix_receipt_note,
+      customer_name, customer_phone, pix_receipt_note, pix_receipt_requested,
       order_items(id, quantity, unit_price, size, is_half, observations, products!order_items_product_id_fkey(name), half_product:products!order_items_half_product_id_fkey(name), edge:pizza_options!order_items_edge_option_id_fkey(name)),
       addresses(street, number, complement, neighborhood, city),
       customer:profiles!orders_customer_id_fkey(full_name, phone),
