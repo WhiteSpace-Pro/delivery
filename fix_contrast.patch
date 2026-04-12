@@ -1,0 +1,5 @@
+--- apollo-pizzaria/app/(admin)/admin/delivery/DeliveryList.tsx
++++ apollo-pizzaria/app/(admin)/admin/delivery/DeliveryList.tsx
+@@ -176,1 +176,1 @@
+-                    <DialogTitle className="text-xl font-bold">{detailsDriver?.full_name}</DialogTitle>
++                    <DialogTitle className="text-xl font-bold text-[#0D0D0D]">{detailsDriver?.full_name}</DialogTitle>

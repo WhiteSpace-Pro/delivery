@@ -6,4 +6,11 @@
   - Local:        http://localhost:3000
 
  ✓ Starting...
- ✓ Ready in 1755ms
+ ✓ Ready in 1639ms
+ ○ Compiling /middleware ...
+ ✓ Compiled /middleware in 1002ms (124 modules)
+ ○ Compiling /login ...
+ ✓ Compiled /login in 6s (593 modules)
+ GET /login?redirect=%2Fcheckout 200 in 6856ms
+ ✓ Compiled in 917ms (299 modules)
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (215kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)

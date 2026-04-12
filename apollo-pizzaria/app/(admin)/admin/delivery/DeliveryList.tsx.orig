@@ -238,7 +238,7 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
                     {detailsDriver?.full_name?.charAt(0)}
                  </div>
                  <div>
-                    <DialogTitle className="text-xl font-bold text-[#0D0D0D]">{detailsDriver?.full_name}</DialogTitle>
+                    <DialogTitle className="text-xl font-bold">{detailsDriver?.full_name}</DialogTitle>
                     <p className="text-sm text-[#666]">{detailsDriver?.vehicle_brand} {detailsDriver?.vehicle_model} • {detailsDriver?.vehicle_plate}</p>
                  </div>
               </div>

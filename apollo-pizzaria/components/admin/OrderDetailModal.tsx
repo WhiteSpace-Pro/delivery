@@ -192,19 +192,21 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
                  <h3 className="font-bold">Itens</h3>
                  <div className="space-y-3">
                     {details?.order_items?.map((item: any) => {
-                      const product = item['products!order_items_product_id_fkey'] || item.products
-                      const halfProduct = item['products!order_items_half_product_id_fkey'] || item.half_product
-                      const edge = item['pizza_options!order_items_edge_option_id_fkey'] || item.edge
+                      const product = item.products || item['products!order_items_product_id_fkey'] || item.product;
+                      const halfProduct = item.half_product || item['half_product'] || item['half_product:products!order_items_half_product_id_fkey'];
+                      const edge = item.edge || item['edge'] || item['edge:pizza_options!order_items_edge_option_id_fkey'];
 
+                      const productName = product?.name || (item.product_id ? `Item #${item.product_id.slice(-4)}` : 'Item não identificado');
+                      const halfName = halfProduct?.name;
                       return (
                         <div key={item.id} className="flex justify-between items-start text-sm">
                           <div className="flex gap-3">
                              <span className="font-bold text-apollo-orange">{item.quantity}×</span>
                              <div>
                                 <p className="font-bold">
-                                  {item.is_half ? `${product?.name} / ${halfProduct?.name}` : product?.name}
+                                  {item.is_half && halfName ? `${productName} / ${halfName}` : productName}
                                 </p>
-                                <p className="text-[10px] text-[#666] font-bold uppercase">{item.size} {edge ? `• Borda ${edge.name}` : ''}</p>
+                                <p className="text-[10px] text-[#666] font-bold uppercase">{item.size || ''} {edge ? `• Borda ${edge.name}` : ''}</p>
                                 {item.observations && <p className="text-xs text-apollo-orange italic mt-1 font-medium">{item.observations}</p>}
                              </div>
                           </div>
