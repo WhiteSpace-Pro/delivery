@@ -142,11 +142,15 @@ export default function CheckoutPage() {
           ...prev,
           street: data.logradouro,
           neighborhood: data.bairro,
-          fee: 0
+          fee: 0,
+          regionNotFound: false
         }))
+      } else {
+        setAddressForm(prev => ({ ...prev, regionNotFound: true }))
       }
     } catch (e) {
       console.error(e)
+      setAddressForm(prev => ({ ...prev, regionNotFound: true }))
     }
   }
 
@@ -387,7 +391,20 @@ export default function CheckoutPage() {
                </div>
                <div className="space-y-1">
                   <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Telefone</label>
-                  <input required value={customerPhone} onChange={e => setCustomerPhone(e.target.value)} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:border-apollo-orange outline-none transition-all" placeholder="(31) 99999-9999" />
+                  <input
+                    required
+                    value={customerPhone}
+                    onChange={e => {
+                      const val = e.target.value.replace(/\D/g, '').slice(0, 11);
+                      let masked = val;
+                      if (val.length > 2) masked = `(${val.slice(0, 2)}) ${val.slice(2)}`;
+                      if (val.length > 6) masked = `(${val.slice(0, 2)}) ${val.slice(2, 6)}-${val.slice(6)}`;
+                      if (val.length > 10) masked = `(${val.slice(0, 2)}) ${val.slice(2, 7)}-${val.slice(7)}`;
+                      setCustomerPhone(masked);
+                    }}
+                    className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:border-apollo-orange outline-none transition-all"
+                    placeholder="(31) 99999-9999"
+                  />
                </div>
              </div>
           </section>
@@ -431,11 +448,12 @@ export default function CheckoutPage() {
                             lng: 0
                           }));
                         }} onBlur={handleCEPBlur} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="00000-000" />
+                        {addressForm.regionNotFound && <p className="text-[10px] text-apollo-orange font-bold mt-1">CEP não encontrado. Preencha o endereço manualmente.</p>}
                      </div>
                      <div className="grid grid-cols-4 gap-2">
                         <div className="col-span-3 space-y-1">
                            <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Rua</label>
-                           <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Rua" value={addressForm.street} readOnly />
+                           <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Rua" value={addressForm.street} readOnly={!addressForm.regionNotFound} onChange={e => setAddressForm(prev => ({...prev, street: e.target.value}))} />
                         </div>
                         <div className="col-span-1 space-y-1">
                            <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Nº</label>
@@ -444,7 +462,7 @@ export default function CheckoutPage() {
                      </div>
                      <div className="space-y-1">
                         <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Bairro</label>
-                        <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Bairro" value={addressForm.neighborhood} readOnly />
+                        <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Bairro" value={addressForm.neighborhood} readOnly={!addressForm.regionNotFound} onChange={e => setAddressForm(prev => ({...prev, neighborhood: e.target.value}))} />
                      </div>
 
 

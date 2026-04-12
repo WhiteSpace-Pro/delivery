@@ -176,13 +176,16 @@ export async function resetDriverPassword(email: string) {
 
 export async function getDriverOrdersDetails(driverId: string) {
   await requireAdmin()
-  const startOfPeriod = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+
+  // Janela de 24h usando o timezone correto America/Sao_Paulo
+  const now = new Date();
+  const startOfPeriod = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
 
   const { data: inProgress, error: err1 } = await supabaseAdmin
     .from('orders')
     .select(`
       id, display_id, dispatched_at, total_amount, payment_method, payment_status, status,
-      addresses(street, number, neighborhood),
+      addresses:addresses!orders_delivery_address_id_fkey(street, number, neighborhood),
       order_items(quantity, products(name))
     `)
     .eq('assigned_delivery_id', driverId)
@@ -192,7 +195,7 @@ export async function getDriverOrdersDetails(driverId: string) {
     .from('orders')
     .select(`
       id, display_id, delivered_at, total_amount, payment_method, payment_status, status,
-      addresses(street, number, neighborhood),
+      addresses:addresses!orders_delivery_address_id_fkey(street, number, neighborhood),
       order_items(quantity, products(name))
     `)
     .eq('assigned_delivery_id', driverId)
@@ -200,7 +203,8 @@ export async function getDriverOrdersDetails(driverId: string) {
     .gte('delivered_at', startOfPeriod)
 
   if (err1 || err2) {
-    console.error(err1 || err2)
+    console.error('Error err1:', err1)
+    console.error('Error err2:', err2)
     throw new Error('Failed to fetch driver orders details')
   }
 
