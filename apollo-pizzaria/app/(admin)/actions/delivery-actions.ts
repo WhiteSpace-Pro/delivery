@@ -46,7 +46,7 @@ export async function getDriversWithStats() {
     .select('assigned_delivery_id')
     .eq('tenant_id', TENANT_ID)
     .eq('status', 'delivered')
-    .gte('created_at', startOfPeriod)
+    .gte('delivered_at', startOfPeriod)
 
   if (ordersError) {
     console.error('Error fetching driver orders:', ordersError)
