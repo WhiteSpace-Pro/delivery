@@ -1,0 +1,21 @@
+--- apollo-pizzaria/app/(client)/checkout/page.tsx
++++ apollo-pizzaria/app/(client)/checkout/page.tsx
+@@ -432,6 +432,18 @@
+                         <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Bairro" value={addressForm.neighborhood} readOnly={!addressForm.regionNotFound} onChange={e => setAddressForm(prev => ({...prev, neighborhood: e.target.value}))} />
+                      </div>
+
++                     <div className="flex items-center gap-2 pt-2">
++                        <input
++                          type="checkbox"
++                          id="shouldSave"
++                          checked={addressForm.shouldSave}
++                          onChange={e => setAddressForm(prev => ({ ...prev, shouldSave: e.target.checked }))}
++                          className="w-4 h-4 rounded border-white/10 bg-white/5 text-apollo-orange focus:ring-apollo-orange transition-all"
++                        />
++                        <label htmlFor="shouldSave" className="text-xs font-medium text-white/60 cursor-pointer select-none">
++                          Salvar este endereço para próximas entregas
++                        </label>
++                     </div>
+
+                      {calculatingFee && <div className="text-center text-xs text-apollo-orange animate-pulse">Calculando distância real...</div>}
+                      {addressForm.fee > 0 && <div className="bg-apollo-orange/10 p-4 rounded-xl text-center text-apollo-orange font-bold text-sm border border-apollo-orange/20 animate-in zoom-in">Taxa de entrega: R$ {addressForm.fee.toFixed(2).replace('.', ',')}</div>}
