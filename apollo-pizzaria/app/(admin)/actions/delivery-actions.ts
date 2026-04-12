@@ -55,8 +55,19 @@ export async function getDriversWithStats() {
 
   const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers()
 
+  const { data: activeOrders, error: activeOrdersError } = await supabaseAdmin
+    .from('orders')
+    .select('assigned_delivery_id')
+    .eq('tenant_id', TENANT_ID)
+    .eq('status', 'out_for_delivery')
+
+  if (activeOrdersError) {
+    console.error('Error fetching active driver orders:', activeOrdersError)
+  }
+
   const stats = typedDrivers.map(driver => {
     const ordersCount = orders?.filter(o => o.assigned_delivery_id === driver.id).length || 0
+    const activeCount = activeOrders?.filter(o => o.assigned_delivery_id === driver.id).length || 0
     const authUser = authUsers?.users.find(u => u.id === driver.id)
 
     return {
@@ -71,7 +82,8 @@ export async function getDriversWithStats() {
       vehicle_brand: driver.vehicle_brand,
       vehicle_model: driver.vehicle_model,
       email: authUser?.email || 'N/A',
-      ordersToday: ordersCount
+      ordersToday: ordersCount,
+      inProgressCount: activeCount
     }
   })
 
@@ -160,4 +172,37 @@ export async function resetDriverPassword(email: string) {
   })
   if (error) throw new Error(error.message)
   return data.properties.action_link
+}
+
+export async function getDriverOrdersDetails(driverId: string) {
+  await requireAdmin()
+  const startOfPeriod = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+
+  const { data: inProgress, error: err1 } = await supabaseAdmin
+    .from('orders')
+    .select(`
+      id, display_id, dispatched_at, total_amount, payment_method, payment_status, status,
+      addresses(street, number, neighborhood),
+      order_items(quantity, products(name))
+    `)
+    .eq('assigned_delivery_id', driverId)
+    .eq('status', 'out_for_delivery')
+
+  const { data: delivered, error: err2 } = await supabaseAdmin
+    .from('orders')
+    .select(`
+      id, display_id, delivered_at, total_amount, payment_method, payment_status, status,
+      addresses(street, number, neighborhood),
+      order_items(quantity, products(name))
+    `)
+    .eq('assigned_delivery_id', driverId)
+    .eq('status', 'delivered')
+    .gte('delivered_at', startOfPeriod)
+
+  if (err1 || err2) {
+    console.error(err1 || err2)
+    throw new Error('Failed to fetch driver orders details')
+  }
+
+  return { inProgress: inProgress || [], delivered: delivered || [] }
 }

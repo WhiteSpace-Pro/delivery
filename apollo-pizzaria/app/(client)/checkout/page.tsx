@@ -133,6 +133,7 @@ export default function CheckoutPage() {
 
   const searchZipcode = async () => {
     const cep = addressForm.zipcode.replace(/\D/g, '')
+    if (cep.length !== 8) return
     try {
       const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`)
       const data = await res.json()
@@ -416,7 +417,20 @@ export default function CheckoutPage() {
                    <div className="space-y-4">
                      <div className="space-y-1">
                         <label className="text-[10px] uppercase font-bold text-white/40 ml-1">CEP</label>
-                        <input value={addressForm.zipcode} onChange={e => setAddressForm(prev => ({...prev, zipcode: e.target.value, fee: 0}))} onBlur={handleCEPBlur} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="00000-000" />
+                        <input value={addressForm.zipcode} onChange={e => {
+                          const val = e.target.value.replace(/\D/g, '').slice(0, 8);
+                          const masked = val.length > 5 ? `${val.slice(0, 5)}-${val.slice(5)}` : val;
+                          setAddressForm(prev => ({
+                            ...prev,
+                            zipcode: masked,
+                            street: '',
+                            number: '',
+                            neighborhood: '',
+                            fee: 0,
+                            lat: 0,
+                            lng: 0
+                          }));
+                        }} onBlur={handleCEPBlur} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="00000-000" />
                      </div>
                      <div className="grid grid-cols-4 gap-2">
                         <div className="col-span-3 space-y-1">
@@ -425,14 +439,14 @@ export default function CheckoutPage() {
                         </div>
                         <div className="col-span-1 space-y-1">
                            <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Nº</label>
-                           <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm text-center" placeholder="123" value={addressForm.number} onChange={e => setAddressForm(prev => ({...prev, number: e.target.value, fee: 0}))} />
+                           <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm text-center" placeholder="123" value={addressForm.number} onChange={e => setAddressForm(prev => ({...prev, number: e.target.value, fee: 0}))} onBlur={handleCalculateFee} />
                         </div>
                      </div>
                      <div className="space-y-1">
                         <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Bairro</label>
                         <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Bairro" value={addressForm.neighborhood} readOnly />
                      </div>
-                     <button type="button" onClick={handleCalculateFee} className="w-full py-4 bg-white/5 border border-white/10 rounded-xl text-xs font-bold uppercase tracking-widest hover:bg-white/10 transition-all">Calcular Frete</button>
+
 
                      {calculatingFee && <div className="text-center text-xs text-apollo-orange animate-pulse">Calculando distância real...</div>}
                      {addressForm.fee > 0 && <div className="bg-apollo-orange/10 p-4 rounded-xl text-center text-apollo-orange font-bold text-sm border border-apollo-orange/20 animate-in zoom-in">Taxa de entrega: R$ {addressForm.fee.toFixed(2).replace('.', ',')}</div>}

@@ -126,7 +126,16 @@ export default async function MyOrdersPage() {
                   </div>
 
                   <div className="flex items-center justify-between gap-4">
-                    <p className="text-xs text-white/60 line-clamp-1 flex-1">{itemsSummary}</p>
+                    <div className="flex-1">
+                      <p className="text-xs text-white/60 line-clamp-1">{itemsSummary}</p>
+                      {order.payment_method === 'pix' && order.payment_status === 'pending' && order.status === 'pending' && (
+                        <div className="mt-3">
+                          <span className="bg-apollo-orange text-white text-[10px] font-bold px-3 py-1.5 rounded-lg uppercase tracking-wider animate-pulse">
+                            Enviar comprovante
+                          </span>
+                        </div>
+                      )}
+                    </div>
                     <div className="w-8 h-8 rounded-full bg-white/5 flex items-center justify-center group-hover:bg-apollo-orange group-hover:text-white transition-colors">
                       <ChevronRight size={18} />
                     </div>
