@@ -47,8 +47,7 @@ export default function OrderSuccessPage() {
 
       if (error) throw error
 
-      const { data: urlData } = supabase.storage.from('delivery-photos').getPublicUrl(fileName)
-      const publicUrl = urlData.publicUrl
+      const publicUrl = `https://ckshypkyylmzvhjhqrzf.supabase.co/storage/v1/object/public/delivery-photos/${fileName}`
 
       await supabase.from('orders').update({
         pix_receipt_note: publicUrl,
@@ -73,7 +72,7 @@ export default function OrderSuccessPage() {
     async function fetchOrder() {
       const { data } = await supabase
         .from('orders')
-        .select('*, display_id, addresses(*)')
+        .select('*, display_id, pix_receipt_requested, addresses(*)')
         .eq('id', id)
         .single()
 
