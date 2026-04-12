@@ -169,9 +169,9 @@ export async function placeOrder(params: PlaceOrderParams) {
     throw new Error('Falha ao criar itens do pedido')
   }
 
-  // 3. Save new address if requested
+  // 3. Save new address if requested and link to order
   if (params.newAddress) {
-    await supabaseAdmin
+    const { data: savedAddress } = await supabaseAdmin
       .from('addresses')
       .insert({
         user_id: params.customer_id,
@@ -190,6 +190,14 @@ export async function placeOrder(params: PlaceOrderParams) {
         state: 'MG',
         is_primary: false,
       } as any)
+      .select('id')
+      .single()
+    if (savedAddress?.id) {
+      await supabaseAdmin
+        .from('orders')
+        .update({ delivery_address_id: savedAddress.id } as any)
+        .eq('id', order.id)
+    }
   }
 
   revalidatePath('/meus-pedidos')
