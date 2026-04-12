@@ -186,7 +186,7 @@ export async function getDriverOrdersDetails(driverId: string) {
     .select(`
       id, display_id, dispatched_at, total_amount, payment_method, payment_status, status,
       addresses:addresses!orders_delivery_address_id_fkey(street, number, neighborhood),
-      order_items(quantity, products(name))
+      order_items(quantity, products!order_items_product_id_fkey(name))
     `)
     .eq('assigned_delivery_id', driverId)
     .eq('status', 'out_for_delivery')
@@ -196,7 +196,7 @@ export async function getDriverOrdersDetails(driverId: string) {
     .select(`
       id, display_id, delivered_at, total_amount, payment_method, payment_status, status,
       addresses:addresses!orders_delivery_address_id_fkey(street, number, neighborhood),
-      order_items(quantity, products(name))
+      order_items(quantity, products!order_items_product_id_fkey(name))
     `)
     .eq('assigned_delivery_id', driverId)
     .eq('status', 'delivered')
