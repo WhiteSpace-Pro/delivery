@@ -53,7 +53,8 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
     // Extract path if it is a full URL
     let path = details.pix_receipt_note
     if (path.startsWith('http')) {
-      const parts = path.split('/public/')
+      // Handle both public and authenticated URLs
+      const parts = path.split(/\/storage\/v1\/object\/(?:public|authenticated)\//)
       if (parts.length > 1) {
         const bucketAndPath = parts[1]
         const firstSlash = bucketAndPath.indexOf('/')
@@ -65,7 +66,10 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
 
     getReceiptSignedUrl(path)
       .then(setReceiptUrl)
-      .catch(() => setReceiptUrl(null))
+      .catch((err) => {
+        console.error('Error fetching signed URL for receipt:', err)
+        setReceiptUrl(null)
+      })
   }, [details?.pix_receipt_note])
 
 
