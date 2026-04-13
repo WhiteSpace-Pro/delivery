@@ -32,12 +32,19 @@ export function useGPSTracking({ orderId, deliveryId, enabled }: TrackingConfig)
     const throttleMs = isVisible ? 5000 : 15000
 
     if (now - lastInsertRef.current < throttleMs) return
-    if (coords.accuracy > 50) return // discard inaccurate fixes
+
+    // Increased accuracy threshold to 100m for better compatibility in test/indoor environments
+    if (coords.accuracy > 100) {
+      console.warn('[GPS] Accuracy too low:', coords.accuracy)
+      return
+    }
 
     lastInsertRef.current = now
 
+    console.log('[GPS] Inserting position:', { lat: coords.latitude, lng: coords.longitude, accuracy: coords.accuracy, orderId })
+
     // Update history - Triggers will handle sync to delivery_current_location
-    await supabase
+    const { error } = await supabase
       .from('delivery_tracking')
       .insert({
         delivery_id: deliveryId,
@@ -53,18 +60,28 @@ export function useGPSTracking({ orderId, deliveryId, enabled }: TrackingConfig)
         timestamp: new Date().toISOString(),
         tenant_id: TENANT_ID,
       } as any)
+
+    if (error) {
+      console.error('[GPS] Error inserting tracking:', error)
+    }
   }, [orderId, deliveryId])
 
   useEffect(() => {
     if (!enabled) {
       if (watchIdRef.current !== null) {
+        console.log('[GPS] Disabling tracking')
         navigator.geolocation.clearWatch(watchIdRef.current)
         watchIdRef.current = null
       }
       return
     }
 
-    if (!navigator.geolocation) return
+    if (!navigator.geolocation) {
+      console.error('[GPS] Geolocation not supported')
+      return
+    }
+
+    console.log('[GPS] Enabling tracking for deliveryId:', deliveryId)
 
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
@@ -74,9 +91,10 @@ export function useGPSTracking({ orderId, deliveryId, enabled }: TrackingConfig)
           lng: pos.coords.longitude,
           accuracy: pos.coords.accuracy,
         })
-        insertTracking(pos.coords)
+        void insertTracking(pos.coords)
       },
       (err) => {
+        console.error('[GPS] watchPosition error:', err)
         if (err.code === 1) {
           setPermissionError(true)
           if (watchIdRef.current !== null) {
@@ -94,7 +112,7 @@ export function useGPSTracking({ orderId, deliveryId, enabled }: TrackingConfig)
         watchIdRef.current = null
       }
     }
-  }, [enabled, insertTracking])
+  }, [enabled, deliveryId, insertTracking])
 
   return { position, permissionError }
 }
