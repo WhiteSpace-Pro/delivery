@@ -1,12 +1,24 @@
 'use client'
 
 import { useState } from 'react'
-import { Plus, Copy, Check, Key, Clock, Bike, AlertCircle } from 'lucide-react'
+import { Plus, Copy, Check, Key, Clock, Bike, AlertCircle, MapPin } from 'lucide-react'
 import { toggleDriverStatus, createDriver, getDriversWithStats, resetDriverPassword, getDriverOrdersDetails } from '@/app/(admin)/actions/delivery-actions'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+
+const STORE_COORDS = { lat: -19.9077, lng: -43.8948 }
+
+function distanciaMetros(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371000
+  const dLat = (lat2 - lat1) * Math.PI / 180
+  const dLng = (lng2 - lng1) * Math.PI / 180
+  const a = Math.sin(dLat/2) ** 2 +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng/2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
 
 interface Driver {
   id: string
@@ -22,6 +34,7 @@ interface Driver {
   ordersToday: number;
   inProgressCount: number;
   previousShiftCount: number;
+  location?: { lat: number | null, lng: number | null } | null
 }
 
 export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
@@ -103,126 +116,189 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
     }
   }
 
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
   return (
     <div className="space-y-6">
-      <div className="flex justify-end">
+      <div className="flex justify-between items-center">
+        <div>
+           <h2 className="text-2xl font-black italic text-[#0D0D0D]">Equipe de Entrega</h2>
+           <p className="text-sm text-[#666]">Turno atual e histórico de entregas da equipe</p>
+        </div>
         <button
           onClick={() => {
             setGeneratedPassword(null)
-            setResetLink(null)
-            setNewDriver({ full_name: '', email: '', phone: '', vehicle_type: 'Moto', vehicle_color: '', vehicle_plate: '', vehicle_brand: '', vehicle_model: '' })
             setIsModalOpen(true)
           }}
-          className="bg-apollo-orange text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 hover:bg-[#D14D1B] transition-all shadow-lg shadow-apollo-orange/20"
+          className="bg-apollo-orange text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-apollo-orange/20"
         >
-          <Plus size={20} />
-          Cadastrar Motoboy
+          <Plus size={20} /> Novo Motoboy
         </button>
       </div>
 
-      <div className="bg-white rounded-2xl shadow-sm border border-[#0D0D0D]/5 overflow-hidden">
-        <table className="w-full text-left border-collapse">
-          <thead>
-            <tr className="bg-[#F8F7F5] border-b border-[#0D0D0D]/5">
-              <th className="px-6 py-4 text-[11px] font-bold text-[#0D0D0D]/40 uppercase tracking-wider">Motoboy</th>
-              <th className="px-6 py-4 text-[11px] font-bold text-[#0D0D0D]/40 uppercase tracking-wider">Veículo</th>
-              <th className="px-6 py-4 text-[11px] font-bold text-[#0D0D0D]/40 uppercase tracking-wider">Status</th>
-              <th className="px-6 py-4 text-[11px] font-bold text-[#0D0D0D]/40 uppercase tracking-wider text-center">No Turno Atual</th>
-              <th className="px-6 py-4 text-[11px] font-bold text-[#0D0D0D]/40 uppercase tracking-wider text-center">Turnos Ant.</th>
-              <th className="px-6 py-4 text-[11px] font-bold text-[#0D0D0D]/40 uppercase tracking-wider text-center">Entregues no Turno</th>
-              <th className="px-6 py-4 text-[11px] font-bold text-[#0D0D0D]/40 uppercase tracking-wider text-right">Ações</th>
+      <div className="bg-white rounded-3xl border border-black/5 overflow-hidden shadow-sm">
+        <table className="w-full text-left">
+          <thead className="bg-[#F8F7F5] border-b border-black/5">
+            <tr>
+              <th className="px-6 py-4 text-[10px] uppercase font-bold tracking-widest text-[#666]">Motoboy</th>
+              <th className="px-6 py-4 text-[10px] uppercase font-bold tracking-widest text-[#666]">Veículo</th>
+              <th className="px-6 py-4 text-[10px] uppercase font-bold tracking-widest text-[#666]">Status</th>
+              <th className="px-6 py-4 text-[10px] uppercase font-bold tracking-widest text-[#666] text-center">No Turno Atual</th>
+              <th className="px-6 py-4 text-[10px] uppercase font-bold tracking-widest text-[#666] text-center">Turnos Ant.</th>
+              <th className="px-6 py-4 text-[10px] uppercase font-bold tracking-widest text-[#666] text-center">Entregues no Turno</th>
+              <th className="px-6 py-4 text-[10px] uppercase font-bold tracking-widest text-[#666] text-right">Ações</th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#0D0D0D]/5">
-            {drivers.map(driver => (
-              <tr key={driver.id} className="hover:bg-[#F8F7F5]/50 transition-colors">
-                <td className="px-6 py-4">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-apollo-orange/10 flex items-center justify-center text-apollo-orange font-bold">
-                      {driver.full_name?.charAt(0)}
+          <tbody className="divide-y divide-black/5">
+            {drivers.map(driver => {
+              const naBase = driver.location && driver.location.lat !== null && driver.location.lng !== null && distanciaMetros(driver.location.lat as number, driver.location.lng as number, STORE_COORDS.lat, STORE_COORDS.lng) <= 50;
+
+              return (
+                <tr key={driver.id} className="hover:bg-[#F8F7F5]/50 transition-colors">
+                  <td className="px-6 py-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-apollo-orange/10 flex items-center justify-center text-apollo-orange font-bold">
+                        {driver.full_name?.charAt(0)}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <p className="font-bold text-[#1A1A1A]">{driver.full_name}</p>
+                          {naBase && (
+                            <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-[9px] font-black uppercase flex items-center gap-1 border border-green-200">
+                              <MapPin size={8} className="fill-green-700" /> NA BASE
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-[13px] text-[#555555]">{driver.email}</p>
+                        <p className="text-[13px] text-[#555555]">{driver.phone}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-bold text-[#1A1A1A]">{driver.full_name}</p>
-                      <p className="text-[13px] text-[#555555]">{driver.email}</p>
-                      <p className="text-[13px] text-[#555555]">{driver.phone}</p>
+                  </td>
+                  <td className="px-6 py-4">
+                     <div className="text-[13px] text-[#555555]">
+                       <p><span className="font-bold">{driver.vehicle_brand} {driver.vehicle_model}</span> {driver.vehicle_color}</p>
+                       <p className="uppercase font-mono">{driver.vehicle_plate} — {driver.vehicle_type}</p>
+                     </div>
+                  </td>
+                  <td className="px-6 py-4">
+                     <span className={cn("px-3 py-1 rounded-full text-[10px] font-bold", driver.is_active ? "bg-[#D1FAE5] text-[#065F46]" : "bg-[#F3F4F6] text-[#6B7280]")}>
+                       {driver.is_active ? 'ONLINE' : 'OFFLINE'}
+                     </span>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                     <button
+                      onClick={() => handleOpenDetails(driver)}
+                      className={cn(
+                        "px-3 py-1 rounded-full text-xs font-bold transition-all",
+                        driver.inProgressCount > 0 ? "bg-apollo-orange text-white" : "bg-[#F3F4F6] text-[#6B7280]"
+                      )}
+                     >
+                       {driver.inProgressCount}
+                     </button>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                     <button
+                      onClick={() => handleOpenDetails(driver)}
+                      className={cn(
+                        "px-3 py-1 rounded-full text-xs font-bold transition-all",
+                        driver.previousShiftCount > 0 ? "bg-red-600 text-white animate-pulse" : "bg-[#F3F4F6] text-[#6B7280]"
+                      )}
+                     >
+                       {driver.previousShiftCount}
+                     </button>
+                  </td>
+                  <td className="px-6 py-4 text-center">
+                     <button
+                      onClick={() => handleOpenDetails(driver)}
+                      className={cn("px-3 py-1 rounded-full text-xs font-bold", driver.ordersToday > 0 ? "bg-green-100 text-green-700" : "bg-[#F3F4F6] text-[#6B7280]")}
+                     >
+                       {driver.ordersToday}
+                     </button>
+                  </td>
+                  <td className="px-6 py-4 text-right">
+                    <div className="flex justify-end gap-2">
+                       <button
+                         onClick={() => handleResetPassword(driver.email)}
+                         className="p-2 text-[#666] hover:bg-[#F8F7F5] rounded-lg transition-all"
+                         title="Resetar Senha"
+                       >
+                         <Key size={18} />
+                       </button>
+                       <Switch
+                        checked={!!driver.is_active}
+                        onCheckedChange={() => handleToggle(driver.id, !!driver.is_active)}
+                       />
                     </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4">
-                   <div className="text-[13px] text-[#555555]">
-                     <p><span className="font-bold">{driver.vehicle_brand} {driver.vehicle_model}</span> {driver.vehicle_color}</p>
-                     <p className="uppercase font-mono">{driver.vehicle_plate} — {driver.vehicle_type}</p>
-                   </div>
-                </td>
-                <td className="px-6 py-4">
-                   <span className={cn("px-3 py-1 rounded-full text-[10px] font-bold", driver.is_active ? "bg-[#D1FAE5] text-[#065F46]" : "bg-[#F3F4F6] text-[#6B7280]")}>
-                     {driver.is_active ? 'ONLINE' : 'OFFLINE'}
-                   </span>
-                </td>
-                <td className="px-6 py-4 text-center">
-                   <button
-                    onClick={() => handleOpenDetails(driver)}
-                    className={cn(
-                      "px-3 py-1 rounded-full text-xs font-bold transition-all",
-                      driver.inProgressCount > 0 ? "bg-apollo-orange text-white" : "bg-[#F3F4F6] text-[#6B7280]"
-                    )}
-                   >
-                     {driver.inProgressCount}
-                   </button>
-                </td>
-                <td className="px-6 py-4 text-center">
-                   <button
-                    onClick={() => handleOpenDetails(driver)}
-                    className={cn(
-                      "px-3 py-1 rounded-full text-xs font-bold transition-all",
-                      driver.previousShiftCount > 0 ? "bg-red-600 text-white animate-pulse" : "bg-[#F3F4F6] text-[#6B7280]"
-                    )}
-                   >
-                     {driver.previousShiftCount}
-                   </button>
-                </td>
-                <td className="px-6 py-4 text-center">
-                   <button
-                    onClick={() => handleOpenDetails(driver)}
-                    className="text-lg font-bold hover:text-apollo-orange transition-colors"
-                   >
-                     {driver.ordersToday}
-                   </button>
-                </td>
-                <td className="px-6 py-4 text-right space-x-2">
-                   <button onClick={() => handleResetPassword(driver.email)} className="p-2 hover:bg-white rounded-lg text-[#666] transition-colors" title="Resetar Senha">
-                      <Key size={18} />
-                   </button>
-                   <Switch checked={driver.is_active ?? false} onCheckedChange={() => handleToggle(driver.id, driver.is_active ?? false)} />
-                </td>
-              </tr>
-            ))}
+                  </td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>
 
+      <Dialog open={!!resetLink} onOpenChange={(open) => !open && setResetLink(null)}>
+         <DialogContent className="bg-white">
+            <DialogHeader>
+               <DialogTitle className="text-xl font-bold">Link de Recuperação</DialogTitle>
+            </DialogHeader>
+            <div className="p-4 bg-[#F8F7F5] rounded-xl break-all text-xs font-mono border border-black/5">
+               {resetLink}
+            </div>
+            <DialogFooter>
+               <button onClick={() => copyToClipboard(resetLink!)} className="w-full py-3 bg-apollo-orange text-white rounded-xl font-bold flex items-center justify-center gap-2">
+                  {copied ? <Check size={18} /> : <Copy size={18} />} {copied ? 'Copiado!' : 'Copiar Link'}
+               </button>
+            </DialogFooter>
+         </DialogContent>
+      </Dialog>
+
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="bg-white rounded-2xl sm:max-w-[500px] p-0 overflow-hidden">
-           {generatedPassword || resetLink ? (
+        <DialogContent className="bg-white p-0 overflow-hidden sm:max-w-[500px]">
+           {generatedPassword ? (
              <div className="p-8 text-center space-y-6">
-                <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto"><Check size={32} /></div>
-                <h3 className="text-xl font-bold">{resetLink ? 'Link Gerado!' : 'Motoboy Criado!'}</h3>
-                <div className="bg-[#F8F7F5] p-6 rounded-2xl border border-dashed border-[#0D0D0D]/10 relative">
-                   <p className="text-[10px] font-bold uppercase text-[#666] mb-2">{resetLink ? 'Link de Recuperação' : 'Senha Temporária'}</p>
-                   <p className="text-sm font-mono font-bold text-apollo-orange break-all">{resetLink || generatedPassword}</p>
-                   <button onClick={() => { navigator.clipboard.writeText(resetLink || generatedPassword!); setCopied(true); setTimeout(() => setCopied(false), 2000); }} className="absolute top-4 right-4 p-2 bg-white rounded-lg border border-black/5">
-                      {copied ? <Check size={16} className="text-green-500" /> : <Copy size={16} />}
-                   </button>
+                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
+                   <Check className="text-green-600" size={32} />
                 </div>
-                <button onClick={() => setIsModalOpen(false)} className="w-full py-4 bg-[#0D0D0D] text-white rounded-xl font-bold">Concluir</button>
+                <div>
+                   <h3 className="text-xl font-bold">Motoboy Criado!</h3>
+                   <p className="text-sm text-[#666]">Envie os dados de acesso para o motoboy.</p>
+                </div>
+                <div className="bg-[#F8F7F5] p-6 rounded-2xl border border-black/5 space-y-4 text-left">
+                   <div>
+                      <Label className="text-[10px] uppercase font-bold text-[#666]">E-mail</Label>
+                      <p className="font-bold">{newDriver.email}</p>
+                   </div>
+                   <div>
+                      <Label className="text-[10px] uppercase font-bold text-[#666]">Senha Temporária</Label>
+                      <p className="text-2xl font-black text-apollo-orange tracking-wider">{generatedPassword}</p>
+                   </div>
+                </div>
+                <button
+                   onClick={() => setIsModalOpen(false)}
+                   className="w-full py-4 bg-[#0D0D0D] text-white rounded-xl font-bold"
+                >
+                   Concluído
+                </button>
              </div>
            ) : (
              <form onSubmit={handleCreateDriver}>
-                <DialogHeader className="p-6 border-b border-[#0D0D0D]/5 bg-[#F8F7F5]"><DialogTitle>Cadastrar Motoboy</DialogTitle></DialogHeader>
+                <DialogHeader className="p-6 border-b border-black/5">
+                   <DialogTitle className="text-xl font-black italic">Novo Motoboy</DialogTitle>
+                </DialogHeader>
                 <div className="p-6 grid grid-cols-2 gap-4">
-                   <div className="col-span-2 space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Nome</Label><input required value={newDriver.full_name} onChange={e => setNewDriver({...newDriver, full_name: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
+                   <div className="col-span-2 space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Nome Completo</Label><input required value={newDriver.full_name} onChange={e => setNewDriver({...newDriver, full_name: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
                    <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">E-mail</Label><input required type="email" value={newDriver.email} onChange={e => setNewDriver({...newDriver, email: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
-                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Telefone</Label><input required value={newDriver.phone} onChange={e => setNewDriver({...newDriver, phone: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
+                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">WhatsApp</Label><input required value={newDriver.phone} onChange={e => setNewDriver({...newDriver, phone: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
+
+                   <div className="col-span-2 pt-2 border-t border-black/5 mt-2">
+                      <p className="text-[10px] uppercase font-black text-apollo-orange mb-4">Dados do Veículo</p>
+                   </div>
+
                    <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Marca</Label><input required value={newDriver.vehicle_brand} onChange={e => setNewDriver({...newDriver, vehicle_brand: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
                    <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Modelo</Label><input required value={newDriver.vehicle_model} onChange={e => setNewDriver({...newDriver, vehicle_model: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
                    <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Cor</Label><input required value={newDriver.vehicle_color} onChange={e => setNewDriver({...newDriver, vehicle_color: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
