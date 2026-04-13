@@ -213,7 +213,7 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
                              <span className="font-bold text-apollo-orange">{item.quantity}×</span>
                              <div>
                                 <p className="font-bold">
-                                  {item.is_half ? `${product?.name} / ${halfProduct?.name}` : product?.name}
+                                  {item.is_half && halfProduct?.name ? `½ ${product?.name ?? ""} / ½ ${halfProduct.name}` : (product?.name ?? "")}
                                 </p>
                                 <p className="text-[10px] text-[#666] font-bold uppercase">{item.size} {edge ? `• Borda ${edge.name}` : ''}</p>
                                 {item.observations && <p className="text-xs text-apollo-orange italic mt-1 font-medium">{item.observations}</p>}

@@ -44,7 +44,7 @@ export async function confirmReceiptUpload(
     .from('notifications')
     .insert({
       tenant_id: tenantId,
-      order_id: orderId,
+      data: { order_id: orderId },
       type: 'order_status',
       title: 'Comprovante recebido',
       message: `Comprovante Pix enviado para o pedido #${orderId.substring(0, 8)}`,
