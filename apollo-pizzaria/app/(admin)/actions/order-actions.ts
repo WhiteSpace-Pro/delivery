@@ -3,6 +3,7 @@
 
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
+import { getStartOfCurrentShift } from '@/lib/turno'
 import { OrderStatus } from '@/types/enums'
 import { revalidatePath } from 'next/cache'
 
@@ -111,7 +112,7 @@ export async function markNotificationAsRead(orderId: string) {
 export async function getKanbanOrders() {
   await requireAdmin()
 
-  const startOfPeriod = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const startOfPeriod = getStartOfCurrentShift().toISOString()
 
   const { data, error } = await supabaseAdmin
     .from("orders")
