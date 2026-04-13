@@ -220,3 +220,20 @@ export async function cancelOrder(orderId: string) {
 
   revalidatePath('/admin', 'page')
 }
+
+export async function confirmWithoutReceipt(orderId: string, userId: string) {
+  await requireAdmin()
+  const { error } = await supabaseAdmin
+    .from('orders')
+    .update({
+      status: 'confirmed',
+      payment_status: 'paid',
+      confirmed_without_receipt: true,
+      confirmed_by: userId,
+      confirmed_at: new Date().toISOString(),
+    } as any)
+    .eq('id', orderId)
+    .eq('tenant_id', TENANT_ID)
+  if (error) throw new Error('Failed to confirm order without receipt')
+  revalidatePath('/admin')
+}

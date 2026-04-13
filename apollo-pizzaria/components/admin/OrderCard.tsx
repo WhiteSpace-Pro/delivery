@@ -161,7 +161,7 @@ export function OrderCard({ order, onOpenDetail, onMoveToNext }: OrderCardProps)
             <button
               disabled={order.status === "pending" && isPixPending}
               onClick={(e) => { e.stopPropagation(); onMoveToNext(); }}
-              title={order.status === "pending" && isPixPending ? "Confirme o pagamento PIX antes de prosseguir" : ""}
+              title={order.status === "pending" && isPixPending ? ((order as any).pix_receipt_note ? "Abra o pedido para confirmar o pagamento PIX" : "Abra o pedido para confirmar ou solicitar reenvio") : ""}
               className={cn(
                 "bg-[#E85D24] text-white text-[11px] font-bold px-2.5 py-1.5 rounded-md hover:bg-[#D14D1B] transition-colors",
                 (order.status === "pending" && isPixPending) && "opacity-50 cursor-not-allowed"

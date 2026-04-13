@@ -14,7 +14,7 @@ import {
   Truck
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { getOrderDetails, getReceiptSignedUrl } from '@/app/(admin)/actions/order-actions'
+import { getOrderDetails, getReceiptSignedUrl, confirmWithoutReceipt } from '@/app/(admin)/actions/order-actions'
 import { OrderWithItems } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -89,6 +89,28 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
   }
 
 
+
+  const handleConfirmWithoutReceipt = async () => {
+    const confirmed = window.confirm(
+      "Atenção: você está confirmando este pedido PIX sem comprovante registrado no sistema. Esta ação será registrada. Deseja continuar?"
+    )
+    if (!confirmed) return
+
+    setIsUpdating(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error("Usuário não autenticado")
+
+      await confirmWithoutReceipt(order.id, user.id)
+      if (onReceiptVerified) onReceiptVerified(order.id)
+      onClose()
+    } catch (error) {
+      console.error("Error confirming without receipt:", error)
+      alert("Erro ao confirmar pedido sem comprovante.")
+    } finally {
+      setIsUpdating(false)
+    }
+  }
 
   const handleConfirmPix = async () => {
     setIsUpdating(true)
@@ -271,7 +293,23 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
                      </div>
                    ) : (
                      <div className="p-6 bg-yellow-50 border border-yellow-100 rounded-xl text-center">
-                        <p className="text-sm text-yellow-800 font-medium italic">Aguardando envio do comprovante pelo cliente...</p>
+                        <p className="text-sm text-yellow-800 font-medium italic mb-4">Aguardando envio do comprovante pelo cliente...</p>
+                        <div className="flex flex-col gap-2">
+                          <button
+                            onClick={handleRequestResend}
+                            disabled={isUpdating || details.pix_receipt_requested}
+                            className="w-full py-3 border-2 border-dashed border-apollo-orange text-apollo-orange font-bold rounded-xl hover:bg-orange-50 transition-all flex items-center justify-center gap-2 text-sm"
+                          >
+                            {isUpdating ? <Loader2 className="animate-spin" /> : (details.pix_receipt_requested ? "Reenvio solicitado" : "Solicitar Reenvio")}
+                          </button>
+                          <button
+                            onClick={handleConfirmWithoutReceipt}
+                            disabled={isUpdating}
+                            className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 text-sm shadow-md"
+                          >
+                            {isUpdating ? <Loader2 className="animate-spin" /> : <><Check size={18} /> Confirmar sem comprovante</>}
+                          </button>
+                        </div>
                      </div>
                    )}
                 </section>
