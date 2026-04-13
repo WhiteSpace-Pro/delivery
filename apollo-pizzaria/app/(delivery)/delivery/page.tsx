@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useUser } from '@/hooks/useUser'
 import { useGPSTracking } from '@/hooks/useGPSTracking'
 import { ConfirmModal } from '@/components/delivery/ConfirmModal'
-import { MapPin, Navigation, Loader2 } from 'lucide-react'
+import { MapPin, Navigation, Loader2, Phone, MessageSquare } from 'lucide-react'
 import { calculateRouteForDeliveries } from '@/lib/maps/tomtom'
 import { Profile } from '@/types'
 import { getDeliveryOrders } from '@/app/(admin)/actions/order-actions'
@@ -14,7 +14,9 @@ const STORE_COORDS = { lat: -19.9077, lng: -43.8948 }
 
 interface DeliveryOrder {
   id: string
+  display_id: string | null
   customer_name: string | null
+  customer_phone: string | null
   delivery_instructions: string | null
   total_amount: number
   payment_method: string
@@ -41,7 +43,7 @@ export default function DeliveryPage() {
   const { position } = useGPSTracking({
     orderId: firstOrder?.id || '',
     deliveryId: user?.id || '',
-    enabled: isOnline && !!firstOrder,
+    enabled: isOnline,
   })
 
   useEffect(() => {
@@ -130,19 +132,50 @@ export default function DeliveryPage() {
           {orders.map((order) => (
             <div key={order.id} className="bg-[#1C1C1C] rounded-3xl p-6 border border-white/5 space-y-5">
               <div className="flex justify-between items-start">
-                 <span className="text-2xl font-bold text-apollo-orange italic">#{order.id.slice(-4).toUpperCase()}</span>
+                 <span className="text-2xl font-bold text-apollo-orange italic">#{order.display_id || order.id.slice(0, 8).toUpperCase()}</span>
                  <div className="text-right">
                     <p className="text-[10px] text-white/40 uppercase font-bold tracking-widest">Valor</p>
                     <p className="text-lg font-bold">R$ {Number(order.total_amount).toFixed(2).replace('.', ',')}</p>
                  </div>
               </div>
 
-              <div className="flex items-start gap-3">
-                 <MapPin className="text-apollo-orange mt-1 shrink-0" size={20} />
-                 <div>
-                    <p className="font-bold text-white/90">{order.addresses?.street}, {order.addresses?.number}</p>
-                    <p className="text-sm text-white/50">{order.addresses?.neighborhood}</p>
-                 </div>
+              <div className="space-y-3">
+                <div className="flex items-start gap-3">
+                  <MapPin className="text-apollo-orange mt-1 shrink-0" size={20} />
+                  <div>
+                      <p className="font-bold text-white/90">{order.addresses?.street}, {order.addresses?.number}</p>
+                      <p className="text-sm text-white/50">{order.addresses?.neighborhood}</p>
+                  </div>
+                </div>
+
+                <div className="pl-8 space-y-1">
+                  <p className="text-xs text-white/40 uppercase font-bold tracking-wider">Cliente</p>
+                  <p className="font-bold text-white/90">{order.customer_name ?? 'Não informado'}</p>
+
+                  {order.customer_phone && (
+                    <div className="flex items-center gap-3 pt-2">
+                      <span className="text-sm font-medium text-white/70">{order.customer_phone}</span>
+                      <div className="flex gap-2">
+                        <a
+                          href={`tel:${order.customer_phone}`}
+                          className="p-2 bg-zinc-800 text-apollo-orange rounded-lg hover:bg-zinc-700 transition-colors"
+                          title="Ligar"
+                        >
+                          <Phone size={16} />
+                        </a>
+                        <a
+                          href={`https://wa.me/55${order.customer_phone.replace(/\D/g, '')}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 bg-zinc-800 text-green-500 rounded-lg hover:bg-zinc-700 transition-colors"
+                          title="WhatsApp"
+                        >
+                          <MessageSquare size={16} />
+                        </a>
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div className="flex gap-2">
