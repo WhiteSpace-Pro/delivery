@@ -1,17 +1,16 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { useUser } from '@/hooks/useUser'
 import { useGPSTracking } from '@/hooks/useGPSTracking'
 import { ConfirmModal } from '@/components/delivery/ConfirmModal'
 import { MapPin, Navigation, Loader2 } from 'lucide-react'
 import { calculateRouteForDeliveries } from '@/lib/maps/tomtom'
 import { Profile } from '@/types'
+import { getDeliveryOrders } from '@/app/(admin)/actions/order-actions'
+import { updateDriverStatus } from '@/app/(admin)/actions/delivery-actions'
 
-const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 const STORE_COORDS = { lat: -19.9077, lng: -43.8948 }
-const supabase = createClient()
 
 interface DeliveryOrder {
   id: string
@@ -20,7 +19,7 @@ interface DeliveryOrder {
   total_amount: number
   payment_method: string
   distanceTo?: number
-  address: {
+  addresses: {
     street: string
     number: string
     neighborhood: string
@@ -28,7 +27,7 @@ interface DeliveryOrder {
     lat: number | null
     lng: number | null
   } | null
-  items: { quantity: number; product: { name: string } | null }[]
+  order_items: { quantity: number; products: { name: string } | null }[]
 }
 
 export default function DeliveryPage() {
@@ -51,38 +50,45 @@ export default function DeliveryPage() {
 
   const fetchOrders = useCallback(async () => {
     if (!user) return
-    const { data } = await supabase
-      .from('orders')
-      .select(`
-        id, customer_name, delivery_instructions, total_amount, payment_method,
-        address:addresses!orders_delivery_address_id_fkey(street, number, neighborhood, complement, lat, lng),
-        items:order_items(quantity, product:products(name))
-      `)
-      .eq('assigned_delivery_id', user.id)
-      .eq('tenant_id', TENANT_ID)
-      .eq('status', 'out_for_delivery')
-      .order('created_at', { ascending: true })
+    try {
+      const data = await getDeliveryOrders()
 
-    if (data) {
-       const typedData = data as unknown as DeliveryOrder[];
-       const destinations = typedData
-         .filter(o => o.address?.lat && o.address?.lng)
-         .map(o => ({ lat: o.address!.lat!, lng: o.address!.lng!, orderId: o.id }));
+      if (data) {
+         const typedData = data.map((o: any) => ({
+           ...o,
+           addresses: o['addresses'] || o.addresses, // Standardized property
+           order_items: o.order_items?.map((i: any) => ({
+             ...i,
+             products: i['products!order_items_product_id_fkey'] || i.products
+           }))
+         })) as unknown as DeliveryOrder[];
 
-       if (destinations.length > 0) {
-          const routeResult = await calculateRouteForDeliveries(STORE_COORDS, destinations as any);
-          const sorted = [...typedData].sort((a, b) => {
-             const idxA = routeResult.route.findIndex(r => (r as any).orderId === a.id);
-             const idxB = routeResult.route.findIndex(r => (r as any).orderId === b.id);
-             return idxA - idxB;
-          }).map(o => {
-             const routeInfo = routeResult.route.find(r => (r as any).orderId === o.id);
-             return { ...o, distanceTo: routeInfo ? (routeInfo as any).distanceFromLast : 0 };
-          });
-          setOrders(sorted);
-       } else {
-          setOrders(typedData);
-       }
+         const destinations = typedData
+           .filter(o => o.addresses?.lat && o.addresses?.lng)
+           .map(o => ({ lat: o.addresses!.lat!, lng: o.addresses!.lng!, orderId: o.id }));
+
+         if (destinations.length > 0) {
+            try {
+              const routeResult = await calculateRouteForDeliveries(STORE_COORDS, destinations as any);
+              const sorted = [...typedData].sort((a, b) => {
+                 const idxA = routeResult.route.findIndex(r => (r as any).orderId === a.id);
+                 const idxB = routeResult.route.findIndex(r => (r as any).orderId === b.id);
+                 return idxA - idxB;
+              }).map(o => {
+                 const routeInfo = routeResult.route.find(r => (r as any).orderId === o.id);
+                 return { ...o, distanceTo: routeInfo ? (routeInfo as any).distanceFromLast : 0 };
+              });
+              setOrders(sorted);
+            } catch (e) {
+              console.error("Routing error:", e);
+              setOrders(typedData);
+            }
+         } else {
+            setOrders(typedData);
+         }
+      }
+    } catch (error) {
+      console.error("Error loading deliveries:", error)
     }
   }, [user])
 
@@ -97,17 +103,22 @@ export default function DeliveryPage() {
   const handleToggleOnline = async () => {
     if (!user) return
     setToggleLoading(true)
-    const next = !isOnline
-    setIsOnline(next)
-    await supabase.from('profiles').update({ is_active: next } as any).eq('id', user.id)
-    setToggleLoading(false)
-    if (next) void fetchOrders()
+    try {
+      const next = !isOnline
+      await updateDriverStatus(next)
+      setIsOnline(next)
+      if (next) void fetchOrders()
+    } catch (error) {
+      console.error("Failed to toggle status:", error)
+    } finally {
+      setToggleLoading(false)
+    }
   }
 
   if (isLoading) return <div className="flex items-center justify-center h-64"><Loader2 size={40} className="text-[#E85D24] animate-spin" /></div>
 
   return (
-    <div className="max-w-lg mx-auto space-y-4 pb-24 px-4 pt-4 font-dm">
+    <div className="max-w-lg mx-auto space-y-4 pb-24 px-4 pt-4 font-dm text-white">
       <button onClick={handleToggleOnline} disabled={toggleLoading} className={`w-full h-16 rounded-2xl font-bold flex items-center justify-center gap-3 transition-all ${isOnline ? 'bg-apollo-orange text-white shadow-lg' : 'bg-zinc-800 text-white/40'}`}>
          {toggleLoading ? <Loader2 className="animate-spin" /> : <><span className={`w-3 h-3 rounded-full ${isOnline ? 'bg-white animate-pulse' : 'bg-white/10'}`} /> {isOnline ? 'ONLINE' : 'OFFLINE'}</>}
       </button>
@@ -122,15 +133,15 @@ export default function DeliveryPage() {
                  <span className="text-2xl font-bold text-apollo-orange italic">#{order.id.slice(-4).toUpperCase()}</span>
                  <div className="text-right">
                     <p className="text-[10px] text-white/40 uppercase font-bold tracking-widest">Valor</p>
-                    <p className="text-lg font-bold">R$ {order.total_amount.toFixed(2).replace('.', ',')}</p>
+                    <p className="text-lg font-bold">R$ {Number(order.total_amount).toFixed(2).replace('.', ',')}</p>
                  </div>
               </div>
 
               <div className="flex items-start gap-3">
                  <MapPin className="text-apollo-orange mt-1 shrink-0" size={20} />
                  <div>
-                    <p className="font-bold text-white/90">{order.address?.street}, {order.address?.number}</p>
-                    <p className="text-sm text-white/50">{order.address?.neighborhood}</p>
+                    <p className="font-bold text-white/90">{order.addresses?.street}, {order.addresses?.number}</p>
+                    <p className="text-sm text-white/50">{order.addresses?.neighborhood}</p>
                  </div>
               </div>
 
@@ -144,7 +155,7 @@ export default function DeliveryPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-2 pt-2">
-                 <a href={`https://www.google.com/maps/dir/?api=1&destination=${order.address?.lat},${order.address?.lng}&travelmode=driving`} target="_blank" rel="noopener noreferrer" className="bg-zinc-800 text-white font-bold py-4 rounded-2xl text-xs flex items-center justify-center gap-2 hover:bg-zinc-700 transition-all"><Navigation size={14} /> NAVEGAR</a>
+                 <a href={`https://www.google.com/maps/dir/?api=1&destination=${order.addresses?.lat},${order.addresses?.lng}&travelmode=driving`} target="_blank" rel="noopener noreferrer" className="bg-zinc-800 text-white font-bold py-4 rounded-2xl text-xs flex items-center justify-center gap-2 hover:bg-zinc-700 transition-all"><Navigation size={14} /> NAVEGAR</a>
                  <button onClick={() => setConfirmOrder(order)} className="bg-apollo-orange text-white font-bold py-4 rounded-2xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-apollo-orange/20 transition-all">✓ ENTREGUE</button>
               </div>
             </div>

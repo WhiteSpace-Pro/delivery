@@ -31,45 +31,58 @@ export default async function AdminDashboard() {
     .eq('id', TENANT_ID)
     .single()
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const todayISO = today.toISOString()
+  // Use last 24h for consistency with Kanban
+  const startOfPeriod = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
-  // Group 3.1 & 5: Correct Dashboard counts
   const { data: ordersToday } = await supabase
     .from('orders')
     .select('total_amount, payment_status, status')
     .eq('tenant_id', TENANT_ID)
-    .gte('created_at', todayISO)
+    .gte('created_at', startOfPeriod)
 
-  const confirmedOrdersToday = ordersToday?.filter(o => o.status !== 'cancelled' && !(o.status === 'pending' && o.payment_status === 'pending')) || []
+  // Pedidos hoje (excluir PIX não confirmado)
+  const confirmedOrdersToday = ordersToday?.filter(o =>
+    !(o.status === 'pending' && o.payment_status === 'pending') && o.status !== 'cancelled'
+  ) || []
   const ordersCount = confirmedOrdersToday.length
 
-  // Faturamento hoje: payment_status IN ('paid', 'awaiting_collection', 'collected') AND status NOT IN ('pending', 'cancelled')
-  const totalRevenue = ordersToday
-    ?.filter(o =>
-       ['paid', 'awaiting_collection', 'collected'].includes(o.payment_status as any) &&
-       !['pending', 'cancelled'].includes(o.status)
-    )
-    .reduce((sum, o) => sum + (o.total_amount || 0), 0) || 0
+  // Faturamento hoje
+  const revenueOrders = ordersToday?.filter(o =>
+    ['paid', 'awaiting_collection', 'collected'].includes(o.payment_status as any) &&
+    !['pending', 'cancelled'].includes(o.status)
+  ) || []
 
-  const averageTicket = ordersCount > 0 ? totalRevenue / ordersCount : 0
+  const totalRevenue = revenueOrders.reduce((sum, o) => sum + Number(o.total_amount || 0), 0)
 
+  // Ticket médio: faturamento / pedidos que geraram faturamento (fórmula correta do contrato)
+  const averageTicket = revenueOrders.length > 0 ? totalRevenue / revenueOrders.length : 0
+
+  // Em andamento
   const inProgressCount = ordersToday
-    ?.filter(o => ['confirmed', 'preparing', 'ready', 'out_for_delivery'].includes(o.status) && o.payment_status !== 'pending')
+    ?.filter(o =>
+      ['confirmed', 'preparing', 'ready', 'out_for_delivery'].includes(o.status) &&
+      o.payment_status !== 'pending'
+    )
     .length || 0
 
-  const hours = new Date().getHours()
-  let greeting = 'Boa noite'
-  if (hours >= 0 && hours < 12) greeting = 'Bom dia'
-  else if (hours >= 12 && hours < 18) greeting = 'Boa tarde'
+  // Horário e Data corretos em BRT (America/Sao_Paulo)
+  const now = new Date()
+  const hour = parseInt(
+    now.toLocaleString('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      hour: 'numeric',
+      hour12: false
+    })
+  )
+  const greeting = hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite'
 
-  const formattedDate = new Intl.DateTimeFormat('pt-BR', {
+  const dateStr = now.toLocaleDateString('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
     weekday: 'long',
     day: 'numeric',
     month: 'long',
     year: 'numeric'
-  }).format(new Date())
+  })
 
   return (
     <main className="min-h-screen bg-[#F8F7F5] font-dm-sans p-4 md:p-8">
@@ -78,7 +91,7 @@ export default async function AdminDashboard() {
           <h1 className="text-2xl font-bold text-[#0D0D0D]">
             {greeting}, {(profile.full_name || 'Usuário').split(' ')[0]}
           </h1>
-          <p className="text-[#666] capitalize">{formattedDate}</p>
+          <p className="text-[#666] capitalize">{dateStr}</p>
         </div>
         <StoreStatusToggle isActive={(tenant as any)?.is_active ?? false} />
       </header>

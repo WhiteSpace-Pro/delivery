@@ -127,7 +127,24 @@ export async function placeOrder(params: PlaceOrderParams) {
     throw new Error('Falha ao criar pedido')
   }
 
-  // 2. Create order items
+  // 2. Resolve half_product_ids by name
+  const halfNames = params.items
+    .filter(item => item.half_half && typeof item.half_half === 'string')
+    .map(item => item.half_half as string)
+  
+  let halfProductMap: Record<string, string> = {}
+  if (halfNames.length > 0) {
+    const { data: halfProducts } = await supabaseAdmin
+      .from('products')
+      .select('id, name')
+      .in('name', halfNames)
+      .eq('tenant_id', TENANT_ID)
+    if (halfProducts) {
+      halfProductMap = Object.fromEntries(halfProducts.map(p => [p.name, p.id]))
+    }
+  }
+
+  // 3. Create order items
   const orderItems = params.items.map(item => ({
     tenant_id: TENANT_ID,
     order_id: order.id,
@@ -138,7 +155,7 @@ export async function placeOrder(params: PlaceOrderParams) {
     size: item.size || null,
     edge_option_id: item.border_id || null,
     is_half: !!item.half_half,
-    half_product_id: item.half_half?.id || null,
+    half_product_id: item.half_half ? (halfProductMap[item.half_half as string] || null) : null,
     observations: item.observations || null,
   }))
 
@@ -152,9 +169,9 @@ export async function placeOrder(params: PlaceOrderParams) {
     throw new Error('Falha ao criar itens do pedido')
   }
 
-  // 3. Save new address if requested
+  // 3. Save new address if requested and link to order
   if (params.newAddress) {
-    await supabaseAdmin
+    const { data: savedAddress } = await supabaseAdmin
       .from('addresses')
       .insert({
         user_id: params.customer_id,
@@ -173,6 +190,14 @@ export async function placeOrder(params: PlaceOrderParams) {
         state: 'MG',
         is_primary: false,
       } as any)
+      .select('id')
+      .single()
+    if (savedAddress?.id) {
+      await supabaseAdmin
+        .from('orders')
+        .update({ delivery_address_id: savedAddress.id } as any)
+        .eq('id', order.id)
+    }
   }
 
   revalidatePath('/meus-pedidos')

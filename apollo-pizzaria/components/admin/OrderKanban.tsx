@@ -8,7 +8,7 @@ import { OrderStatus } from '@/types/enums'
 import { OrderDetailModal } from './OrderDetailModal'
 import { DriverAssignModal } from './DriverAssignModal'
 import { playNotificationSound } from '@/lib/audio'
-import { updateOrderStatus } from '@/app/(admin)/actions/order-actions'
+import { updateOrderStatus, getKanbanOrders, getOrderDetails } from '@/app/(admin)/actions/order-actions'
 import {
   DndContext,
   closestCorners,
@@ -41,37 +41,35 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
   const supabase = supabaseModule
 
   const fetchInitialData = useCallback(async () => {
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
-    const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+    try {
+      const ordersData = await getKanbanOrders()
+      const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000)
 
-    const { data: ordersData } = await supabase
-      .from('orders')
-      .select('*, order_items(*, products!order_items_product_id_fkey(name, type)), profiles(*)')
-      .eq('tenant_id', tenantId)
-      .gte('created_at', today.toISOString())
-      .neq('status', 'cancelled')
-      .order('created_at', { ascending: true })
+      if (ordersData) {
+        const filtered = (ordersData as any[]).filter(o => {
+          if (o.status === 'pending') {
+            if (o.payment_method === 'pix') {
+              const isRecent = new Date(o.created_at).getTime() >= twoHoursAgo.getTime()
+              return !!o.pix_receipt_note || isRecent
+            }
+          }
+          return true
+        })
+        setOrders(filtered)
+      }
 
-    if (ordersData) {
-      const filtered = (ordersData as any[]).filter(o => {
-        if (o.status === 'pending' && o.payment_method === 'pix' && o.payment_status === 'pending') {
-          return new Date(o.created_at).getTime() >= new Date(twoHoursAgo).getTime()
-        }
-        return true
-      })
-      setOrders(filtered)
-    }
+      const { data: notifications } = await supabase
+        .from('notifications')
+        .select('order_id' as any)
+        .eq('tenant_id', tenantId)
+        .in('type' as any, ['order_status', 'delivery_approaching'])
+        .eq('is_read' as any, false)
 
-    const { data: notifications } = await supabase
-      .from('notifications')
-      .select('order_id' as any)
-      .eq('tenant_id', tenantId)
-      .in('type' as any, ['order_status', 'delivery_approaching'])
-      .eq('is_read' as any, false)
-
-    if (notifications) {
-      setPendingReceipts(new Set(notifications.map((n: any) => n.order_id)))
+      if (notifications) {
+        setPendingReceipts(new Set(notifications.map((n: any) => n.order_id)))
+      }
+    } catch (error) {
+      console.error('Error fetching initial data:', error)
     }
   }, [tenantId, supabase])
 
@@ -85,15 +83,14 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
         table: 'orders',
         filter: `tenant_id=eq.${tenantId}`
       }, async (payload) => {
-        const { data } = await supabase
-          .from('orders')
-          .select('*, order_items(*, products!order_items_product_id_fkey(name, type)), profiles(*)')
-          .eq('id', payload.new.id)
-          .single()
-
-        if (data) {
-          setOrders(prev => [...prev, data as any])
-          if (data.status === 'pending' || data.status === 'confirmed') playNotificationSound()
+        try {
+          const data = await getOrderDetails(payload.new.id)
+          if (data) {
+            setOrders(prev => [(data as any), ...prev])
+            if (data.status === 'pending' || data.status === 'confirmed') playNotificationSound()
+          }
+        } catch (error) {
+          console.error('Error fetching new order on realtime:', error)
         }
       })
       .on('postgres_changes', {
@@ -101,8 +98,8 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
         schema: 'public',
         table: 'orders',
         filter: `tenant_id=eq.${tenantId}`
-      }, (payload) => {
-        setOrders(prev => prev.map(o => o.id === payload.new.id ? { ...o, ...payload.new } : o))
+      }, async (payload) => {
+         setOrders(prev => prev.map(o => o.id === payload.new.id ? { ...o, ...payload.new } : o))
       })
       .subscribe()
 
@@ -155,7 +152,6 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
               title={col.label}
               color={col.color}
               orders={orders.filter(o => o.status === col.key)}
-              pendingReceipts={pendingReceipts}
               onOpenDetail={setSelectedOrder}
               onMoveToNext={(orderToMove) => {
                  const currentIdx = COLUMNS.findIndex(c => c.key === orderToMove.status);

@@ -26,9 +26,7 @@ async function requireAdmin() {
 export async function getDriversWithStats() {
   await requireAdmin()
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
-  const todayISO = today.toISOString()
+  const startOfPeriod = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
 
   const { data: drivers, error: driversError } = await supabaseAdmin
     .from('profiles')
@@ -48,7 +46,7 @@ export async function getDriversWithStats() {
     .select('assigned_delivery_id')
     .eq('tenant_id', TENANT_ID)
     .eq('status', 'delivered')
-    .gte('created_at', todayISO)
+    .gte('delivered_at', startOfPeriod)
 
   if (ordersError) {
     console.error('Error fetching driver orders:', ordersError)
@@ -57,8 +55,19 @@ export async function getDriversWithStats() {
 
   const { data: authUsers } = await supabaseAdmin.auth.admin.listUsers()
 
+  const { data: activeOrders, error: activeOrdersError } = await supabaseAdmin
+    .from('orders')
+    .select('assigned_delivery_id')
+    .eq('tenant_id', TENANT_ID)
+    .eq('status', 'out_for_delivery')
+
+  if (activeOrdersError) {
+    console.error('Error fetching active driver orders:', activeOrdersError)
+  }
+
   const stats = typedDrivers.map(driver => {
     const ordersCount = orders?.filter(o => o.assigned_delivery_id === driver.id).length || 0
+    const activeCount = activeOrders?.filter(o => o.assigned_delivery_id === driver.id).length || 0
     const authUser = authUsers?.users.find(u => u.id === driver.id)
 
     return {
@@ -73,11 +82,28 @@ export async function getDriversWithStats() {
       vehicle_brand: driver.vehicle_brand,
       vehicle_model: driver.vehicle_model,
       email: authUser?.email || 'N/A',
-      ordersToday: ordersCount
+      ordersToday: ordersCount,
+      inProgressCount: activeCount
     }
   })
 
   return stats
+}
+
+export async function updateDriverStatus(isOnline: boolean) {
+  const supabase = createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('Unauthorized')
+
+  const { error } = await supabaseAdmin
+    .from('profiles')
+    .update({ is_active: isOnline } as any)
+    .eq('id', user.id)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/delivery')
+  return { success: true }
 }
 
 export async function createDriver(formData: {
@@ -146,4 +172,41 @@ export async function resetDriverPassword(email: string) {
   })
   if (error) throw new Error(error.message)
   return data.properties.action_link
+}
+
+export async function getDriverOrdersDetails(driverId: string) {
+  await requireAdmin()
+
+  // Janela de 24h usando o timezone correto America/Sao_Paulo
+  const now = new Date();
+  const startOfPeriod = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: inProgress, error: err1 } = await supabaseAdmin
+    .from('orders')
+    .select(`
+      id, display_id, dispatched_at, total_amount, payment_method, payment_status, status,
+      addresses:addresses!orders_delivery_address_id_fkey(street, number, neighborhood),
+      order_items(quantity, products!order_items_product_id_fkey(name))
+    `)
+    .eq('assigned_delivery_id', driverId)
+    .eq('status', 'out_for_delivery')
+
+  const { data: delivered, error: err2 } = await supabaseAdmin
+    .from('orders')
+    .select(`
+      id, display_id, delivered_at, total_amount, payment_method, payment_status, status,
+      addresses:addresses!orders_delivery_address_id_fkey(street, number, neighborhood),
+      order_items(quantity, products!order_items_product_id_fkey(name))
+    `)
+    .eq('assigned_delivery_id', driverId)
+    .eq('status', 'delivered')
+    .gte('delivered_at', startOfPeriod)
+
+  if (err1 || err2) {
+    console.error('Error err1:', err1)
+    console.error('Error err2:', err2)
+    throw new Error('Failed to fetch driver orders details')
+  }
+
+  return { inProgress: inProgress || [], delivered: delivered || [] }
 }

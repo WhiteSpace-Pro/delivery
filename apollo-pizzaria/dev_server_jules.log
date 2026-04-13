@@ -2,48 +2,94 @@
 > apollo-pizzaria@0.1.0 dev
 > next dev
 
- ⚠ Port 3000 is in use, trying 3001 instead.
   ▲ Next.js 14.2.10
-  - Local:        http://localhost:3001
+  - Local:        http://localhost:3000
 
  ✓ Starting...
- ✓ Ready in 1738ms
+ ✓ Ready in 1732ms
  ○ Compiling /middleware ...
- ✓ Compiled /middleware in 1006ms (124 modules)
- ○ Compiling / ...
- ✓ Compiled / in 9.6s (1730 modules)
-NEXT_PUBLIC_TENANT_ID_APOLLO is not defined in environment variables. Using fallback tenant ID.
- ⨯ Error: Your project's URL and Key are required to create a Supabase client!
+ ✓ Compiled /middleware in 1463ms (124 modules)
+ ○ Compiling /login ...
+ ✓ Compiled /login in 6.8s (593 modules)
+ ⨯ Error: @supabase/ssr: Your project's URL and API key are required to create a Supabase client!
 
 Check your Supabase project's API settings to find these values
 
 https://supabase.com/dashboard/project/_/settings/api
-    at createClient (./lib/supabase/server.ts:11:77)
-    at HomePage (page.tsx:17:88)
-    at stringify (<anonymous>)
-digest: "2075471340"
- ⨯ Error: Your project's URL and Key are required to create a Supabase client!
-
-Check your Supabase project's API settings to find these values
-
-https://supabase.com/dashboard/project/_/settings/api
-    at createClient (./lib/supabase/server.ts:11:77)
-    at ClientLayout (layout.tsx:15:88)
-    at stringify (<anonymous>)
-digest: "2045141176"
- ⨯ Error: Your project's URL and Key are required to create a Supabase client!
-
-Check your Supabase project's API settings to find these values
-
-https://supabase.com/dashboard/project/_/settings/api
-    at createClient (./lib/supabase/server.ts:11:77)
-    at ClientLayout (layout.tsx:15:88)
-    at stringify (<anonymous>)
-digest: "2045141176"
- GET / 500 in 10406ms
- ✓ Compiled in 988ms (831 modules)
+    at createClient (./lib/supabase/client.ts:8:78)
+    at LoginContent (./app/login/page.tsx:23:88)
+digest: "1704154223"
+ GET /login 200 in 7679ms
+ ✓ Compiled in 997ms (299 modules)
 <w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (215kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
- ✓ Compiled in 6.2s (831 modules)
- ✓ Compiled in 1912ms (831 modules)
- ✓ Compiled in 554ms (831 modules)
- ✓ Compiled in 690ms (831 modules)
+ ○ Compiling /cardapio ...
+ ✓ Compiled /cardapio in 8.6s (1699 modules)
+ ⨯ Error: Your project's URL and Key are required to create a Supabase client!
+
+Check your Supabase project's API settings to find these values
+
+https://supabase.com/dashboard/project/_/settings/api
+    at createClient (./lib/supabase/server.ts:11:77)
+    at CardapioPage (cardapio/page.tsx:14:88)
+    at stringify (<anonymous>)
+digest: "529957775"
+ ⨯ Error: Your project's URL and Key are required to create a Supabase client!
+
+Check your Supabase project's API settings to find these values
+
+https://supabase.com/dashboard/project/_/settings/api
+    at createClient (./lib/supabase/server.ts:11:77)
+    at ClientLayout (layout.tsx:31:88)
+    at stringify (<anonymous>)
+digest: "1687229566"
+ ⨯ Error: Your project's URL and Key are required to create a Supabase client!
+
+Check your Supabase project's API settings to find these values
+
+https://supabase.com/dashboard/project/_/settings/api
+    at createClient (./lib/supabase/server.ts:11:77)
+    at ClientLayout (layout.tsx:31:88)
+    at stringify (<anonymous>)
+digest: "1687229566"
+ ⚠ Fast Refresh had to perform a full reload due to a runtime error.
+ GET /cardapio 500 in 9411ms
+ ✓ Compiled in 7.4s (830 modules)
+ ✓ Compiled in 746ms (830 modules)
+ ✓ Compiled in 345ms (830 modules)
+ ✓ Compiled in 345ms (830 modules)
+ ✓ Compiled in 612ms (830 modules)
+ ✓ Compiled in 5.8s (830 modules)
+ ✓ Compiled in 418ms (830 modules)
+ ✓ Compiled in 266ms (830 modules)
+ ✓ Compiled in 8s (830 modules)
+ ✓ Compiled in 666ms (830 modules)
+ ✓ Compiled in 760ms (830 modules)
+ ✓ Compiled in 396ms (830 modules)
+ ✓ Compiled in 327ms (830 modules)
+ ✓ Compiled in 680ms (830 modules)
+ ✓ Compiled in 524ms (830 modules)
+ ✓ Compiled in 275ms (830 modules)
+ ✓ Compiled in 256ms (830 modules)
+ ✓ Compiled in 309ms (830 modules)
+ ✓ Compiled in 656ms (830 modules)
+ ✓ Compiled in 534ms (830 modules)
+ ✓ Compiled in 288ms (830 modules)
+ ✓ Compiled in 277ms (830 modules)
+ ✓ Compiled in 557ms (830 modules)
+ ✓ Compiled in 535ms (830 modules)
+ ✓ Compiled in 550ms (830 modules)
+ ✓ Compiled in 586ms (830 modules)
+ ✓ Compiled in 533ms (830 modules)
+ ✓ Compiled in 552ms (830 modules)
+ ✓ Compiled in 328ms (830 modules)
+ ✓ Compiled in 291ms (830 modules)
+ ✓ Compiled in 7.8s (830 modules)
+ ✓ Compiled in 994ms (830 modules)
+ ✓ Compiled in 275ms (830 modules)
+ ✓ Compiled in 822ms (830 modules)
+ ✓ Compiled in 451ms (830 modules)
+ ✓ Compiled in 274ms (830 modules)
+ ✓ Compiled in 694ms (830 modules)
+ ✓ Compiled in 637ms (830 modules)
+ ✓ Compiled in 547ms (830 modules)
+ ✓ Compiled in 555ms (830 modules)
