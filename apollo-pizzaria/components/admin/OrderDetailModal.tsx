@@ -17,6 +17,13 @@ import { createClient } from '@/lib/supabase/client'
 import { getOrderDetails, getReceiptSignedUrl, confirmWithoutReceipt } from '@/app/(admin)/actions/order-actions'
 import { OrderWithItems } from '@/types'
 import { cn } from '@/lib/utils'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter
+} from '@/components/ui/dialog'
 
 interface OrderDetailModalProps {
   order: OrderWithItems
@@ -28,6 +35,7 @@ interface OrderDetailModalProps {
 export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDetailModalProps) {
   const [details, setDetails] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null)
   const supabase = createClient()
@@ -47,7 +55,7 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
     void fetchFullDetails()
   }, [order.id])
 
-    useEffect(() => {
+  useEffect(() => {
     if (!details?.pix_receipt_note) return
 
     // Extract path if it is a full URL
@@ -72,8 +80,6 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
       })
   }, [details?.pix_receipt_note])
 
-
-
   const handleUpdatePaymentStatus = async (newStatus: string) => {
     setIsUpdating(true)
     const { error } = await supabase
@@ -88,14 +94,12 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
     setIsUpdating(false)
   }
 
+  const handleConfirmWithoutReceipt = () => {
+    setShowConfirmDialog(true)
+  }
 
-
-  const handleConfirmWithoutReceipt = async () => {
-    const confirmed = window.confirm(
-      "Atenção: você está confirmando este pedido PIX sem comprovante registrado no sistema. Esta ação será registrada. Deseja continuar?"
-    )
-    if (!confirmed) return
-
+  const executeConfirmWithoutReceipt = async () => {
+    setShowConfirmDialog(false)
     setIsUpdating(true)
     try {
       const { data: { user } } = await supabase.auth.getUser()
@@ -324,6 +328,32 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
             </>
           )}
         </div>
+        {details?.payment_method === "pix" && (
+          <Dialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+            <DialogContent className="max-w-[400px]">
+              <DialogHeader>
+                <DialogTitle>Confirmar Pagamento PIX</DialogTitle>
+              </DialogHeader>
+              <div className="py-4 text-sm text-[#333] leading-relaxed">
+                Atenção: você está confirmando este pedido PIX sem comprovante registrado no sistema. Esta ação será registrada. Deseja continuar?
+              </div>
+              <DialogFooter className="flex gap-2 sm:justify-end">
+                <button
+                  onClick={() => setShowConfirmDialog(false)}
+                  className="px-4 py-2 text-sm font-bold text-[#666] hover:bg-[#F3F4F6] rounded-lg transition-colors"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={executeConfirmWithoutReceipt}
+                  className="px-4 py-2 text-sm font-bold bg-amber-600 hover:bg-amber-700 text-white rounded-lg shadow-sm transition-colors"
+                >
+                  Sim, confirmar
+                </button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </motion.div>
     </div>
   )
