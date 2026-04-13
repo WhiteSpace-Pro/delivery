@@ -14,7 +14,7 @@ import {
   Truck
 } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
-import { getOrderDetails, getReceiptSignedUrl } from '@/app/(admin)/actions/order-actions'
+import { getOrderDetails, getReceiptSignedUrl, confirmWithoutReceipt } from '@/app/(admin)/actions/order-actions'
 import { OrderWithItems } from '@/types'
 import { cn } from '@/lib/utils'
 
@@ -28,6 +28,7 @@ interface OrderDetailModalProps {
 export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDetailModalProps) {
   const [details, setDetails] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [showInlineConfirm, setShowInlineConfirm] = useState(false)
   const [isUpdating, setIsUpdating] = useState(false)
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null)
   const supabase = createClient()
@@ -47,13 +48,11 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
     void fetchFullDetails()
   }, [order.id])
 
-    useEffect(() => {
+  useEffect(() => {
     if (!details?.pix_receipt_note) return
 
-    // Extract path if it is a full URL
     let path = details.pix_receipt_note
     if (path.startsWith('http')) {
-      // Handle both public and authenticated URLs
       const parts = path.split(/\/storage\/v1\/object\/(?:public|authenticated)\//)
       if (parts.length > 1) {
         const bucketAndPath = parts[1]
@@ -72,8 +71,6 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
       })
   }, [details?.pix_receipt_note])
 
-
-
   const handleUpdatePaymentStatus = async (newStatus: string) => {
     setIsUpdating(true)
     const { error } = await supabase
@@ -88,7 +85,22 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
     setIsUpdating(false)
   }
 
+  const handleConfirmWithoutReceipt = async () => {
+    setIsUpdating(true)
+    try {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error("Usuário não autenticado")
 
+      await confirmWithoutReceipt(order.id, user.id)
+      if (onReceiptVerified) onReceiptVerified(order.id)
+      onClose()
+    } catch (error) {
+      console.error("Error confirming without receipt:", error)
+      alert("Erro ao confirmar pedido sem comprovante.")
+    } finally {
+      setIsUpdating(false)
+    }
+  }
 
   const handleConfirmPix = async () => {
     setIsUpdating(true)
@@ -134,7 +146,6 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
     paid: 'Pago'
   }
 
-  // Mandatory Rules: Direct fields priority
   const customerName = details?.customer_name ?? details?.customer?.full_name ?? 'Não identificado'
   const customerPhone = details?.customer_phone ?? details?.customer?.phone ?? 'Não informado'
   const deliveryName = details?.delivery?.full_name
@@ -271,7 +282,46 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
                      </div>
                    ) : (
                      <div className="p-6 bg-yellow-50 border border-yellow-100 rounded-xl text-center">
-                        <p className="text-sm text-yellow-800 font-medium italic">Aguardando envio do comprovante pelo cliente...</p>
+                        <p className="text-sm text-yellow-800 font-medium italic mb-4">Aguardando envio do comprovante pelo cliente...</p>
+                        <div className="flex flex-col gap-2">
+                          {!showInlineConfirm ? (
+                            <>
+                              <button
+                                onClick={handleRequestResend}
+                                disabled={isUpdating || details.pix_receipt_requested}
+                                className="w-full py-3 border-2 border-dashed border-apollo-orange text-apollo-orange font-bold rounded-xl hover:bg-orange-50 transition-all flex items-center justify-center gap-2 text-sm"
+                              >
+                                {isUpdating ? <Loader2 className="animate-spin" /> : (details.pix_receipt_requested ? "Reenvio solicitado" : "Solicitar Reenvio")}
+                              </button>
+                              <button
+                                onClick={() => setShowInlineConfirm(true)}
+                                disabled={isUpdating}
+                                className="w-full py-3 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 text-sm shadow-md"
+                              >
+                                {isUpdating ? <Loader2 className="animate-spin" /> : <><Check size={18} /> Confirmar sem comprovante</>}
+                              </button>
+                            </>
+                          ) : (
+                            <div className="bg-red-50 border border-red-200 rounded-xl p-4 space-y-3 text-left">
+                              <p className="text-sm text-red-800 font-medium">⚠️ Atenção: confirmando sem comprovante. Esta ação será registrada.</p>
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => setShowInlineConfirm(false)}
+                                  className="flex-1 py-2 text-xs font-bold text-red-800 border border-red-200 rounded-lg hover:bg-red-100 transition-colors"
+                                >
+                                  Cancelar
+                                </button>
+                                <button
+                                  onClick={handleConfirmWithoutReceipt}
+                                  disabled={isUpdating}
+                                  className="flex-1 py-2 text-xs font-bold bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors shadow-sm"
+                                >
+                                  {isUpdating ? <Loader2 className="animate-spin size-3 mx-auto" /> : "Confirmar mesmo assim"}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
                      </div>
                    )}
                 </section>
