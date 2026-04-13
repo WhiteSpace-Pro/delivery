@@ -21,7 +21,7 @@ export default async function AdminDashboard() {
     .eq('id', user.id)
     .single()
 
-  if (!profile || !['admin', 'kitchen'].includes(profile.role)) {
+  if (!profile || !['admin', 'kitchen', 'dev', 'superadmin'].includes(profile.role)) {
     redirect('/')
   }
 
