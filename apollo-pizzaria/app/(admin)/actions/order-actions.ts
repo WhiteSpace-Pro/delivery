@@ -102,7 +102,7 @@ export async function markNotificationAsRead(orderId: string) {
   await supabaseAdmin
     .from('notifications')
     .update({ is_read: true } as any)
-    .eq('order_id' as any, orderId)
+    .contains('data', { order_id: orderId })
     .eq('type' as any, 'receipt_uploaded')
     .eq('tenant_id', TENANT_ID)
 
@@ -118,7 +118,7 @@ export async function getKanbanOrders() {
     .from("orders")
     .select(`
       *,
-      display_id, pix_receipt_note, pix_receipt_requested, order_items(*, products!order_items_product_id_fkey(name, type)),
+      display_id, pix_receipt_note, pix_receipt_requested, order_items(*, products!order_items_product_id_fkey(name, type), half_product:products!order_items_half_product_id_fkey(name)),
       addresses(*),
       customer:profiles!orders_customer_id_fkey(full_name, phone),
       delivery:profiles!orders_assigned_delivery_id_fkey(full_name, phone)

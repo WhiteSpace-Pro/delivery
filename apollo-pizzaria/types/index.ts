@@ -13,6 +13,7 @@ export interface OrderItemWithProduct extends OrderItem {
     name: string;
     type: Database['public']['Enums']['product_type'];
   } | null;
+  half_product?: { name: string } | null;
 }
 
 export interface OrderWithItems extends Order {

@@ -60,13 +60,13 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
 
       const { data: notifications } = await supabase
         .from('notifications')
-        .select('order_id' as any)
+        .select('data' as any)
         .eq('tenant_id', tenantId)
         .in('type' as any, ['order_status', 'delivery_approaching'])
         .eq('is_read' as any, false)
 
       if (notifications) {
-        setPendingReceipts(new Set(notifications.map((n: any) => n.order_id)))
+        setPendingReceipts(new Set(notifications.map((n: any) => n.data?.order_id).filter(id => !!id)))
       }
     } catch (error) {
       console.error('Error fetching initial data:', error)

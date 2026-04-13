@@ -11,7 +11,7 @@ export default async function DeliveryPage() {
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <div>
           <h1 className="text-2xl font-bold text-[#0D0D0D]">Gestão de Motoboys</h1>
-          <p className="text-[#666]">Gerencie sua equipe de entregas e acompanhe o desempenho hoje.</p>
+          <p className="text-[#666]">Turno atual e histórico de entregas da equipe</p>
         </div>
       </header>
 
