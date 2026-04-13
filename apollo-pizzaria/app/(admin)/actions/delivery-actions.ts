@@ -66,11 +66,18 @@ export async function getDriversWithStats() {
     console.error('Error fetching active driver orders:', activeOrdersError)
   }
 
+  // Feature 2: Fetch current locations
+  const { data: locations } = await supabaseAdmin
+    .from('delivery_current_location')
+    .select('delivery_id, lat, lng, updated_at')
+    .eq('tenant_id', TENANT_ID)
+
   const stats = typedDrivers.map(driver => {
     const ordersCount = orders?.filter(o => o.assigned_delivery_id === driver.id).length || 0
     const currentShiftActive = activeOrders?.filter(o => o.assigned_delivery_id === driver.id && o.dispatched_at && o.dispatched_at >= startOfPeriod).length || 0
     const previousShiftCount = activeOrders?.filter(o => o.assigned_delivery_id === driver.id && o.dispatched_at && o.dispatched_at < startOfPeriod).length || 0
     const authUser = authUsers?.users.find(u => u.id === driver.id)
+    const location = locations?.find(l => l.delivery_id === driver.id) || null
 
     return {
       id: driver.id,
@@ -86,7 +93,8 @@ export async function getDriversWithStats() {
       email: authUser?.email || 'N/A',
       ordersToday: ordersCount,
       inProgressCount: currentShiftActive,
-      previousShiftCount: previousShiftCount
+      previousShiftCount: previousShiftCount,
+      location: location
     }
   })
 
@@ -227,4 +235,31 @@ export async function getDriverOrdersDetails(driverId: string) {
     delivered: delivered || [],
     previousShift: previousShift || []
   }
+}
+
+// Feature 1: Check remaining orders
+export async function checkRemainingOrders(userId: string) {
+  const { data: pedidosRestantes } = await supabaseAdmin
+    .from('orders')
+    .select('id')
+    .eq('assigned_delivery_id', userId)
+    .eq('status', 'out_for_delivery')
+    .eq('tenant_id', TENANT_ID)
+
+  return pedidosRestantes?.length === 0
+}
+
+// Feature 1: Register return to base
+export async function registerReturnToBase(userId: string, lat: number | null, lng: number | null) {
+  const { error } = await supabaseAdmin.from('delivery_checkins').insert({
+    delivery_id: userId,
+    type: 'pickup',
+    lat: lat,
+    lng: lng,
+    tenant_id: TENANT_ID,
+    order_id: null,
+  } as any)
+
+  if (error) throw new Error(error.message)
+  return { success: true }
 }

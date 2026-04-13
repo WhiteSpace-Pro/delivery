@@ -3,7 +3,8 @@
 
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Camera, Loader2, Wallet, Check } from 'lucide-react'
+import { Camera, Loader2, Wallet, Check, Home } from 'lucide-react'
+import { checkRemainingOrders, registerReturnToBase } from '@/app/(admin)/actions/delivery-actions'
 
 const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 const supabase = createClient()
@@ -20,7 +21,7 @@ export function ConfirmModal({ orderId, deliveryId, position, onClose, onConfirm
   const [photo, setPhoto] = useState<File | null>(null)
   const [preview, setPreview] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [step, setStep] = useState(1) // 1: photo, 2: collection confirmation
+  const [step, setStep] = useState(1) // 1: photo, 2: collection confirmation, 3: return to base
   const [error, setError] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -70,11 +71,33 @@ export function ConfirmModal({ orderId, deliveryId, position, onClose, onConfirm
       const { error: orderError } = await supabase.from('orders').update(updateData).eq('id', orderId)
       if (orderError) throw orderError
 
-      onConfirmed()
+      // Feature 1: Check if it was the last delivery
+      const isLast = await checkRemainingOrders(deliveryId)
+      if (isLast) {
+        setStep(3)
+      } else {
+        onConfirmed()
+      }
     } catch (err: any) {
       setError(err.message || 'Erro ao confirmar entrega.')
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleReturnToBase = async (returning: boolean) => {
+    if (returning) {
+      setLoading(true)
+      try {
+        await registerReturnToBase(deliveryId, position?.lat ?? null, position?.lng ?? null)
+        onConfirmed()
+      } catch (err: any) {
+        setError(err.message || 'Erro ao registrar retorno.')
+      } finally {
+        setLoading(false)
+      }
+    } else {
+      onConfirmed()
     }
   }
 
@@ -91,7 +114,7 @@ export function ConfirmModal({ orderId, deliveryId, position, onClose, onConfirm
               </div>
               <button onClick={handlePhotoSubmit} disabled={!photo} className="w-full h-14 bg-apollo-orange disabled:opacity-30 text-white font-bold rounded-2xl shadow-xl shadow-apollo-orange/20">Avançar</button>
            </div>
-        ) : (
+        ) : step === 2 ? (
            <div className="space-y-6 text-center">
               <div className="w-16 h-16 bg-apollo-orange/10 rounded-full flex items-center justify-center mx-auto"><Wallet className="text-apollo-orange" size={32} /></div>
               <h2 className="text-xl font-bold text-white italic">Você recebeu o pagamento?</h2>
@@ -103,6 +126,21 @@ export function ConfirmModal({ orderId, deliveryId, position, onClose, onConfirm
                  </button>
                  <button onClick={() => handleFinalConfirm(false)} disabled={loading} className="w-full h-14 bg-zinc-800 text-white font-bold rounded-2xl transition-all hover:bg-zinc-700">
                     Não recebi / PIX
+                 </button>
+              </div>
+           </div>
+        ) : (
+           <div className="space-y-6 text-center">
+              <div className="w-16 h-16 bg-apollo-orange/10 rounded-full flex items-center justify-center mx-auto"><Home className="text-apollo-orange" size={32} /></div>
+              <h2 className="text-xl font-bold text-white italic">Rota concluída!</h2>
+              <p className="text-white/40 text-sm italic">Está voltando para a base?</p>
+
+              <div className="grid grid-cols-1 gap-3">
+                 <button onClick={() => handleReturnToBase(true)} disabled={loading} className="w-full h-14 bg-apollo-orange text-white font-bold rounded-2xl flex items-center justify-center gap-2 transition-all hover:bg-apollo-orange/80">
+                    {loading ? <Loader2 className="animate-spin" /> : 'Sim, estou voltando'}
+                 </button>
+                 <button onClick={() => handleReturnToBase(false)} disabled={loading} className="w-full h-14 bg-zinc-800 text-white font-bold rounded-2xl transition-all hover:bg-zinc-700">
+                    Não por enquanto
                  </button>
               </div>
            </div>
