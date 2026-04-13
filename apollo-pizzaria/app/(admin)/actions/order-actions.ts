@@ -13,7 +13,7 @@ async function requireAdmin() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('Unauthorized')
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).single()
-  if (!profile || !['admin', 'kitchen'].includes(profile.role)) throw new Error('Forbidden')
+  if (!profile || !['admin', 'kitchen', 'dev', 'superadmin'].includes(profile.role)) throw new Error('Forbidden')
 }
 
 export async function updateOrderStatus(orderId: string, status: OrderStatus) {

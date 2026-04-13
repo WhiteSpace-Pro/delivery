@@ -18,7 +18,7 @@ async function requireAdmin() {
     .eq('id', user.id)
     .single()
 
-  if (!profile || !['admin', 'kitchen'].includes(profile.role)) {
+  if (!profile || !['admin', 'kitchen', 'dev', 'superadmin'].includes(profile.role)) {
     throw new Error('Forbidden')
   }
 }
