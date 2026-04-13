@@ -468,6 +468,16 @@ export default function CheckoutPage() {
 
                      {calculatingFee && <div className="text-center text-xs text-apollo-orange animate-pulse">Calculando distância real...</div>}
                      {addressForm.fee > 0 && <div className="bg-apollo-orange/10 p-4 rounded-xl text-center text-apollo-orange font-bold text-sm border border-apollo-orange/20 animate-in zoom-in">Taxa de entrega: R$ {addressForm.fee.toFixed(2).replace('.', ',')}</div>}
+                     <label className="flex items-center gap-3 cursor-pointer mt-2">
+                       <input
+                         type="checkbox"
+                         id="shouldSave"
+                         checked={addressForm.shouldSave}
+                         onChange={e => setAddressForm(prev => ({ ...prev, shouldSave: e.target.checked }))}
+                         className="w-4 h-4 accent-apollo-orange"
+                       />
+                       <span className="text-xs font-medium text-white/60">Salvar este endereço para próximas entregas</span>
+                     </label>
                    </div>
                  )}
                </div>
