@@ -864,7 +864,7 @@ export type Database = {
         | "accident"
         | "other"
       product_type: "pizza" | "beverage" | "combo" | "extra"
-      user_role: "customer" | "admin" | "kitchen" | "delivery"
+      user_role: "customer" | "admin" | "kitchen" | "delivery" | "dev" | "superadmin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1024,7 +1024,7 @@ export const Constants = {
         "other",
       ],
       product_type: ["pizza", "beverage", "combo", "extra"],
-      user_role: ["customer", "admin", "kitchen", "delivery"],
+      user_role: ["customer", "admin", "kitchen", "delivery", "dev", "superadmin"],
     },
   },
 } as const
