@@ -80,6 +80,11 @@ export async function middleware(request: NextRequest) {
 
   const role = profile?.role
 
+  // dev e superadmin têm acesso irrestrito a todas as rotas
+  if (role === 'dev' || role === 'superadmin') {
+    return response
+  }
+
   // Admin routes protection
   if (pathname.startsWith('/admin')) {
     if (role !== 'admin' && role !== 'kitchen') {
