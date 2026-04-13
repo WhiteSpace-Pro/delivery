@@ -2,6 +2,7 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { OrderKanban } from '@/components/admin/OrderKanban'
 import { StoreStatusToggle } from '@/components/admin/StoreStatusToggle'
+import { getStartOfCurrentShift } from '@/lib/turno'
 
 const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 
@@ -31,8 +32,8 @@ export default async function AdminDashboard() {
     .eq('id', TENANT_ID)
     .single()
 
-  // Use last 24h for consistency with Kanban
-  const startOfPeriod = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  // Use shift-based period instead of fixed 24h
+  const startOfPeriod = getStartOfCurrentShift().toISOString()
 
   const { data: ordersToday } = await supabase
     .from('orders')
@@ -40,13 +41,13 @@ export default async function AdminDashboard() {
     .eq('tenant_id', TENANT_ID)
     .gte('created_at', startOfPeriod)
 
-  // Pedidos hoje (excluir PIX não confirmado)
+  // Pedidos no turno (excluir PIX não confirmado)
   const confirmedOrdersToday = ordersToday?.filter(o =>
     !(o.status === 'pending' && o.payment_status === 'pending') && o.status !== 'cancelled'
   ) || []
   const ordersCount = confirmedOrdersToday.length
 
-  // Faturamento hoje
+  // Faturamento no turno
   const revenueOrders = ordersToday?.filter(o =>
     ['paid', 'awaiting_collection', 'collected'].includes(o.payment_status as any) &&
     !['pending', 'cancelled'].includes(o.status)
@@ -97,9 +98,9 @@ export default async function AdminDashboard() {
       </header>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-        <MetricCard title="Pedidos hoje" value={ordersCount.toString()} />
+        <MetricCard title="Pedidos no turno" value={ordersCount.toString()} />
         <MetricCard
-          title="Faturamento hoje"
+          title="Faturamento no turno"
           value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalRevenue)}
         />
         <MetricCard

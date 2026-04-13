@@ -4,6 +4,7 @@
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
+import { getStartOfCurrentShift } from '@/lib/turno'
 
 const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 
@@ -26,7 +27,7 @@ async function requireAdmin() {
 export async function getDriversWithStats() {
   await requireAdmin()
 
-  const startOfPeriod = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()
+  const startOfPeriod = getStartOfCurrentShift().toISOString()
 
   const { data: drivers, error: driversError } = await supabaseAdmin
     .from('profiles')
@@ -57,7 +58,7 @@ export async function getDriversWithStats() {
 
   const { data: activeOrders, error: activeOrdersError } = await supabaseAdmin
     .from('orders')
-    .select('assigned_delivery_id')
+    .select('assigned_delivery_id, dispatched_at')
     .eq('tenant_id', TENANT_ID)
     .eq('status', 'out_for_delivery')
 
@@ -67,7 +68,8 @@ export async function getDriversWithStats() {
 
   const stats = typedDrivers.map(driver => {
     const ordersCount = orders?.filter(o => o.assigned_delivery_id === driver.id).length || 0
-    const activeCount = activeOrders?.filter(o => o.assigned_delivery_id === driver.id).length || 0
+    const currentShiftActive = activeOrders?.filter(o => o.assigned_delivery_id === driver.id && o.dispatched_at && o.dispatched_at >= startOfPeriod).length || 0
+    const previousShiftCount = activeOrders?.filter(o => o.assigned_delivery_id === driver.id && o.dispatched_at && o.dispatched_at < startOfPeriod).length || 0
     const authUser = authUsers?.users.find(u => u.id === driver.id)
 
     return {
@@ -83,7 +85,8 @@ export async function getDriversWithStats() {
       vehicle_model: driver.vehicle_model,
       email: authUser?.email || 'N/A',
       ordersToday: ordersCount,
-      inProgressCount: activeCount
+      inProgressCount: currentShiftActive,
+      previousShiftCount: previousShiftCount
     }
   })
 
@@ -177,9 +180,7 @@ export async function resetDriverPassword(email: string) {
 export async function getDriverOrdersDetails(driverId: string) {
   await requireAdmin()
 
-  // Janela de 24h usando o timezone correto America/Sao_Paulo
-  const now = new Date();
-  const startOfPeriod = new Date(now.getTime() - 24 * 60 * 60 * 1000).toISOString();
+  const startOfPeriod = getStartOfCurrentShift().toISOString()
 
   const { data: inProgress, error: err1 } = await supabaseAdmin
     .from('orders')
@@ -190,6 +191,18 @@ export async function getDriverOrdersDetails(driverId: string) {
     `)
     .eq('assigned_delivery_id', driverId)
     .eq('status', 'out_for_delivery')
+    .gte('dispatched_at', startOfPeriod)
+
+  const { data: previousShift, error: errPrev } = await supabaseAdmin
+    .from('orders')
+    .select(`
+      id, display_id, dispatched_at, total_amount, payment_method, payment_status, status,
+      addresses:addresses!orders_delivery_address_id_fkey(street, number, neighborhood),
+      order_items(quantity, products!order_items_product_id_fkey(name))
+    `)
+    .eq('assigned_delivery_id', driverId)
+    .eq('status', 'out_for_delivery')
+    .lt('dispatched_at', startOfPeriod)
 
   const { data: delivered, error: err2 } = await supabaseAdmin
     .from('orders')
@@ -202,11 +215,16 @@ export async function getDriverOrdersDetails(driverId: string) {
     .eq('status', 'delivered')
     .gte('delivered_at', startOfPeriod)
 
-  if (err1 || err2) {
+  if (err1 || err2 || errPrev) {
     console.error('Error err1:', err1)
     console.error('Error err2:', err2)
+    console.error('Error errPrev:', errPrev)
     throw new Error('Failed to fetch driver orders details')
   }
 
-  return { inProgress: inProgress || [], delivered: delivered || [] }
+  return {
+    inProgress: inProgress || [],
+    delivered: delivered || [],
+    previousShift: previousShift || []
+  }
 }
