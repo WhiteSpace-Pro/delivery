@@ -13,11 +13,12 @@
 Projeto: Apollo Pizzaria System
 Stack: Next.js 14 App Router · TypeScript strict · Tailwind · Shadcn/ui · Supabase · Vercel
 Banco: supabase-cerulean-prism (project_id: ckshypkyylmzvhjhqrzf)
-Branch ativa: fix-admin-kanban-dashboard-sidebar-apollo-13662929136679408498
+Branch ativa: main-apollo (produção automática no Vercel)
 URL produção: delivery-nu-weld.vercel.app
 TENANT_ID: 496c5a35-6843-4061-b3ab-159d15a0cbc6
 Repositório: franciscoqueirozdriver/delivery
 Root directory Vercel: apollo-pizzaria/
+Script de merge: /workspaces/delivery/merge_jules.sh
 ```
 
 ---
@@ -28,8 +29,24 @@ Root directory Vercel: apollo-pizzaria/
 order_status:     pending | confirmed | preparing | ready | out_for_delivery | delivered | cancelled
 payment_status:   pending | paid | failed | refunded | awaiting_collection | collected
 payment_method:   pix | credit_card | debit_card | cash
-user_role:        customer | admin | kitchen | delivery
+user_role:        customer | admin | kitchen | delivery | dev | superadmin
 ```
+
+---
+
+## HIERARQUIA DE ROLES
+
+```
+dev          → acesso total ao sistema (bypassa todas as verificações)
+superadmin   → acesso total a um tenant específico
+admin        → gestão operacional (kanban, dashboard, motoboys)
+kitchen      → apenas kanban/preparo
+delivery     → apenas app motoboy
+customer     → portal do cliente
+```
+
+Trigger `protect_admin_role_trigger` protege: admin, kitchen, delivery, dev, superadmin
+NUNCA remover esse trigger.
 
 ---
 
@@ -49,35 +66,46 @@ NUNCA criar pedido dinheiro/cartão com status: pending ou payment_status: pendi
 
 PIX:
   pending → (admin confirma comprovante no Kanban) → paid
+  OU
+  pending → (admin confirma sem comprovante) → paid + confirmed_without_receipt=true + confirmed_by=user.id
 
 Dinheiro/Cartão:
   awaiting_collection → (motoboy confirma recebimento) → collected
   collected → (admin dá baixa) → paid
 
-### 3. Chave PIX da loja
+### 3. Fluxo PIX no Kanban
+
+Botão "Confirmar" no card PIX:
+- Sem comprovante (pix_receipt_note IS NULL): desabilitado, tooltip "Abra o pedido para confirmar ou solicitar reenvio"
+- Com comprovante (pix_receipt_note IS NOT NULL): desabilitado, tooltip "Abra o pedido para confirmar o pagamento PIX"
+- Após payment_status = paid: botão não mais relevante (card move automaticamente)
+
+Confirmação sem comprovante:
+- Admin abre modal → clica "Confirmar sem comprovante" → aparece aviso inline
+- Ao confirmar: status=confirmed, payment_status=paid, confirmed_without_receipt=true, confirmed_by=user.id
+
+### 4. Chave PIX da loja
 - Salva em tenants.pix_key = '+5531985375524'
 - Tipo: tenants.pix_key_type = 'telefone'
 - QR Code gerado internamente por app/api/pix/qrcode/route.ts via lib/pix/brcode.ts
 - NUNCA usar API externa gerarqrcodepix.com.br — tem CORS bloqueado
-- Endpoint GET /api/pix/qrcode?valor=X&txid=APOLLOYYY&saida=qr → imagem PNG
-- Endpoint GET /api/pix/qrcode?valor=X&txid=APOLLOYYY&saida=br → JSON com brcode
 
-### 4. Coordenadas da pizzaria
+### 5. Coordenadas da pizzaria
 - lat: -19.9077, lng: -43.8948
 - Endereço: Av. Jequitinhonha 218, Vera Cruz, Belo Horizonte - MG
 
-### 5. Cálculo de frete
+### 6. Cálculo de frete
 - TomTom Routing API para distância real
-- Taxa = Math.ceil(distanceKm) × 1.00
+- Taxa = Math.max(Math.ceil(distanceKm) * 1.00, 3.00) — mínimo R$3,00
 - NÃO mostrar km — apenas "Taxa de entrega: R$ X,00"
 - Calcular apenas após CEP E número preenchidos
 - Resetar frete se CEP ou número mudarem
-- Frete obrigatório para finalizar pedido
 
-### 6. Proteção de roles no banco
-- Trigger protect_admin_role_trigger em profiles
-- Impede admin/kitchen/delivery de serem rebaixados para customer
-- NÃO remover esse trigger
+### 7. Lógica de turno
+- Turno começa às 17h40 BRT (America/Sao_Paulo)
+- Se agora < 17h40 BRT → turno atual começou às 17h40 do dia anterior
+- Usar lib/turno.ts → getStartOfCurrentShift()
+- Dashboard e gestão de motoboys usam visão de turno, não dia calendário
 
 ---
 
@@ -89,17 +117,23 @@ Aceitar 10 dígitos (fixo) e 11 dígitos (celular). NUNCA bloquear com 9.
 ### Tela PIX — comportamento obrigatório
 - QR Code: img src="/api/pix/qrcode?valor=X&txid=APOLLOYYY&saida=qr"
 - Copia-e-cola: fetch /api/pix/qrcode?saida=br → response.brcode
-- Upload comprovante → bucket delivery-photos, path: {tenant_id}/comprovantes/{order_id}/{timestamp}
+- Upload comprovante → bucket delivery-photos (PRIVADO), path: {tenant_id}/comprovantes/{order_id}/{timestamp}
 - Salvar URL em orders.pix_receipt_note
 - Botão "Trocar forma de pagamento" presente
 - Tela persiste se cliente sair (localStorage)
-- NÃO mostrar campo "nome do pagador"
+
+### Reenvio de comprovante
+- Campo pix_receipt_requested BOOLEAN na tabela orders
+- Admin solicita reenvio → pix_receipt_requested=true
+- Cliente vê banner laranja na tela /order/[id]
+- Após reenvio: pix_receipt_note=novaUrl, pix_receipt_requested=false
 
 ### Meus Pedidos
 - Buscar com supabaseAdmin (não cliente browser)
 - Select: *, order_items(*, products(name))
 - NUNCA usar alias com : no select — quebra silenciosamente
 - Usar order_items[i].products.name (sem alias)
+- Pedidos PIX com payment_status=pending mostram botão "Enviar comprovante"
 
 ---
 
@@ -112,10 +146,11 @@ Aceitar 10 dígitos (fixo) e 11 dígitos (celular). NUNCA bloquear com 9.
 - Relatórios → /admin/relatorios (Em breve)
 - Configurações → /admin/settings (Em breve)
 
-### Dashboard — timezone obrigatório
+### Dashboard — visão de turno obrigatória
 - Sempre usar America/Sao_Paulo para datas e saudação
-- Janela de 24h: Date.now() - 86400000 (evita bug UTC/BRT)
-- Pedidos hoje: excluir status=pending AND payment_status=pending
+- Usar getStartOfCurrentShift() de lib/turno.ts
+- Labels: "Pedidos no turno", "Faturamento no turno"
+- Pedidos no turno: excluir status=pending AND payment_status=pending
 - Faturamento: payment_status IN (paid, awaiting_collection, collected)
 - Ticket médio: faturamento / COUNT de pedidos que geraram receita
 - Em andamento: status IN (confirmed, preparing, ready, out_for_delivery)
@@ -126,7 +161,7 @@ orders tem DUAS FK para profiles. SEMPRE especificar qual:
 
 .select(`
   *,
-  order_items(*, products(name, type)),
+  order_items(*, products!order_items_product_id_fkey(name, type)),
   addresses(*),
   customer:profiles!orders_customer_id_fkey(full_name, phone),
   delivery:profiles!orders_assigned_delivery_id_fkey(full_name, phone)
@@ -134,63 +169,30 @@ orders tem DUAS FK para profiles. SEMPRE especificar qual:
 
 NUNCA usar profiles(full_name, phone) sem FK — causa erro PGRST201.
 
-### Modal de detalhes — campos obrigatórios
-- Nome: order.customer_name ?? order.customer?.full_name ?? 'Não identificado'
-- Telefone: order.customer_phone ?? order.customer?.phone ?? 'Não informado'
-- Subtotal: Number(order.subtotal)
-- Taxa: Number(order.delivery_fee)
-- Total: Number(order.total_amount)
-- Itens: order.order_items?.map(i => ({ name: i.products?.name, qty: i.quantity }))
-- Método: { pix:'PIX', cash:'Dinheiro', credit_card:'Cartão de Crédito', debit_card:'Cartão de Débito' }
-- Status pagamento: { pending:'Aguardando confirmação', awaiting_collection:'A cobrar (motoboy)', collected:'Coletado pelo motoboy', paid:'Pago' }
+### display_id — obrigatório em todos os lugares
+- Formato: XXXX-0000 (4 chars aleatórios + sequencial diário com 4 dígitos)
+- Gerado automaticamente via trigger generate_display_id_trigger
+- Exibir em: Kanban, modal de detalhes, /order/[id], /meus-pedidos
+- NUNCA exibir UUID truncado
 
-### Server actions para admin (bypass RLS)
-- getOrderDetails(orderId) — usa supabaseAdmin
-- getAvailableDrivers(tenantId) — usa supabaseAdmin, filtra is_active=true
-
-### Atribuir motoboy
-UPDATE orders SET assigned_delivery_id=motoboyId, status='out_for_delivery', dispatched_at=now()
+### Gestão de Motoboys — visão de turno
+- Colunas: "No Turno Atual", "Turnos Ant.", "Entregues no Turno"
+- Badge vermelho em "Turnos Ant." quando previousShiftCount > 0
+- Modal com seções: Em Andamento, Entregues no Turno, Turnos Anteriores
+- Usar getStartOfCurrentShift() para todas as queries
 
 ---
 
 ## APP DO MOTOBOY
 
 ### Acesso
-- Apenas role: delivery
+- Roles: delivery, dev, superadmin
 - Sem auth → /login?redirect=/delivery
 - Após login delivery → /delivery
-- NUNCA redirecionar para / ou tela do cliente
 
 ### Query de entregas — obrigatória
 - SEMPRE usar supabaseAdmin — RLS bloqueia sem service role
 - Filtrar: assigned_delivery_id=user.id, status=out_for_delivery, tenant_id=TENANT_ID
-- NÃO filtrar por created_at — mostrar TODOS independente da data
-- Include: addresses(street, number, complement, neighborhood, city, lat, lng)
-
-### Navegação Google Maps — com fallback
-Se lat/lng disponíveis: usar coordenadas
-Se lat/lng null mas tem endereço: usar texto encodado com cidade "Belo Horizonte, MG"
-Se nenhum dado: mostrar toast "Endereço não disponível" — NUNCA abrir Maps com dados errados
-
-### Confirmação de entrega
-1. Foto obrigatória
-2. "Recebeu pagamento?" → Sim: payment_status=collected / Não: mantém
-3. INSERT delivery_checkins
-4. UPDATE orders: status=delivered, delivered_at=now()
-5. Upload foto → delivery-photos/{tenant_id}/{order_id}/{timestamp}.jpg
-
-### GPS tracking
-- Throttle 5s (15s background), descartar accuracy > 50m
-- lat/lng SEMPRE Number() — NUNCA string
-- INSERT delivery_tracking (append-only)
-- delivery_current_location atualizado por trigger
-
----
-
-## RASTREAMENTO
-
-- NUNCA usar delivery_tracking para posição atual
-- SEMPRE usar delivery_current_location (snapshot via trigger)
 
 ---
 
@@ -199,9 +201,9 @@ Se nenhum dado: mostrar toast "Endereço não disponível" — NUNCA abrir Maps 
 ### RLS ativa
 - orders INSERT: customer_id = auth.uid()
 - orders SELECT: customer_id=uid OR assigned_delivery_id=uid OR admin/kitchen
-- profiles: trigger protege rebaixamento de role
-- tenants SELECT: público (necessário para is_active no portal)
-- Storage delivery-photos INSERT: qualquer autenticado; SELECT: admin/kitchen/delivery
+- orders UPDATE (admin): roles admin/kitchen/dev/superadmin via supabaseAdmin
+- orders UPDATE (cliente): apenas pix_receipt_note e pix_receipt_requested (policy orders_customer_pix_receipt_update)
+- Storage delivery-photos INSERT: qualquer autenticado; SELECT: admin/kitchen/delivery via signed URL
 
 ---
 
@@ -214,54 +216,66 @@ Se nenhum dado: mostrar toast "Endereço não disponível" — NUNCA abrir Maps 
 5. Trigger handle_new_user — precisa cast ::user_role explícito
 6. Vercel Hobby — apenas commits de google-labs-jules[bot] ou franciscoqueirozdriver
 7. QR Code PIX — API externa tem CORS. Usar lib/pix/brcode.ts
-8. Frete — calcular só após número. Resetar se CEP/número mudarem
+8. Frete — calcular só após número. Resetar se CEP/número mudarem. Mínimo R$3,00
 9. payment_status — dinheiro/cartão nunca começam como pending
 10. supabaseAdmin — usar para admin e delivery. NUNCA expor no cliente
 11. Timezone — sempre America/Sao_Paulo. Nunca UTC direto
-12. Janela de tempo — usar 24h (Date.now()-86400000) não CURRENT_DATE
-13. Navegação Maps — verificar lat/lng antes de abrir. Fallback textual
-14. Máscara telefone — aceitar 10 e 11 dígitos, mínimo 10
-15. Roles — trigger protege admin/kitchen/delivery. Não remover
+12. Janela de tempo — usar getStartOfCurrentShift() não CURRENT_DATE ou 24h fixo
+13. Máscara telefone — aceitar 10 e 11 dígitos, mínimo 10
+14. Roles — trigger protege admin/kitchen/delivery/dev/superadmin. Não remover
+15. half_product_id — CartContext salva half_half como string (nome). checkout-actions.ts busca product_id pelo nome antes de inserir
+16. FK explícita em order_items — sempre products!order_items_product_id_fkey(name)
+17. Bucket delivery-photos — PRIVADO. Usar signed URL via getReceiptSignedUrl no admin
+18. window.confirm — bloqueado em Next.js. Usar AlertDialog ou inline confirmation
 
 ---
 
-## ESTADO ATUAL (11/04/2026)
+## ESTADO ATUAL (13/04/2026)
 
 ### Funcionando
 - Cardápio com filtros
-- PizzaModal completo
-- Carrinho com persistência
-- Checkout com ViaCEP + TomTom
+- PizzaModal completo com meia a meia (half_product_id gravado corretamente)
+- Carrinho com persistência e proteção do localStorage
+- Checkout com ViaCEP + TomTom + frete mínimo R$3,00
+- Checkout com checkbox "Salvar endereço" funcional
 - QR Code PIX interno
-- Upload comprovante PIX
-- Meus Pedidos
+- Upload comprovante PIX com RLS correta
+- Reenvio de comprovante (pix_receipt_requested)
+- Meus Pedidos com botão "Enviar comprovante" para PIX pendente
 - Login por role com redirecionamento
-- Header com nome do usuário
-- Kanban admin 6 colunas
-- Dashboard com métricas corretas (BRT)
-- Modal de detalhes completo
-- Gestão de motoboys
-- Atribuição de motoboy
+- Header com nome do usuário e role
+- Kanban admin com Realtime
+- Dashboard com visão de turno (getStartOfCurrentShift)
+- Modal de detalhes completo com display_id
+- Gestão de motoboys com visão de turno (No Turno Atual, Turnos Ant., Entregues no Turno)
+- Modal de motoboy com pedidos em andamento, entregues e turnos anteriores
+- Fluxo PIX no Kanban: botão Confirmar bloqueado, confirmação sem comprovante com auditoria
 - App motoboy: toggle online/offline + lista de entregas
 - Sidebar com todos os links
-- Proteção de roles no banco
-- Pedidos dinheiro/cartão como confirmed/awaiting_collection
+- Proteção de roles no banco (dev e superadmin incluídos)
+- Roles dev e superadmin com acesso irrestrito
+- Branch main-apollo como produção fixa no Vercel
+- Script merge_jules.sh para merge seguro das branches do Jules
+- JULES_RULES.md com regras permanentes
 
 ### Parcialmente funcionando
-- App motoboy: endereço pode ser vazio em pedidos antigos (delivery_address_id=null)
-- Máscara de telefone no checkout (fix em andamento)
+- Combo — não mostra sabores escolhidos no modal do Kanban
+- Notificações — tabela não tem coluna order_id (causa erro 400)
 
 ### Não implementado
-- Meia a meia em combos
-- Confirmação de entrega com foto
+- Meia a meia em combos/promoções
+- Confirmação de entrega com foto (app motoboy)
 - Rastreamento em tempo real com mapa
 - Popup "você é o próximo"
 - Toggle loja aberta/fechada bloqueando pedidos
 - Responsividade nível app nativo
 - Relatórios reais
 - Configurações do tenant
+- Mapa com pins dos motoboys
+- Badge "Na base" (50m da pizzaria)
+- Confirmação de retorno após última entrega
 
 ---
 
 *Apollo Pizzaria · Banco: supabase-cerulean-prism*
-*Última atualização: 11/04/2026*
+*Última atualização: 13/04/2026*
