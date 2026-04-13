@@ -59,8 +59,8 @@ export function useUser() {
 
   const role = profile?.role || null
   const tenantId = profile?.tenant_id || null
-  const isAdmin = role === 'admin' || role === 'kitchen'
-  const isDelivery = role === 'delivery'
+  const isAdmin = role === 'admin' || role === 'kitchen' || role === 'dev' || role === 'superadmin'
+  const isDelivery = role === 'delivery' || role === 'dev' || role === 'superadmin'
 
   return {
     user,
