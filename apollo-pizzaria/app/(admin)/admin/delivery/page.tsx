@@ -1,8 +1,8 @@
 import { getDriversWithStats } from '@/app/(admin)/actions/delivery-actions'
 import { DeliveryList } from './DeliveryList'
-import dynamic from 'next/dynamic'
+import nextDynamic from 'next/dynamic'
 
-const DeliveryMap = dynamic(() => import('@/components/admin/DeliveryMap'), { ssr: false })
+const DeliveryMap = nextDynamic(() => import('@/components/admin/DeliveryMap'), { ssr: false })
 
 export const dynamic = 'force-dynamic'
 
