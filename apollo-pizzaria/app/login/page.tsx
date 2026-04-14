@@ -53,24 +53,29 @@ function LoginContent() {
         return
       }
 
-      if (redirectPath) {
-        router.push(redirectPath)
-        return
+      const roleRedirects: Record<string, string> = {
+        dev:        '/admin',
+        superadmin: '/admin',
+        admin:      '/admin',
+        kitchen:    '/admin',
+        delivery:   '/delivery',
+        customer:   '/',
       }
 
-      switch (profile.role) {
-        case 'admin':
-        case 'kitchen':
-          router.push('/admin')
-          break
-        case 'delivery':
-          router.push('/delivery')
-          break
-        case 'customer':
-        default:
-          router.push('/')
-          break
+      const defaultDest = roleRedirects[profile.role] ?? '/'
+      const adminRoles = ['dev', 'superadmin', 'admin', 'kitchen']
+      const deliveryRoles = ['delivery']
+
+      let destino = defaultDest
+      if (redirectPath) {
+        if (redirectPath.startsWith('/admin') && adminRoles.includes(profile.role)) {
+          destino = redirectPath
+        } else if (redirectPath.startsWith('/delivery') && deliveryRoles.includes(profile.role)) {
+          destino = redirectPath
+        }
       }
+
+      router.push(destino)
     }
   }
 
