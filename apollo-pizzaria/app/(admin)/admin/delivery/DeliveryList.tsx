@@ -331,7 +331,7 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
                    <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">WhatsApp</Label><input required value={newDriver.phone} onChange={e => setNewDriver({...newDriver, phone: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
 
                    <div className="col-span-2 pt-2 border-t border-black/5 mt-2">
-                      <p className="text-[10px] uppercase font-black text-apollo-orange mb-4">Dados do Veículo</p>
+                      <p className="text-[10px] uppercase font-black text-gray-500 mb-4">Dados do Veículo</p>
                    </div>
 
                    <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Marca</Label><input required value={newDriver.vehicle_brand} onChange={e => setNewDriver({...newDriver, vehicle_brand: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
