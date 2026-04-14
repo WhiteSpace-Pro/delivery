@@ -300,13 +300,13 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
                    <Check className="text-green-600" size={32} />
                 </div>
                 <div>
-                   <h3 className="text-xl font-bold">Motoboy Criado!</h3>
+                   <h3 className="text-xl font-bold text-[#0D0D0D]">Motoboy Criado!</h3>
                    <p className="text-sm text-[#666]">Envie os dados de acesso para o motoboy.</p>
                 </div>
                 <div className="bg-[#F8F7F5] p-6 rounded-2xl border border-black/5 space-y-4 text-left">
                    <div>
                       <Label className="text-[10px] uppercase font-bold text-[#666]">E-mail</Label>
-                      <p className="font-bold">{newDriver.email}</p>
+                      <p className="font-bold text-[#0D0D0D]">{newDriver.email}</p>
                    </div>
                    <div>
                       <Label className="text-[10px] uppercase font-bold text-[#666]">Senha Temporária</Label>
