@@ -38,3 +38,25 @@ export type TrackingPoint = Database['public']['Tables']['delivery_current_locat
 export interface DeliveryWithOrder extends Profile {
   orders: Order[];
 }
+
+export interface Driver {
+  id: string;
+  full_name: string | null;
+  phone: string | null;
+  email: string;
+  role: string;
+  is_active: boolean | null;
+  vehicle_type: string | null;
+  vehicle_color: string | null;
+  vehicle_plate: string | null;
+  vehicle_brand: string | null;
+  vehicle_model: string | null;
+  ordersToday: number;
+  inProgressCount: number;
+  previousShiftCount: number;
+  location: {
+    lat: number | null;
+    lng: number | null;
+    updated_at?: string | null;
+  } | null;
+}

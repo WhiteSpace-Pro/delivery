@@ -1,10 +1,14 @@
 import { getDriversWithStats } from '@/app/(admin)/actions/delivery-actions'
 import { DeliveryList } from './DeliveryList'
+import nextDynamic from 'next/dynamic'
+
+const DeliveryMap = nextDynamic(() => import('@/components/admin/DeliveryMap'), { ssr: false })
 
 export const dynamic = 'force-dynamic'
 
 export default async function DeliveryPage() {
   const drivers = await getDriversWithStats()
+  const hasLocations = drivers.some(d => d.location)
 
   return (
     <div className="space-y-8">
@@ -14,6 +18,8 @@ export default async function DeliveryPage() {
           <p className="text-[#666]">Turno atual e histórico de entregas da equipe</p>
         </div>
       </header>
+
+      {hasLocations && <DeliveryMap initialDrivers={drivers} />}
 
       <DeliveryList initialDrivers={drivers} />
     </div>
