@@ -7,8 +7,8 @@ import { createClient } from '@/lib/supabase/client'
 import '@tomtom-international/web-sdk-maps/dist/maps.css'
 import { Driver } from '@/types'
 
-const STORE_LAT = -19.9077
-const STORE_LNG = -43.8948
+const STORE_LAT = -19.90693
+const STORE_LNG = -43.89515
 const TOMTOM_KEY = process.env.NEXT_PUBLIC_TOMTOM_API_KEY
 const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 

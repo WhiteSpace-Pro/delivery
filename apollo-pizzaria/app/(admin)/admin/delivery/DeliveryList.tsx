@@ -8,7 +8,7 @@ import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 
-const STORE_COORDS = { lat: -19.9077, lng: -43.8948 }
+const STORE_COORDS = { lat: -19.90693, lng: -43.89515 }
 
 function distanciaMetros(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000
