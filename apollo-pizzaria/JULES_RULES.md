@@ -66,7 +66,7 @@ Arquivos a modificar:
 
 9. **payment_status** — pedidos dinheiro/cartão NUNCA começam como `pending`. Sempre `awaiting_collection`.
 
-10. **supabaseAdmin** — usar para admin e delivery. NUNCA expor no cliente.
+10. **supabaseAdmin** — usar para admin e delivery queries. NUNCA usar para GPS tracking — usar cliente Supabase autenticado do browser.
 
 11. **Timezone** — sempre `America/Sao_Paulo`. Nunca UTC direto.
 
@@ -84,7 +84,15 @@ Arquivos a modificar:
 
 18. **window.confirm** — bloqueado em Next.js/Radix. Usar AlertDialog do Shadcn/ui ou inline confirmation com estado.
 
-19. **display_id** — SEMPRE exibir em todos os lugares (Kanban, modal, /order/[id], /meus-pedidos). NUNCA exibir UUID truncado.
+19. **display_id** — SEMPRE exibir em todos os lugares (Kanban, modal, /order/[id], /meus-pedidos, app do motoboy). NUNCA exibir UUID truncado nem order.id.
+
+20. **notifications.order_id** — não existe como coluna direta na tabela notifications. Salvar dentro do campo `data` (jsonb): `{ order_id: '...' }`. Filtrar com `.contains('data', { order_id: orderId })`.
+
+21. **delivery_current_location — PK é `delivery_id`**, não `order_id`. `order_id` é nullable. `ON CONFLICT` deve usar `delivery_id`. Trigger ativo: `trg_sync_current_location` → `sync_current_location()`.
+
+22. **GPS tracking — filtro de accuracy** — NÃO usar threshold fixo. iOS indoor pode reportar >200m. Remover filtro ou usar valor muito alto (>500m). Nunca silenciar leituras sem logar o motivo.
+
+23. **delivery_tracking INSERT** — usar cliente Supabase autenticado (browser), NUNCA supabaseAdmin. RLS exige `delivery_id = auth.uid()` com role delivery.
 
 ---
 
@@ -133,10 +141,10 @@ O sistema opera por turnos, não por dia calendário:
 1. Jules termina → cria branch nova (padrão: main-apollo-XXXXXXX)
 2. Vercel gera URL de preview automaticamente
 3. franciscoqueirozdriver testa no preview antes de qualquer merge
-4. Se aprovado → `./merge_jules.sh` na raiz do repositório
+4. Se aprovado → `cd /workspaces/delivery && ./merge_jules.sh`
 5. Deploy automático em produção via main-apollo
 
 ---
 
-*Última atualização: 13/04/2026*
+*Última atualização: 14/04/2026*
 *Não editar sem autorização de franciscoqueirozdriver*
