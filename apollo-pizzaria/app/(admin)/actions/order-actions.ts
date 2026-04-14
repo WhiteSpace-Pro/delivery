@@ -188,7 +188,7 @@ export async function getDeliveryOrders() {
     .from('orders')
     .select(`
       *,
-      addresses(street, number, complement, neighborhood, city, lat, lng),
+      display_id, customer_name, customer_phone, addresses(street, number, complement, neighborhood, city, lat, lng),
       order_items(quantity, products!order_items_product_id_fkey(name))
     `)
     .eq('assigned_delivery_id', user.id)
