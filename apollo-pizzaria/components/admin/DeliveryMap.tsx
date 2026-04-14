@@ -59,7 +59,8 @@ export default function DeliveryMap({ initialDrivers }: DeliveryMapProps) {
   function addOrUpdateMarker(driver: Driver, tt: any) {
     if (!mapRef.current || !driver.location) return
 
-    const { delivery_id, lat, lng, updated_at } = driver.location
+    const { lat, lng, updated_at } = driver.location
+    const delivery_id = driver.id
     const dist = distanciaMetros(STORE_LAT, STORE_LNG, lat, lng)
     const timeStr = timeSince(updated_at)
 
