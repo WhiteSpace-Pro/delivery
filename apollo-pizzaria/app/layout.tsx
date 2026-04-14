@@ -15,8 +15,8 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
-  title: "Apollo Pizzaria",
-  description: "Sistema de Delivery Apollo Pizzaria",
+  title: "Apollo Pizzaria - Delivery de Pizzas Artesanais Online",
+  description: "Sistema de delivery online da Apollo Pizzaria: peça pizzas artesanais com ingredientes frescos, acompanhe seu pedido em tempo real e receba entregas rápidas e seguras. Cardápio variado, pagamentos via PIX e suporte completo para uma experiência deliciosa.",
 };
 
 export default function RootLayout({
