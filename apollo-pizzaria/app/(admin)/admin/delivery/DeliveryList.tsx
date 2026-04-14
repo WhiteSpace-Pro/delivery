@@ -1,12 +1,14 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Copy, Check, Key, Clock, Bike, AlertCircle, MapPin } from 'lucide-react'
 import { toggleDriverStatus, createDriver, getDriversWithStats, resetDriverPassword, getDriverOrdersDetails } from '@/app/(admin)/actions/delivery-actions'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
+const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 
 const STORE_COORDS = { lat: -19.90693, lng: -43.89515 }
 
@@ -39,6 +41,39 @@ interface Driver {
 
 export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
   const [drivers, setDrivers] = useState<Driver[]>(initialDrivers)
+
+  useEffect(() => {
+    const supabase = createClient()
+    const profileChannel = supabase
+      .channel('delivery-profiles-realtime')
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `tenant_id=eq.${TENANT_ID}` },
+        (payload) => {
+          setDrivers(prev => prev.map(d =>
+            d.id === payload.new.id ? { ...d, is_active: payload.new.is_active as boolean } : d
+          ))
+        }
+      )
+      .subscribe()
+
+    const locationChannel = supabase
+      .channel('delivery-location-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'delivery_current_location', filter: `tenant_id=eq.${TENANT_ID}` },
+        (payload) => {
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const loc = payload.new as { delivery_id: string; lat: number; lng: number; updated_at: string }
+            setDrivers(prev => prev.map(d =>
+              d.id === loc.delivery_id ? { ...d, location: { lat: loc.lat, lng: loc.lng } } : d
+            ))
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(profileChannel)
+      supabase.removeChannel(locationChannel)
+    }
+  }, [])
   const [isModalOpen, setIsModalOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [detailsDriver, setDetailsDriver] = useState<Driver | null>(null)
