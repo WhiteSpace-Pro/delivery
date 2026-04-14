@@ -61,6 +61,7 @@ export default function DeliveryMap({ initialDrivers }: DeliveryMapProps) {
 
     const { lat, lng, updated_at } = driver.location
     const delivery_id = driver.id
+    if (lat === null || lng === null) return
     const dist = distanciaMetros(STORE_LAT, STORE_LNG, lat, lng)
     const timeStr = timeSince(updated_at)
 
