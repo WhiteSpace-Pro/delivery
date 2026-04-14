@@ -4,6 +4,15 @@ import { useState, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
+const roleRedirects: Record<string, string> = {
+  dev: '/admin',
+  superadmin: '/admin',
+  admin: '/admin',
+  kitchen: '/admin',
+  delivery: '/delivery',
+  customer: '/',
+}
+
 function LoginContent() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -53,24 +62,25 @@ function LoginContent() {
         return
       }
 
+      const role = profile.role
+      let finalDestino = roleRedirects[role] ?? '/'
+
+      // Se existir um parâmetro redirect na URL, respeitar APENAS se o role tiver permissão
       if (redirectPath) {
-        router.push(redirectPath)
-        return
+        let canAccess = true
+
+        if (redirectPath.startsWith('/admin')) {
+          canAccess = ['dev', 'superadmin', 'admin', 'kitchen'].includes(role)
+        } else if (redirectPath.startsWith('/delivery')) {
+          canAccess = ['dev', 'superadmin', 'delivery'].includes(role)
+        }
+
+        if (canAccess) {
+          finalDestino = redirectPath
+        }
       }
 
-      switch (profile.role) {
-        case 'admin':
-        case 'kitchen':
-          router.push('/admin')
-          break
-        case 'delivery':
-          router.push('/delivery')
-          break
-        case 'customer':
-        default:
-          router.push('/')
-          break
-      }
+      router.push(finalDestino)
     }
   }
 
