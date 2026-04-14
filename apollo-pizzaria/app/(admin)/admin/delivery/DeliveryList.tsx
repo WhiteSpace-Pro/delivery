@@ -96,7 +96,7 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
         (payload) => {
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             setDrivers(prev => prev.map(d =>
-              d.id === payload.new.delivery_id ? { ...d, location: payload.new } : d
+              d.id === payload.new.delivery_id ? { ...d, location: { lat: payload.new.lat ?? null, lng: payload.new.lng ?? null, updated_at: payload.new.updated_at } } : d
             ))
           }
         }
