@@ -5,6 +5,7 @@ import { supabaseAdmin } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { getStartOfCurrentShift } from '@/lib/turno'
+import { Driver } from '@/types'
 
 const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 
@@ -24,7 +25,7 @@ async function requireAdmin() {
   }
 }
 
-export async function getDriversWithStats() {
+export async function getDriversWithStats(): Promise<Driver[]> {
   await requireAdmin()
 
   const startOfPeriod = getStartOfCurrentShift().toISOString()
@@ -72,12 +73,12 @@ export async function getDriversWithStats() {
     .select('delivery_id, lat, lng, updated_at')
     .eq('tenant_id', TENANT_ID)
 
-  const stats = typedDrivers.map(driver => {
+  const stats: Driver[] = typedDrivers.map(driver => {
     const ordersCount = orders?.filter(o => o.assigned_delivery_id === driver.id).length || 0
     const currentShiftActive = activeOrders?.filter(o => o.assigned_delivery_id === driver.id && o.dispatched_at && o.dispatched_at >= startOfPeriod).length || 0
     const previousShiftCount = activeOrders?.filter(o => o.assigned_delivery_id === driver.id && o.dispatched_at && o.dispatched_at < startOfPeriod).length || 0
     const authUser = authUsers?.users.find(u => u.id === driver.id)
-    const location = locations?.find(l => l.delivery_id === driver.id) || null
+    const location: any = locations?.find(l => l.delivery_id === driver.id) || null
 
     return {
       id: driver.id,

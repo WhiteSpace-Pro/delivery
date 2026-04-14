@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/client'
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — CSS import for TomTom SDK
 import '@tomtom-international/web-sdk-maps/dist/maps.css'
+import { Driver } from '@/types'
 
 const STORE_LAT = -19.9077
 const STORE_LNG = -43.8948
@@ -30,7 +31,7 @@ function timeSince(date: string) {
 }
 
 interface DeliveryMapProps {
-  initialDrivers: any[]
+  initialDrivers: Driver[]
 }
 
 export default function DeliveryMap({ initialDrivers }: DeliveryMapProps) {
@@ -38,9 +39,9 @@ export default function DeliveryMap({ initialDrivers }: DeliveryMapProps) {
   const mapRef = useRef<any>(null)
   const markersRef = useRef<{ [key: string]: any }>({})
   const ttRef = useRef<any>(null)
-  const [drivers, setDrivers] = useState(initialDrivers)
+  const [drivers, setDrivers] = useState<Driver[]>(initialDrivers)
 
-  function createPopupContent(driver: any, dist: number, timeStr: string) {
+  function createPopupContent(driver: Driver, dist: number, timeStr: string) {
     return `
       <div style="padding: 4px; min-width: 120px; font-family: sans-serif;">
         <div style="font-weight: bold; margin-bottom: 4px; color: #0D0D0D;">${driver.full_name}</div>
@@ -55,7 +56,7 @@ export default function DeliveryMap({ initialDrivers }: DeliveryMapProps) {
     `
   }
 
-  function addOrUpdateMarker(driver: any, tt: any) {
+  function addOrUpdateMarker(driver: Driver, tt: any) {
     if (!mapRef.current || !driver.location) return
 
     const { delivery_id, lat, lng, updated_at } = driver.location
@@ -81,7 +82,7 @@ export default function DeliveryMap({ initialDrivers }: DeliveryMapProps) {
       el.style.fontSize = '13px'
       el.style.border = '2px solid white'
       el.style.boxShadow = '0 2px 6px rgba(0,0,0,0.3)'
-      el.innerText = driver.full_name.charAt(0).toUpperCase()
+      el.innerText = (driver.full_name || 'M').charAt(0).toUpperCase()
 
       const popup = new tt.Popup({ offset: 30, closeButton: false }).setHTML(createPopupContent(driver, dist, timeStr))
 
@@ -179,7 +180,7 @@ export default function DeliveryMap({ initialDrivers }: DeliveryMapProps) {
         },
         (payload: any) => {
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
-            const newLoc = payload.new
+            const newLoc = payload.new as any;
             setDrivers(prev => {
               const updated = prev.map(d => {
                 if (d.id === newLoc.delivery_id) {

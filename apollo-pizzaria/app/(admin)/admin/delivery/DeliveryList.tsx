@@ -8,6 +8,7 @@ import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
 import { createClient } from '@/lib/supabase/client'
+import { Driver } from '@/types'
 
 const STORE_COORDS = { lat: -19.9077, lng: -43.8948 }
 const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
@@ -20,23 +21,6 @@ function distanciaMetros(lat1: number, lng1: number, lat2: number, lng2: number)
     Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
     Math.sin(dLng/2) ** 2
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
-}
-
-interface Driver {
-  id: string
-  full_name: string | null
-  phone: string | null
-  email: string
-  is_active: boolean | null
-  vehicle_type: string | null
-  vehicle_color: string | null
-  vehicle_plate: string | null
-  vehicle_brand: string | null
-  vehicle_model: string | null
-  ordersToday: number;
-  inProgressCount: number;
-  previousShiftCount: number;
-  location?: { lat: number | null, lng: number | null, updated_at?: string } | null
 }
 
 export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
@@ -95,8 +79,9 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
         },
         (payload) => {
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            const newLoc = payload.new as any;
             setDrivers(prev => prev.map(d =>
-              d.id === payload.new.delivery_id ? { ...d, location: { lat: payload.new.lat ?? null, lng: payload.new.lng ?? null, updated_at: payload.new.updated_at } } : d
+              d.id === newLoc.delivery_id ? { ...d, location: newLoc } : d
             ))
           }
         }
@@ -346,7 +331,7 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
               ) : (
                 <>
                   <div className="grid grid-cols-2 gap-4">
-                     <button onClick={() => handleResetPassword(detailsDriver!.email)} className="bg-white p-4 rounded-2xl border border-black/5 flex items-center gap-3 hover:bg-gray-50 group">
+                     <button onClick={() => detailsDriver && handleResetPassword(detailsDriver.email)} className="bg-white p-4 rounded-2xl border border-black/5 flex items-center gap-3 hover:bg-gray-50 group">
                         <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 group-hover:text-apollo-orange">
                            <Key size={20} />
                         </div>
