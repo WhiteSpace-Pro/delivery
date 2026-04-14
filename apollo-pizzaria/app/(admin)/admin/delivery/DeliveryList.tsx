@@ -323,24 +323,24 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
            ) : (
              <form onSubmit={handleCreateDriver}>
                 <DialogHeader className="p-6 border-b border-black/5">
-                   <DialogTitle className="text-xl font-black italic">Novo Motoboy</DialogTitle>
+                   <DialogTitle className="text-xl font-black italic text-[#0D0D0D]">Novo Motoboy</DialogTitle>
                 </DialogHeader>
                 <div className="p-6 grid grid-cols-2 gap-4">
-                   <div className="col-span-2 space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Nome Completo</Label><input required value={newDriver.full_name} onChange={e => setNewDriver({...newDriver, full_name: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
-                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">E-mail</Label><input required type="email" value={newDriver.email} onChange={e => setNewDriver({...newDriver, email: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
-                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">WhatsApp</Label><input required value={newDriver.phone} onChange={e => setNewDriver({...newDriver, phone: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
+                   <div className="col-span-2 space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Nome Completo</Label><input required value={newDriver.full_name} onChange={e => setNewDriver({...newDriver, full_name: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm text-[#0D0D0D]" /></div>
+                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">E-mail</Label><input required type="email" value={newDriver.email} onChange={e => setNewDriver({...newDriver, email: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm text-[#0D0D0D]" /></div>
+                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">WhatsApp</Label><input required value={newDriver.phone} onChange={e => setNewDriver({...newDriver, phone: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm text-[#0D0D0D]" /></div>
 
                    <div className="col-span-2 pt-2 border-t border-black/5 mt-2">
                       <p className="text-[10px] uppercase font-black text-gray-500 mb-4">Dados do Veículo</p>
                    </div>
 
-                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Marca</Label><input required value={newDriver.vehicle_brand} onChange={e => setNewDriver({...newDriver, vehicle_brand: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
-                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Modelo</Label><input required value={newDriver.vehicle_model} onChange={e => setNewDriver({...newDriver, vehicle_model: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
-                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Cor</Label><input required value={newDriver.vehicle_color} onChange={e => setNewDriver({...newDriver, vehicle_color: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
-                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Placa</Label><input required value={newDriver.vehicle_plate} onChange={e => setNewDriver({...newDriver, vehicle_plate: formatPlate(e.target.value)})} maxLength={8} className="w-full p-3 rounded-xl border border-black/10 text-sm font-mono" /></div>
+                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Marca</Label><input required value={newDriver.vehicle_brand} onChange={e => setNewDriver({...newDriver, vehicle_brand: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm text-[#0D0D0D]" /></div>
+                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Modelo</Label><input required value={newDriver.vehicle_model} onChange={e => setNewDriver({...newDriver, vehicle_model: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm text-[#0D0D0D]" /></div>
+                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Cor</Label><input required value={newDriver.vehicle_color} onChange={e => setNewDriver({...newDriver, vehicle_color: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm text-[#0D0D0D]" /></div>
+                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Placa</Label><input required value={newDriver.vehicle_plate} onChange={e => setNewDriver({...newDriver, vehicle_plate: formatPlate(e.target.value)})} maxLength={8} className="w-full p-3 rounded-xl border border-black/10 text-sm font-mono text-[#0D0D0D]" /></div>
                    <div className="col-span-2 space-y-1">
                       <Label className="text-[10px] uppercase font-bold text-[#666]">Tipo</Label>
-                      <select value={newDriver.vehicle_type} onChange={e => setNewDriver({...newDriver, vehicle_type: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm bg-white">
+                      <select value={newDriver.vehicle_type} onChange={e => setNewDriver({...newDriver, vehicle_type: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm bg-white text-[#0D0D0D]">
                          <option>Moto</option><option>Carro</option><option>Bicicleta</option><option>Van</option>
                       </select>
                    </div>
