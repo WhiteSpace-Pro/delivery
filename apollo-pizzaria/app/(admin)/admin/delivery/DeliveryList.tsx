@@ -1,14 +1,16 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Plus, Copy, Check, Key, Clock, Bike, AlertCircle, MapPin } from 'lucide-react'
-import { toggleDriverStatus, createDriver, getDriversWithStats, resetDriverPassword, getDriverOrdersDetails } from '@/app/(admin)/actions/delivery-actions'
+import { toggleDriverStatus, createDriver, resetDriverPassword, getDriverOrdersDetails } from '@/app/(admin)/actions/delivery-actions'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
 import { cn } from '@/lib/utils'
+import { createClient } from '@/lib/supabase/client'
 
 const STORE_COORDS = { lat: -19.9077, lng: -43.8948 }
+const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 
 function distanciaMetros(lat1: number, lng1: number, lat2: number, lng2: number): number {
   const R = 6371000
@@ -34,7 +36,7 @@ interface Driver {
   ordersToday: number;
   inProgressCount: number;
   previousShiftCount: number;
-  location?: { lat: number | null, lng: number | null } | null
+  location?: { lat: number | null, lng: number | null, updated_at?: string } | null
 }
 
 export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
@@ -57,6 +59,55 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
   const [generatedPassword, setGeneratedPassword] = useState<string | null>(null)
   const [resetLink, setResetLink] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
+
+  useEffect(() => {
+    const supabase = createClient()
+
+    // Subscribe to profile changes (online/offline status)
+    const profileChannel = supabase
+      .channel('delivery-profiles-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `tenant_id=eq.${TENANT_ID}`
+        },
+        (payload) => {
+          setDrivers(prev => prev.map(d =>
+            d.id === payload.new.id ? { ...d, is_active: payload.new.is_active } : d
+          ))
+        }
+      )
+      .subscribe()
+
+    // Subscribe to location changes
+    const locationChannel = supabase
+      .channel('delivery-location-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'delivery_current_location',
+          filter: `tenant_id=eq.${TENANT_ID}`
+        },
+        (payload) => {
+          if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
+            setDrivers(prev => prev.map(d =>
+              d.id === payload.new.delivery_id ? { ...d, location: payload.new } : d
+            ))
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(profileChannel)
+      supabase.removeChannel(locationChannel)
+    }
+  }, [])
 
   const handleToggle = async (driverId: string, currentStatus: boolean) => {
     try {
@@ -99,18 +150,15 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
     }
   }
 
-  const handleCreateDriver = async (e: React.FormEvent) => {
+  const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsSubmitting(true)
     const tempPass = Math.random().toString(36).slice(-8)
     try {
       await createDriver({ ...newDriver, password_temp: tempPass })
       setGeneratedPassword(tempPass)
-      const updatedDrivers = await getDriversWithStats()
-      setDrivers(updatedDrivers as unknown as Driver[])
-    } catch (error: unknown) {
-      const msg = error instanceof Error ? error.message : 'Erro desconhecido'
-      alert(msg)
+    } catch (err: any) {
+      alert(err.message)
     } finally {
       setIsSubmitting(false)
     }
@@ -125,192 +173,151 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
-        <div>
-           <h2 className="text-2xl font-black italic text-[#0D0D0D]">Equipe de Entrega</h2>
-           <p className="text-sm text-[#666]">Turno atual e histórico de entregas da equipe</p>
-        </div>
+        <h2 className="text-xl font-bold text-[#0D0D0D]">Equipe de Entrega</h2>
         <button
           onClick={() => {
-            setGeneratedPassword(null)
             setIsModalOpen(true)
+            setGeneratedPassword(null)
           }}
-          className="bg-apollo-orange text-white px-6 py-3 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-apollo-orange/20"
+          className="bg-apollo-orange text-white px-4 py-2 rounded-xl font-bold flex items-center gap-2 shadow-lg shadow-apollo-orange/20"
         >
-          <Plus size={20} /> Novo Motoboy
+          <Plus size={20} />
+          Novo Motoboy
         </button>
       </div>
 
-      <div className="bg-white rounded-3xl border border-black/5 overflow-hidden shadow-sm">
-        <table className="w-full text-left">
-          <thead className="bg-[#F8F7F5] border-b border-black/5">
-            <tr>
-              <th className="px-6 py-4 text-[10px] uppercase font-bold tracking-widest text-[#666]">Motoboy</th>
-              <th className="px-6 py-4 text-[10px] uppercase font-bold tracking-widest text-[#666]">Veículo</th>
-              <th className="px-6 py-4 text-[10px] uppercase font-bold tracking-widest text-[#666]">Status</th>
-              <th className="px-6 py-4 text-[10px] uppercase font-bold tracking-widest text-[#666] text-center">No Turno Atual</th>
-              <th className="px-6 py-4 text-[10px] uppercase font-bold tracking-widest text-[#666] text-center">Turnos Ant.</th>
-              <th className="px-6 py-4 text-[10px] uppercase font-bold tracking-widest text-[#666] text-center">Entregues no Turno</th>
-              <th className="px-6 py-4 text-[10px] uppercase font-bold tracking-widest text-[#666] text-right">Ações</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-black/5">
-            {drivers.map(driver => {
-              const naBase = driver.location && driver.location.lat !== null && driver.location.lng !== null && distanciaMetros(driver.location.lat as number, driver.location.lng as number, STORE_COORDS.lat, STORE_COORDS.lng) <= 50;
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {drivers.map((driver) => {
+          const distance = driver.location?.lat && driver.location?.lng
+            ? distanciaMetros(STORE_COORDS.lat, STORE_COORDS.lng, driver.location.lat, driver.location.lng)
+            : null
 
-              return (
-                <tr key={driver.id} className="hover:bg-[#F8F7F5]/50 transition-colors">
-                  <td className="px-6 py-4">
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 rounded-full bg-apollo-orange/10 flex items-center justify-center text-apollo-orange font-bold">
-                        {driver.full_name?.charAt(0)}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <p className="font-bold text-[#1A1A1A]">{driver.full_name}</p>
-                          {naBase && (
-                            <span className="bg-green-100 text-green-700 px-2 py-0.5 rounded-full text-[9px] font-black uppercase flex items-center gap-1 border border-green-200">
-                              <MapPin size={8} className="fill-green-700" /> NA BASE
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-[13px] text-[#555555]">{driver.email}</p>
-                        <p className="text-[13px] text-[#555555]">{driver.phone}</p>
-                      </div>
+          const isNearBase = distance !== null && distance <= 50
+
+          return (
+            <div
+              key={driver.id}
+              className={cn(
+                "bg-white p-6 rounded-3xl border border-black/5 shadow-sm transition-all hover:shadow-md cursor-pointer",
+                !driver.is_active && "opacity-70"
+              )}
+              onClick={() => handleOpenDetails(driver)}
+            >
+              <div className="flex justify-between items-start mb-6">
+                <div className="flex items-center gap-4">
+                  <div className={cn(
+                    "w-12 h-12 rounded-full flex items-center justify-center font-bold text-lg",
+                    driver.is_active ? "bg-apollo-orange/10 text-apollo-orange" : "bg-gray-100 text-gray-400"
+                  )}>
+                    {driver.full_name?.charAt(0)}
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-[#0D0D0D]">{driver.full_name}</h3>
+                    <p className="text-xs text-[#666]">{driver.phone}</p>
+                  </div>
+                </div>
+                <div onClick={(e) => e.stopPropagation()}>
+                  <Switch
+                    checked={!!driver.is_active}
+                    onCheckedChange={() => handleToggle(driver.id, !!driver.is_active)}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="bg-[#F8F7F5] p-3 rounded-2xl text-center">
+                  <p className="text-[10px] uppercase font-bold text-[#666] mb-1">Entregas</p>
+                  <p className="text-xl font-black text-[#0D0D0D]">{driver.ordersToday}</p>
+                </div>
+                <div className="bg-[#F8F7F5] p-3 rounded-2xl text-center relative overflow-hidden">
+                  <p className="text-[10px] uppercase font-bold text-[#666] mb-1">No Turno</p>
+                  <p className="text-xl font-black text-apollo-orange">{driver.inProgressCount}</p>
+                  {driver.previousShiftCount > 0 && (
+                    <div className="absolute top-0 right-0 bg-red-600 text-white text-[8px] font-bold px-1.5 py-0.5 rounded-bl-lg animate-pulse">
+                      +{driver.previousShiftCount} ANT.
                     </div>
-                  </td>
-                  <td className="px-6 py-4">
-                     <div className="text-[13px] text-[#555555]">
-                       <p><span className="font-bold">{driver.vehicle_brand} {driver.vehicle_model}</span> {driver.vehicle_color}</p>
-                       <p className="uppercase font-mono">{driver.vehicle_plate} — {driver.vehicle_type}</p>
-                     </div>
-                  </td>
-                  <td className="px-6 py-4">
-                     <span className={cn("px-3 py-1 rounded-full text-[10px] font-bold", driver.is_active ? "bg-[#D1FAE5] text-[#065F46]" : "bg-[#F3F4F6] text-[#6B7280]")}>
-                       {driver.is_active ? 'ONLINE' : 'OFFLINE'}
-                     </span>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                     <button
-                      onClick={() => handleOpenDetails(driver)}
-                      className={cn(
-                        "px-3 py-1 rounded-full text-xs font-bold transition-all",
-                        driver.inProgressCount > 0 ? "bg-apollo-orange text-white" : "bg-[#F3F4F6] text-[#6B7280]"
-                      )}
-                     >
-                       {driver.inProgressCount}
-                     </button>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                     <button
-                      onClick={() => handleOpenDetails(driver)}
-                      className={cn(
-                        "px-3 py-1 rounded-full text-xs font-bold transition-all",
-                        driver.previousShiftCount > 0 ? "bg-red-600 text-white animate-pulse" : "bg-[#F3F4F6] text-[#6B7280]"
-                      )}
-                     >
-                       {driver.previousShiftCount}
-                     </button>
-                  </td>
-                  <td className="px-6 py-4 text-center">
-                     <button
-                      onClick={() => handleOpenDetails(driver)}
-                      className={cn("px-3 py-1 rounded-full text-xs font-bold", driver.ordersToday > 0 ? "bg-green-100 text-green-700" : "bg-[#F3F4F6] text-[#6B7280]")}
-                     >
-                       {driver.ordersToday}
-                     </button>
-                  </td>
-                  <td className="px-6 py-4 text-right">
-                    <div className="flex justify-end gap-2">
-                       <button
-                         onClick={() => handleResetPassword(driver.email)}
-                         className="p-2 text-[#666] hover:bg-[#F8F7F5] rounded-lg transition-all"
-                         title="Resetar Senha"
-                       >
-                         <Key size={18} />
-                       </button>
-                       <Switch
-                        checked={!!driver.is_active}
-                        onCheckedChange={() => handleToggle(driver.id, !!driver.is_active)}
-                       />
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between pt-4 border-t border-black/5">
+                <div className="flex items-center gap-2">
+                  <Bike size={14} className="text-[#666]" />
+                  <span className="text-[10px] font-medium text-[#666] truncate max-w-[120px]">
+                    {driver.vehicle_model} ({driver.vehicle_plate})
+                  </span>
+                </div>
+                {driver.location?.lat ? (
+                   <div className={cn(
+                     "flex items-center gap-1.5 px-2 py-1 rounded-full text-[10px] font-bold",
+                     isNearBase ? "bg-green-100 text-green-700" : "bg-blue-50 text-blue-600"
+                   )}>
+                     <MapPin size={10} />
+                     {isNearBase ? "NA BASE" : `${(distance! / 1000).toFixed(1)}km`}
+                   </div>
+                ) : (
+                  <span className="text-[10px] font-bold text-[#999]">SEM GPS</span>
+                )}
+              </div>
+            </div>
+          )
+        })}
       </div>
 
-      <Dialog open={!!resetLink} onOpenChange={(open) => !open && setResetLink(null)}>
-         <DialogContent className="bg-white">
-            <DialogHeader>
-               <DialogTitle className="text-xl font-bold">Link de Recuperação</DialogTitle>
-            </DialogHeader>
-            <div className="p-4 bg-[#F8F7F5] rounded-xl break-all text-xs font-mono border border-black/5">
-               {resetLink}
-            </div>
-            <DialogFooter>
-               <button onClick={() => copyToClipboard(resetLink!)} className="w-full py-3 bg-apollo-orange text-white rounded-xl font-bold flex items-center justify-center gap-2">
-                  {copied ? <Check size={18} /> : <Copy size={18} />} {copied ? 'Copiado!' : 'Copiar Link'}
-               </button>
-            </DialogFooter>
-         </DialogContent>
-      </Dialog>
-
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-        <DialogContent className="bg-white p-0 overflow-hidden sm:max-w-[500px]">
+        <DialogContent className="bg-[#F8F7F5] sm:max-w-[500px] p-0 overflow-hidden">
+           <DialogHeader className="p-6 bg-white border-b border-[#0D0D0D]/5">
+              <DialogTitle className="text-xl font-bold text-[#0D0D0D]">Cadastrar Motoboy</DialogTitle>
+           </DialogHeader>
+
            {generatedPassword ? (
-             <div className="p-8 text-center space-y-6">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-                   <Check className="text-green-600" size={32} />
+             <div className="p-12 text-center space-y-6">
+                <div className="w-16 h-16 bg-green-100 text-green-600 rounded-full flex items-center justify-center mx-auto mb-4">
+                   <Check size={32} />
                 </div>
                 <div>
-                   <h3 className="text-xl font-bold">Motoboy Criado!</h3>
+                   <h3 className="text-lg font-bold">Motoboy Criado!</h3>
                    <p className="text-sm text-[#666]">Envie os dados de acesso para o motoboy.</p>
                 </div>
-                <div className="bg-[#F8F7F5] p-6 rounded-2xl border border-black/5 space-y-4 text-left">
+                <div className="bg-white p-6 rounded-2xl border border-black/5 space-y-4 text-left">
                    <div>
                       <Label className="text-[10px] uppercase font-bold text-[#666]">E-mail</Label>
-                      <p className="font-bold">{newDriver.email}</p>
+                      <p className="font-medium">{newDriver.email}</p>
                    </div>
                    <div>
                       <Label className="text-[10px] uppercase font-bold text-[#666]">Senha Temporária</Label>
-                      <p className="text-2xl font-black text-apollo-orange tracking-wider">{generatedPassword}</p>
+                      <div className="flex items-center justify-between">
+                         <p className="font-mono font-bold text-lg">{generatedPassword}</p>
+                         <button onClick={() => copyToClipboard(generatedPassword)} className="text-apollo-orange p-2 hover:bg-apollo-orange/5 rounded-lg">
+                            {copied ? <Check size={20} /> : <Copy size={20} />}
+                         </button>
+                      </div>
                    </div>
                 </div>
-                <button
-                   onClick={() => setIsModalOpen(false)}
-                   className="w-full py-4 bg-[#0D0D0D] text-white rounded-xl font-bold"
-                >
-                   Concluído
-                </button>
+                <button onClick={() => setIsModalOpen(false)} className="w-full py-4 bg-[#0D0D0D] text-white rounded-2xl font-bold">Concluir</button>
              </div>
            ) : (
-             <form onSubmit={handleCreateDriver}>
-                <DialogHeader className="p-6 border-b border-black/5">
-                   <DialogTitle className="text-xl font-black italic">Novo Motoboy</DialogTitle>
-                </DialogHeader>
-                <div className="p-6 grid grid-cols-2 gap-4">
-                   <div className="col-span-2 space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Nome Completo</Label><input required value={newDriver.full_name} onChange={e => setNewDriver({...newDriver, full_name: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
-                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">E-mail</Label><input required type="email" value={newDriver.email} onChange={e => setNewDriver({...newDriver, email: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
-                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">WhatsApp</Label><input required value={newDriver.phone} onChange={e => setNewDriver({...newDriver, phone: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
-
-                   <div className="col-span-2 pt-2 border-t border-black/5 mt-2">
-                      <p className="text-[10px] uppercase font-black text-apollo-orange mb-4">Dados do Veículo</p>
+             <form onSubmit={onSubmit}>
+                <div className="p-6 space-y-4 max-h-[60vh] overflow-y-auto">
+                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Nome Completo</Label><input required value={newDriver.full_name} onChange={e => setNewDriver({...newDriver, full_name: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
+                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">E-mail (Login)</Label><input required type="email" value={newDriver.email} onChange={e => setNewDriver({...newDriver, email: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
+                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Telefone/WhatsApp</Label><input required value={newDriver.phone} onChange={e => setNewDriver({...newDriver, phone: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
+                   <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Marca</Label><input required value={newDriver.vehicle_brand} onChange={e => setNewDriver({...newDriver, vehicle_brand: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
+                      <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Modelo</Label><input required value={newDriver.vehicle_model} onChange={e => setNewDriver({...newDriver, vehicle_model: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
                    </div>
-
-                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Marca</Label><input required value={newDriver.vehicle_brand} onChange={e => setNewDriver({...newDriver, vehicle_brand: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
-                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Modelo</Label><input required value={newDriver.vehicle_model} onChange={e => setNewDriver({...newDriver, vehicle_model: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
-                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Cor</Label><input required value={newDriver.vehicle_color} onChange={e => setNewDriver({...newDriver, vehicle_color: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
-                   <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Placa</Label><input required value={newDriver.vehicle_plate} onChange={e => setNewDriver({...newDriver, vehicle_plate: formatPlate(e.target.value)})} maxLength={8} className="w-full p-3 rounded-xl border border-black/10 text-sm font-mono" /></div>
-                   <div className="col-span-2 space-y-1">
-                      <Label className="text-[10px] uppercase font-bold text-[#666]">Tipo</Label>
+                   <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Cor</Label><input required value={newDriver.vehicle_color} onChange={e => setNewDriver({...newDriver, vehicle_color: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm" /></div>
+                      <div className="space-y-1"><Label className="text-[10px] uppercase font-bold text-[#666]">Placa</Label><input required value={newDriver.vehicle_plate} onChange={e => setNewDriver({...newDriver, vehicle_plate: formatPlate(e.target.value)})} maxLength={8} className="w-full p-3 rounded-xl border border-black/10 text-sm font-mono" /></div>
+                   </div>
+                   <div className="space-y-1">
+                      <Label className="text-[10px] uppercase font-bold text-[#666]">Tipo de Veículo</Label>
                       <select value={newDriver.vehicle_type} onChange={e => setNewDriver({...newDriver, vehicle_type: e.target.value})} className="w-full p-3 rounded-xl border border-black/10 text-sm bg-white">
                          <option>Moto</option><option>Carro</option><option>Bicicleta</option><option>Van</option>
                       </select>
                    </div>
                 </div>
-                <DialogFooter className="p-6 bg-[#F8F7F5] border-t border-[#0D0D0D]/5">
+                <DialogFooter className="p-6 bg-white border-t border-[#0D0D0D]/5">
                    <button type="button" onClick={() => setIsModalOpen(false)} className="flex-1 py-3 text-sm font-bold text-[#666]">Cancelar</button>
                    <button type="submit" disabled={isSubmitting} className="flex-1 py-3 bg-apollo-orange text-white rounded-xl font-bold shadow-lg shadow-apollo-orange/20">{isSubmitting ? 'Salvando...' : 'Salvar Motoboy'}</button>
                 </DialogFooter>
@@ -338,6 +345,29 @@ export function DeliveryList({ initialDrivers }: { initialDrivers: Driver[] }) {
                 <div className="py-12 text-center text-[#666] animate-pulse">Carregando detalhes...</div>
               ) : (
                 <>
+                  <div className="grid grid-cols-2 gap-4">
+                     <button onClick={() => handleResetPassword(detailsDriver!.email)} className="bg-white p-4 rounded-2xl border border-black/5 flex items-center gap-3 hover:bg-gray-50 group">
+                        <div className="w-10 h-10 bg-gray-100 rounded-full flex items-center justify-center text-gray-400 group-hover:text-apollo-orange">
+                           <Key size={20} />
+                        </div>
+                        <div className="text-left">
+                           <p className="text-xs font-bold">Resetar Senha</p>
+                           <p className="text-[10px] text-[#666]">Gerar link de acesso</p>
+                        </div>
+                     </button>
+                     {resetLink && (
+                        <button onClick={() => copyToClipboard(resetLink)} className="bg-green-50 p-4 rounded-2xl border border-green-100 flex items-center gap-3 hover:bg-green-100 group">
+                           <div className="w-10 h-10 bg-green-200 rounded-full flex items-center justify-center text-green-600">
+                              {copied ? <Check size={20} /> : <Copy size={20} />}
+                           </div>
+                           <div className="text-left">
+                              <p className="text-xs font-bold text-green-700">Link Gerado!</p>
+                              <p className="text-[10px] text-green-600">Clique para copiar</p>
+                           </div>
+                        </button>
+                     )}
+                  </div>
+
                   {driverOrders?.previousShift && driverOrders.previousShift.length > 0 && (
                     <section>
                       <div className="flex items-center gap-2 mb-4">

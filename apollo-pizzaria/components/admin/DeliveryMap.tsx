@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore — CSS import for TomTom SDK
@@ -38,6 +38,7 @@ export default function DeliveryMap({ initialDrivers }: DeliveryMapProps) {
   const mapRef = useRef<any>(null)
   const markersRef = useRef<{ [key: string]: any }>({})
   const ttRef = useRef<any>(null)
+  const [drivers, setDrivers] = useState(initialDrivers)
 
   function createPopupContent(driver: any, dist: number, timeStr: string) {
     return `
@@ -123,7 +124,7 @@ export default function DeliveryMap({ initialDrivers }: DeliveryMapProps) {
             .addTo(map)
 
           // Initial driver markers
-          initialDrivers.forEach(driver => {
+          drivers.forEach(driver => {
             if (driver.location) {
               addOrUpdateMarker(driver, tt)
             }
@@ -139,8 +140,35 @@ export default function DeliveryMap({ initialDrivers }: DeliveryMapProps) {
 
     // Realtime subscription
     const supabase = createClient()
-    const channel = supabase
-      .channel('delivery-locations-map')
+
+    // Profile changes for online/offline status in map popups
+    const profileChannel = supabase
+      .channel('map-profiles-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'profiles',
+          filter: `tenant_id=eq.${TENANT_ID}`
+        },
+        (payload) => {
+          setDrivers(prev => {
+            const updated = prev.map(d =>
+              d.id === payload.new.id ? { ...d, is_active: payload.new.is_active } : d
+            )
+            const driver = updated.find(d => d.id === payload.new.id)
+            if (driver && driver.location && ttRef.current) {
+              addOrUpdateMarker(driver, ttRef.current)
+            }
+            return updated
+          })
+        }
+      )
+      .subscribe()
+
+    const locationChannel = supabase
+      .channel('map-location-changes')
       .on(
         'postgres_changes',
         {
@@ -152,10 +180,20 @@ export default function DeliveryMap({ initialDrivers }: DeliveryMapProps) {
         (payload: any) => {
           if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
             const newLoc = payload.new
-            const driver = initialDrivers.find(d => d.id === newLoc.delivery_id)
-            if (driver && ttRef.current) {
-              addOrUpdateMarker({ ...driver, location: newLoc }, ttRef.current)
-            }
+            setDrivers(prev => {
+              const updated = prev.map(d => {
+                if (d.id === newLoc.delivery_id) {
+                  return { ...d, location: newLoc }
+                }
+                return d
+              })
+
+              const driver = updated.find(d => d.id === newLoc.delivery_id)
+              if (driver && ttRef.current) {
+                addOrUpdateMarker(driver, ttRef.current)
+              }
+              return updated
+            })
           }
         }
       )
@@ -166,7 +204,8 @@ export default function DeliveryMap({ initialDrivers }: DeliveryMapProps) {
         mapRef.current.remove()
         mapRef.current = null
       }
-      supabase.removeChannel(channel)
+      supabase.removeChannel(profileChannel)
+      supabase.removeChannel(locationChannel)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
