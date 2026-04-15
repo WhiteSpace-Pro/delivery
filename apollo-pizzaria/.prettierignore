@@ -1,0 +1,13 @@
+node_modules
+.next
+out
+coverage
+.DS_Store
+*.log
+*.lock
+dist
+public/**/*.png
+public/**/*.jpg
+public/**/*.jpeg
+public/**/*.svg
+public/**/*.webp
