@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { X, ArrowRight, ArrowLeft, Mail, Phone, Lock, User, Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
@@ -139,7 +139,7 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
     if (redirectToCheckout) router.push('/checkout')
   }
 
-  const resetAll = () => {
+  const resetAll = useCallback(() => {
     setStep('identify')
     setDirection(1)
     setFoundName('')
@@ -150,13 +150,13 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
     identifyForm.reset()
     signInForm.reset()
     registerForm.reset()
-  }
+  }, [identifyForm, registerForm, signInForm])
 
   useEffect(() => {
     if (!isOpen) {
       setTimeout(resetAll, 300)
     }
-  }, [isOpen])
+  }, [isOpen, resetAll])
 
   const handleIdentify = async (values: IdentifyFormValues) => {
     setLoading(true)
