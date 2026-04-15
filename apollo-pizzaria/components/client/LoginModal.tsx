@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { useForm } from 'react-hook-form'
+import { Controller, useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 
@@ -120,6 +120,7 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
   const cleanedIdentifier = identifierValue.trim()
   const isEmail = cleanedIdentifier.includes('@')
   const isPhone = !isEmail && cleanedIdentifier.replace(/\D/g, '').length >= 10
+  const signInPassword = signInForm.watch('password')
 
   const maskPhone = (v: string) => {
     const digits = v.replace(/\D/g, '').slice(0, 11)
@@ -168,6 +169,11 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ identifier: values.identifier.trim() }),
       })
+
+      if (!res.ok) {
+        throw new Error('Erro ao verificar. Tente novamente.')
+      }
+
       const data = await res.json()
 
       if (data.found) {
@@ -237,7 +243,7 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
             full_name: values.full_name,
             phone: values.phone,
             role: 'customer',
-            tenant_id: '496c5a35-6843-4061-b3ab-159d15a0cbc6',
+            tenant_id: process.env.NEXT_PUBLIC_TENANT_ID_APOLLO || '496c5a35-6843-4061-b3ab-159d15a0cbc6',
           },
         },
       })
@@ -245,16 +251,23 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
       if (signUpError) throw signUpError
 
       if (data.user) {
-        await fetch('/api/auth/create-profile', {
+        const profileRes = await fetch('/api/auth/create-profile', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             id: data.user.id,
             full_name: values.full_name,
             phone: values.phone,
-            tenant_id: '496c5a35-6843-4061-b3ab-159d15a0cbc6',
+            tenant_id: process.env.NEXT_PUBLIC_TENANT_ID_APOLLO || '496c5a35-6843-4061-b3ab-159d15a0cbc6',
           }),
         })
+
+        const profileData = await profileRes.json()
+
+        if (!profileRes.ok || !profileData.success) {
+          throw new Error(profileData?.error || 'Erro ao criar perfil')
+        }
+
         handleSuccess()
       }
     } catch (err: any) {
@@ -281,8 +294,7 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
     }),
   }
 
-  const inputCls =
-    'w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 pl-12 text-sm focus:outline-none focus:border-apollo-orange transition-all placeholder:text-white/20'
+  const inputCls = 'pl-12 placeholder:text-white/20'
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -327,11 +339,22 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
                         size={18}
                       />
                     )}
-                    <Input
-                      autoFocus
-                      {...identifyForm.register('identifier')}
-                      placeholder="nome@email.com ou (11) 99999-9999"
-                      className={inputCls}
+                    <Controller
+                      control={identifyForm.control}
+                      name="identifier"
+                      render={({ field }) => (
+                        <Input
+                          autoFocus
+                          value={field.value}
+                          onChange={e => {
+                            const nextValue = e.target.value
+                            const shouldMask = !nextValue.includes('@')
+                            field.onChange(shouldMask ? maskPhone(nextValue) : nextValue)
+                          }}
+                          placeholder="nome@email.com ou (11) 99999-9999"
+                          className={inputCls}
+                        />
+                      )}
                     />
                   </div>
 
@@ -415,7 +438,7 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
                   <Button
                     type="submit"
                     className="w-full"
-                    disabled={loading || !signInForm.getValues('password')}
+                    disabled={loading || !signInPassword}
                   >
                     {loading ? (
                       <Loader2 className="animate-spin" size={18} />
@@ -489,14 +512,17 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
                         className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20"
                         size={18}
                       />
-                      <Input
-                        {...registerForm.register('phone')}
-                        placeholder="Telefone (opcional)"
-                        className={inputCls}
-                        onChange={e => {
-                          const masked = maskPhone(e.target.value)
-                          registerForm.setValue('phone', masked)
-                        }}
+                      <Controller
+                        control={registerForm.control}
+                        name="phone"
+                        render={({ field }) => (
+                          <Input
+                            {...field}
+                            placeholder="Telefone (opcional)"
+                            className={inputCls}
+                            onChange={e => field.onChange(maskPhone(e.target.value))}
+                          />
+                        )}
                       />
                     </div>
                   )}
