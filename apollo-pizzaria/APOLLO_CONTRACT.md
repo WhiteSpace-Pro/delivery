@@ -188,7 +188,10 @@ Se nenhum dado: mostrar toast "Endereço não disponível" — NUNCA abrir Maps 
 2. "Recebeu pagamento?" → Sim: payment_status=collected / Não: mantém
 3. INSERT delivery_checkins
 4. UPDATE orders: status=delivered, delivered_at=now()
-5. Upload foto → delivery-photos/{tenant_id}/{order_id}/{timestamp}.jpg
+5. Upload foto → delivery-photos/{tenant_id}/entregas/{order_id}/{timestamp}.jpg
+   - Persistir storage_path e expires_at em delivery_checkins
+   - Acesso via /api/delivery/checkin/[id]/foto (signed URL, 5 min)
+   - Expiração automática em 7 dias via cron
 6. Após confirmação: verificar pedidos restantes com status=out_for_delivery
 7. Se nenhum pedido restante: exibir modal "Rota concluída! Está voltando para a base?"
    - Sim → INSERT delivery_checkins type=pickup, order_id=null, lat/lng GPS atual
@@ -229,7 +232,7 @@ Se nenhum dado: mostrar toast "Endereço não disponível" — NUNCA abrir Maps 
 - orders SELECT: customer_id=uid OR assigned_delivery_id=uid OR admin/kitchen
 - profiles: trigger protege rebaixamento de role
 - tenants SELECT: público (necessário para is_active no portal)
-- Storage delivery-photos INSERT: qualquer autenticado; SELECT: admin/kitchen/delivery
+- Storage delivery-photos INSERT: qualquer autenticado; SELECT: admin (sempre); delivery (apenas próprio checkin, dentro da janela de 7 dias); kitchen proibido
 - delivery_tracking INSERT: delivery_id=auth.uid() AND role=delivery (browser client)
 
 ---
@@ -256,6 +259,7 @@ Se nenhum dado: mostrar toast "Endereço não disponível" — NUNCA abrir Maps 
 18. Filtro de accuracy no GPS — não usar threshold fixo. iOS indoor pode reportar >200m. Remover filtro ou usar valor alto (>500m)
 19. display_id no app do motoboy — NUNCA usar order.id ou fragmento do UUID. Sempre order.display_id
 20. notifications.order_id — não existe como coluna direta. Salvar dentro do campo data (jsonb): { order_id: '...' }
+21. Comprovantes de entrega — nunca usar image_url como referência; usar storage_path. Acesso sempre via /api/delivery/checkin/[id]/foto, nunca direto ao storage
 
 ---
 

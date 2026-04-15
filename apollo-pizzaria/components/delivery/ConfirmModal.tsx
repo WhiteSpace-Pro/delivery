@@ -44,7 +44,7 @@ export function ConfirmModal({ orderId, deliveryId, position, onClose, onConfirm
     try {
       // 1. Upload photo
       const timestamp = Date.now()
-      const path = `${TENANT_ID}/${orderId}/${timestamp}.jpg`
+      const path = `${TENANT_ID}/entregas/${orderId}/${timestamp}.jpg`
       const { error: uploadError } = await supabase.storage
         .from('delivery-photos')
         .upload(path, photo!, { contentType: photo!.type, upsert: false })
@@ -54,6 +54,9 @@ export function ConfirmModal({ orderId, deliveryId, position, onClose, onConfirm
       const photoUrl = urlData.publicUrl
 
       // 2. INSERT delivery_checkin
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+
       await supabase.from('delivery_checkins').insert({
         order_id: orderId,
         delivery_id: deliveryId,
@@ -62,6 +65,9 @@ export function ConfirmModal({ orderId, deliveryId, position, onClose, onConfirm
         lat: position?.lat ?? null,
         lng: position?.lng ?? null,
         photo_url: photoUrl,
+        storage_bucket: 'delivery-photos',
+        storage_path: path,
+        expires_at: expiresAt.toISOString(),
       } as any)
 
       // 3. Update order status and payment status if received

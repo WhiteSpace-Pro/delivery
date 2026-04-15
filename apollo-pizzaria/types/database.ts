@@ -148,6 +148,9 @@ export type Database = {
           lng: number | null
           order_id: string | null
           photo_url: string | null
+          storage_bucket: string | null
+          storage_path: string | null
+          expires_at: string | null
           problem_notes: string | null
           problem_reason: Database["public"]["Enums"]["problem_reason"] | null
           tenant_id: string | null
@@ -163,6 +166,9 @@ export type Database = {
           lng?: number | null
           order_id?: string | null
           photo_url?: string | null
+          storage_bucket?: string | null
+          storage_path?: string | null
+          expires_at?: string | null
           problem_notes?: string | null
           problem_reason?: Database["public"]["Enums"]["problem_reason"] | null
           tenant_id?: string | null
@@ -178,6 +184,9 @@ export type Database = {
           lng?: number | null
           order_id?: string | null
           photo_url?: string | null
+          storage_bucket?: string | null
+          storage_path?: string | null
+          expires_at?: string | null
           problem_notes?: string | null
           problem_reason?: Database["public"]["Enums"]["problem_reason"] | null
           tenant_id?: string | null
