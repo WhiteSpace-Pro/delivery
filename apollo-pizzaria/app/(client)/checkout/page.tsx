@@ -2,11 +2,12 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Check, Loader2, Camera, Copy, MapPin } from 'lucide-react'
+import { ArrowLeft, Check, Loader2, Camera, Copy, MapPin, AlertTriangle } from 'lucide-react'
 import { useCart } from '@/contexts/CartContext'
 import { useUser } from '@/hooks/useUser'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import { placeOrder } from './actions/checkout-actions'
 import { calculateDeliveryFee } from '@/lib/maps/distance'
 import Image from 'next/image'
@@ -68,6 +69,15 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'cash' | 'credit_card' | 'debit_card'>('pix')
   const [changeFor, setChangeFor] = useState('')
 
+  const [showAddressAlert, setShowAddressAlert] = useState(false)
+  const [inlineCorrection, setInlineCorrection] = useState({
+    active: false,
+    zipcode: '',
+    number: '',
+    street: '',
+    neighborhood: '',
+    searching: false
+  })
   const subtotal = items.reduce((acc, item) => acc + item.total_price, 0)
 
   useEffect(() => {
@@ -180,6 +190,94 @@ export default function CheckoutPage() {
       }))
     } else {
       setAddressForm(prev => ({ ...prev, regionNotFound: true, fee: 0 }))
+    }
+    setCalculatingFee(false)
+  }
+
+    useEffect(() => {
+    if (deliveryType === 'delivery' && selectedAddressId && selectedAddressId !== 'new') {
+      const activeAddress = savedAddresses.find(a => a.id === selectedAddressId)
+      if (activeAddress) {
+        if (!activeAddress.lat || !activeAddress.lng || (activeAddress.lat === 0 && activeAddress.lng === 0)) {
+          setShowAddressAlert(true)
+        } else {
+          setShowAddressAlert(false)
+        }
+      }
+    } else {
+      setShowAddressAlert(false)
+    }
+  }, [deliveryType, selectedAddressId, savedAddresses])
+
+  const handleInlineCepBlur = async () => {
+    const cep = inlineCorrection.zipcode.replace(/\D/g, '')
+    if (cep.length !== 8) return
+
+    setInlineCorrection(prev => ({ ...prev, searching: true }))
+    try {
+      const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`)
+      const data = await res.json()
+      if (!data.erro) {
+        setInlineCorrection(prev => ({
+          ...prev,
+          street: data.logradouro,
+          neighborhood: data.bairro,
+          searching: false
+        }))
+      } else {
+        setInlineCorrection(prev => ({ ...prev, searching: false }))
+      }
+    } catch (e) {
+      console.error(e)
+      setInlineCorrection(prev => ({ ...prev, searching: false }))
+    }
+  }
+
+  const handleUpdateAddress = async () => {
+    if (!inlineCorrection.street || !inlineCorrection.number || !inlineCorrection.neighborhood) {
+      alert('Preencha os campos para atualizar.')
+      return
+    }
+
+    setCalculatingFee(true)
+    const fullAddress = `${inlineCorrection.street}, ${inlineCorrection.number}, ${inlineCorrection.neighborhood}, Belo Horizonte, MG`
+    const result = await calculateDeliveryFee(fullAddress)
+
+    if (result.coords) {
+      try {
+        const { error } = await supabase.from('addresses').update({
+          zipcode: inlineCorrection.zipcode,
+          number: inlineCorrection.number,
+          street: inlineCorrection.street,
+          neighborhood: inlineCorrection.neighborhood,
+          lat: result.coords.lat,
+          lng: result.coords.lng,
+          delivery_fee: result.fee
+        } as any).eq('id', selectedAddressId)
+
+        if (error) throw error
+
+        // Update local state to reflect the fix
+        setSavedAddresses(prev => prev.map(a =>
+          a.id === selectedAddressId ? {
+            ...a,
+            zipcode: inlineCorrection.zipcode,
+            number: inlineCorrection.number,
+            street: inlineCorrection.street,
+            neighborhood: inlineCorrection.neighborhood,
+            lat: result.coords!.lat,
+            lng: result.coords!.lng,
+            delivery_fee: result.fee
+          } : a
+        ))
+
+        setShowAddressAlert(false)
+        setInlineCorrection(prev => ({ ...prev, active: false }))
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : 'Erro'; alert('Erro ao atualizar endereço: ' + msg)
+      }
+    } else {
+      alert('Não foi possível localizar o endereço. Tente outro CEP.')
     }
     setCalculatingFee(false)
   }
@@ -429,6 +527,92 @@ export default function CheckoutPage() {
                      <button type="button" onClick={() => setSelectedAddressId('new')} className={cn("p-4 rounded-xl border border-dashed text-sm font-bold", selectedAddressId === 'new' ? "border-apollo-orange text-apollo-orange" : "border-white/20 text-white/40")}>+ Novo Endereço</button>
                    </div>
                  )}
+                 {showAddressAlert && !inlineCorrection.active && selectedAddressId !== 'new' && (
+                   <div className="mt-4 animate-in fade-in zoom-in slide-in-from-top-2">
+                     <Alert variant="destructive" className="bg-red-500/10 border-red-500/20">
+                       <AlertTriangle className="h-4 w-4" />
+                       <AlertDescription className="text-xs font-medium ml-2">
+                         Este endereço pode ter dificuldade na localização. A entrega pode ser prejudicada.
+                       </AlertDescription>
+                     </Alert>
+                     <div className="flex gap-2 mt-3">
+                       <button
+                         type="button"
+                         onClick={() => setShowAddressAlert(false)}
+                         className="flex-1 py-2 rounded-xl border border-white/10 text-xs font-bold text-white/60 hover:bg-white/5 transition-colors"
+                       >
+                         Continuar mesmo assim
+                       </button>
+                       <button
+                         type="button"
+                         onClick={() => setInlineCorrection(prev => ({ ...prev, active: true }))}
+                         className="flex-1 py-2 rounded-xl bg-apollo-orange text-white text-xs font-bold hover:bg-apollo-orange/90 transition-colors shadow-lg shadow-apollo-orange/20"
+                       >
+                         Tenho o CEP
+                       </button>
+                     </div>
+                   </div>
+                 )}
+
+                 {inlineCorrection.active && selectedAddressId !== 'new' && (
+                   <div className="mt-4 p-4 border border-[#2A2A2A] bg-[#141414] rounded-xl animate-in fade-in zoom-in">
+                     <h3 className="text-xs font-bold mb-3">Atualizar Endereço</h3>
+                     <div className="grid grid-cols-3 gap-2 mb-3">
+                       <div className="col-span-2 space-y-1">
+                          <label className="text-[10px] uppercase font-bold text-white/40 ml-1">CEP</label>
+                          <input
+                            value={inlineCorrection.zipcode}
+                            onChange={e => {
+                              const val = e.target.value.replace(/\D/g, '').slice(0, 8);
+                              const masked = val.length > 5 ? `${val.slice(0, 5)}-${val.slice(5)}` : val;
+                              setInlineCorrection(prev => ({ ...prev, zipcode: masked, street: '', neighborhood: '' }))
+                            }}
+                            onBlur={handleInlineCepBlur}
+                            className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-2 text-sm focus:border-apollo-orange outline-none"
+                            placeholder="00000-000"
+                          />
+                       </div>
+                       <div className="col-span-1 space-y-1">
+                          <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Nº</label>
+                          <input
+                            value={inlineCorrection.number}
+                            onChange={e => setInlineCorrection(prev => ({ ...prev, number: e.target.value }))}
+                            className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-2 text-sm text-center focus:border-apollo-orange outline-none"
+                            placeholder="123"
+                          />
+                       </div>
+                     </div>
+                     {(inlineCorrection.street || inlineCorrection.searching) && (
+                       <div className="mb-3">
+                         <div className="text-xs text-white/60 bg-[#0D0D0D] p-3 rounded-xl border border-[#2A2A2A]">
+                           {inlineCorrection.searching ? (
+                             <span className="flex items-center gap-2"><Loader2 size={12} className="animate-spin" /> Buscando...</span>
+                           ) : (
+                             `${inlineCorrection.street}, ${inlineCorrection.neighborhood}`
+                           )}
+                         </div>
+                       </div>
+                     )}
+                     <div className="flex gap-2 mt-2">
+                       <button
+                         type="button"
+                         onClick={() => setInlineCorrection(prev => ({ ...prev, active: false }))}
+                         className="flex-1 py-2 rounded-xl text-xs font-bold text-white/40 hover:text-white transition-colors"
+                       >
+                         Cancelar
+                       </button>
+                       <button
+                         type="button"
+                         onClick={handleUpdateAddress}
+                         disabled={!inlineCorrection.street || !inlineCorrection.number || calculatingFee}
+                         className="flex-1 py-2 rounded-xl bg-apollo-orange text-white text-xs font-bold disabled:opacity-50 flex justify-center items-center gap-2"
+                       >
+                         {calculatingFee ? <Loader2 size={14} className="animate-spin" /> : 'Confirmar'}
+                       </button>
+                     </div>
+                   </div>
+                 )}
+
 
                  {selectedAddressId === 'new' && (
                    <div className="space-y-4">
