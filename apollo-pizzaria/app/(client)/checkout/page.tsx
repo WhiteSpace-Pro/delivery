@@ -208,7 +208,7 @@ export default function CheckoutPage() {
       const checkLat = isNewAddress ? addressForm.lat : activeAddress?.lat;
       const checkLng = isNewAddress ? addressForm.lng : activeAddress?.lng;
 
-      if (checkLat == null || checkLng == null) {
+      if (!checkLat || !checkLng) {
         if (!showLocationAlert) {
           setShowLocationAlert(true);
           return;
@@ -497,7 +497,31 @@ return <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-cente
                      {calculatingFee && <div className="text-center text-xs text-apollo-orange animate-pulse">Calculando distância real...</div>}
                      {addressForm.fee > 0 && <div className="bg-apollo-orange/10 p-4 rounded-xl text-center text-apollo-orange font-bold text-sm border border-apollo-orange/20 animate-in zoom-in">Taxa de entrega: R$ {addressForm.fee.toFixed(2).replace('.', ',')}</div>}
 
-             {showLocationAlert && deliveryType === 'delivery' && (
+
+
+                     <label className="flex items-center gap-3 cursor-pointer mt-2">
+                       <input
+                         type="checkbox"
+                         id="shouldSave"
+                         checked={addressForm.shouldSave}
+                         onChange={e => setAddressForm(prev => ({ ...prev, shouldSave: e.target.checked }))}
+                         className="w-4 h-4 accent-apollo-orange"
+                       />
+                       <span className="text-xs font-medium text-white/60">Salvar este endereço para próximas entregas</span>
+                     </label>
+                   </div>
+                 )}
+               </div>
+             )}
+
+             {deliveryType === 'pickup' && (
+                <div className="bg-[#0D0D0D] p-6 rounded-2xl border border-dashed border-apollo-orange/30 text-center">
+                   <MapPin className="mx-auto text-apollo-orange mb-2" size={32} />
+                   <h3 className="font-bold text-sm">Retirada na Loja</h3>
+                   <p className="text-xs text-white/40">Av. Jequitinhonha, 218 - Vera Cruz</p>
+                </div>
+             )}
+          {showLocationAlert && deliveryType === 'delivery' && (
                <div className="mt-4 animate-in fade-in slide-in-from-top-2">
                  <Alert variant="destructive" className="bg-red-500/10 border-red-500/50 mb-4">
                    <AlertCircle className="h-4 w-4" />
@@ -541,29 +565,6 @@ return <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-cente
                    </button>
                  </div>
                </div>
-             )}
-
-                     <label className="flex items-center gap-3 cursor-pointer mt-2">
-                       <input
-                         type="checkbox"
-                         id="shouldSave"
-                         checked={addressForm.shouldSave}
-                         onChange={e => setAddressForm(prev => ({ ...prev, shouldSave: e.target.checked }))}
-                         className="w-4 h-4 accent-apollo-orange"
-                       />
-                       <span className="text-xs font-medium text-white/60">Salvar este endereço para próximas entregas</span>
-                     </label>
-                   </div>
-                 )}
-               </div>
-             )}
-
-             {deliveryType === 'pickup' && (
-                <div className="bg-[#0D0D0D] p-6 rounded-2xl border border-dashed border-apollo-orange/30 text-center">
-                   <MapPin className="mx-auto text-apollo-orange mb-2" size={32} />
-                   <h3 className="font-bold text-sm">Retirada na Loja</h3>
-                   <p className="text-xs text-white/40">Av. Jequitinhonha, 218 - Vera Cruz</p>
-                </div>
              )}
           </section>
 
