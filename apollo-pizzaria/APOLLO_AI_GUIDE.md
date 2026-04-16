@@ -7,10 +7,19 @@
 
 ---
 
+## VOCABULÁRIO PROIBIDO
+
+- **NUNCA usar o verbo "merge"** — substituir por "integrar à main-apollo" ou "enviar para produção"
+- **NUNCA sugerir integração automática** — a decisão é sempre de Francisco
+- **Deploy de produção** acontece apenas quando Francisco decide manualmente
+- Branches do Jules ficam como preview até aprovação explícita
+
+---
+
 ## DIVISÃO DE RESPONSABILIDADES
 
 ### ChatGPT faz:
-- Gerar prompts completos para o Jules (agente de código do Google)
+- Gerar prompts completos para o Jules
 - Escrever e refatorar código TypeScript/Next.js
 - Criar componentes, páginas e API routes
 - Implementar features do backlog
@@ -23,9 +32,46 @@
 - Consultar logs da Vercel (`get_runtime_logs`)
 - Verificar estado de deployments
 - Diagnosticar dados reais em produção
-- Validar se dados no banco estão consistentes com o esperado
+- Validar se dados no banco estão consistentes
 - Criar ou corrigir políticas de segurança no banco
 - Qualquer operação que exija acesso à infraestrutura real
+
+---
+
+## CABEÇALHO OBRIGATÓRIO — TODO PROMPT PARA O JULES
+
+**Sem exceção. Copiar exatamente:**
+
+```
+ANTES DE COMEÇAR: leia os seguintes arquivos na branch main-apollo:
+- apollo-pizzaria/APOLLO_CONTRACT.md
+- apollo-pizzaria/APOLLO_SPEC.md
+- apollo-pizzaria/APOLLO_PRD.md
+- apollo-pizzaria/APOLLO_ROADMAP.md
+- apollo-pizzaria/APOLLO_AI_GUIDE.md
+- apollo-pizzaria/JULES_RULES.md
+
+TYPESCRIPT OBRIGATÓRIO: Todo código novo deve ter tipagem explícita e correta.
+Nunca usar `any` sem justificativa. Nunca fazer cast com `as any` para contornar erros.
+Se o TypeScript reclamar, corrigir o tipo, não silenciar o erro.
+`npm run build` deve passar sem erros de TS antes de qualquer commit.
+
+ANTES DE IMPLEMENTAR: liste os arquivos que serão modificados e aguarde aprovação.
+Não comece a codar sem essa confirmação.
+```
+
+---
+
+## REGRAS QUE DEVEM APARECER EM TODO PROMPT
+
+- Branch de trabalho: sempre a partir de `main-apollo`
+- NUNCA alterar enums do banco sem documentar no APOLLO_CONTRACT.md
+- NUNCA remover triggers existentes
+- NUNCA usar `alert()`, `confirm()` ou `prompt()` nativos do browser
+- NUNCA usar o verbo "merge"
+- Usar apenas componentes Shadcn já existentes no projeto
+- `supabaseAdmin` apenas em API routes server-side, nunca no cliente
+- Endereço sem lat/lng: checkout exibe alerta leve (não bloqueia) — Kanban bloqueia atribuição
 
 ---
 
@@ -38,18 +84,28 @@ Sempre que estiver criando um prompt para o Jules e perceber que parte da tarefa
 - Diagnosticar um erro que pode ser de banco ou infraestrutura
 - Aplicar seeds ou dados de configuração
 
-→ **Crie um prompt separado com o título `[PARA O CLAUDE]`** antes ou depois do prompt do Jules, conforme o contexto exigir.
+→ **Crie um prompt separado com o título `[PARA O CLAUDE]`** antes ou depois do prompt do Jules.
 
 ---
 
 ## FORMATO DE PROMPT PARA O JULES
 
-Todo prompt para o Jules deve seguir esta estrutura:
-
 ```
-ANTES DE COMEÇAR: leia apollo-pizzaria/APOLLO_CONTRACT.md e apollo-pizzaria/JULES_RULES.md na branch main-apollo.
+ANTES DE COMEÇAR: leia os seguintes arquivos na branch main-apollo:
+- apollo-pizzaria/APOLLO_CONTRACT.md
+- apollo-pizzaria/APOLLO_SPEC.md
+- apollo-pizzaria/APOLLO_PRD.md
+- apollo-pizzaria/APOLLO_ROADMAP.md
+- apollo-pizzaria/APOLLO_AI_GUIDE.md
+- apollo-pizzaria/JULES_RULES.md
 
-TYPESCRIPT OBRIGATÓRIO: Todo código novo deve ter tipagem explícita e correta. Nunca usar `any` sem justificativa. Nunca fazer cast com `as any` para contornar erros. Se o TypeScript reclamar, corrigir o tipo, não silenciar o erro. `npm run build` deve passar sem erros de TS antes de qualquer commit.
+TYPESCRIPT OBRIGATÓRIO: Todo código novo deve ter tipagem explícita e correta.
+Nunca usar `any` sem justificativa. Nunca fazer cast com `as any` para contornar erros.
+Se o TypeScript reclamar, corrigir o tipo, não silenciar o erro.
+`npm run build` deve passar sem erros de TS antes de qualquer commit.
+
+ANTES DE IMPLEMENTAR: liste os arquivos que serão modificados e aguarde aprovação.
+Não comece a codar sem essa confirmação.
 
 [DESCRIÇÃO DA TAREFA]
 
@@ -66,8 +122,6 @@ Restrições:
 
 ## FORMATO DE PROMPT PARA O CLAUDE
 
-Quando identificar uma tarefa para o Claude, gere um bloco separado com este formato:
-
 ```
 [PARA O CLAUDE]
 
@@ -82,91 +136,33 @@ Tenant ID: 496c5a35-6843-4061-b3ab-159d15a0cbc6
 
 ---
 
-## EXEMPLOS DE DIVISÃO
-
-### Exemplo 1 — Nova feature com schema novo
-
-**ChatGPT gera dois prompts:**
-
-Prompt 1 → `[PARA O CLAUDE]`
-```
-[PARA O CLAUDE]
-
-Contexto: Vamos implementar o toggle de loja aberta/fechada.
-
-Tarefa:
-- Adicionar coluna `is_open boolean default true` na tabela `tenants`
-- Criar política RLS: apenas admin pode atualizar is_open
-- Confirmar que a coluna foi criada corretamente
-
-Projeto Supabase: ckshypkyylmzvhjhqrzf
-```
-
-Prompt 2 → Jules
-```
-ANTES DE COMEÇAR: leia apollo-pizzaria/APOLLO_CONTRACT.md e apollo-pizzaria/JULES_RULES.md na branch main-apollo.
-
-TYPESCRIPT OBRIGATÓRIO: ...
-
-Implementar toggle de loja aberta/fechada.
-A coluna `tenants.is_open` já foi adicionada ao banco pelo Claude.
-
-Arquivos a modificar:
-- app/api/tenant/toggle/route.ts (criar)
-- components/admin/StoreToggle.tsx (criar)
-- app/admin/settings/page.tsx (adicionar toggle)
-- app/(client)/cardapio/page.tsx (bloquear pedido se is_open=false)
-```
-
----
-
-### Exemplo 2 — Bug de dados
-
-**ChatGPT gera:**
-
-Prompt 1 → `[PARA O CLAUDE]`
-```
-[PARA O CLAUDE]
-
-Contexto: Meus Pedidos está vazio para o usuário mesmo havendo pedidos no banco.
-
-Tarefa:
-- Verificar se existem pedidos para o customer_id informado
-- Verificar se RLS está bloqueando a query do supabaseAdmin
-- Retornar o resultado da query: SELECT * FROM orders WHERE customer_id = '[uid]'
-
-Projeto Supabase: ckshypkyylmzvhjhqrzf
-```
-
-Prompt 2 → Jules (só depois que o Claude confirmar o diagnóstico)
-```
-[código do fix com base no diagnóstico do Claude]
-```
-
----
-
 ## IDENTIDADES E ACESSOS
 
 | Item | Valor |
 |---|---|
+| Repositório | WhiteSpace-Pro/delivery |
+| Root dir Vercel | apollo-pizzaria/ |
+| Branch principal | main-apollo |
 | Projeto Supabase | ckshypkyylmzvhjhqrzf |
 | Tenant ID | 496c5a35-6843-4061-b3ab-159d15a0cbc6 |
 | Vercel project | prj_aYq7UqSroKQVaPBjvAIfx649NsHG |
 | Vercel team | team_SEwhLhL6izfKoxiM15Nxs05G |
-| Repositório | franciscoqueirozdriver/delivery |
-| Root dir Vercel | apollo-pizzaria/ |
-| Branch principal | main-apollo |
 | URL produção | delivery-nu-weld.vercel.app |
 | Commit autorizado | franciscoqueirozdriver@gmail.com |
 
 ---
 
-## REFERÊNCIAS OBRIGATÓRIAS
+## ARQUIVOS DE REFERÊNCIA OBRIGATÓRIOS (main-apollo)
 
-Antes de criar qualquer prompt, leia:
-- `apollo-pizzaria/APOLLO_CONTRACT.md` — regras de negócio, enums, armadilhas conhecidas
-- `apollo-pizzaria/JULES_RULES.md` — regras operacionais do agente Jules
+| Arquivo | Conteúdo |
+|---|---|
+| `APOLLO_CONTRACT.md` | Regras de negócio, enums, armadilhas conhecidas |
+| `APOLLO_SPEC.md` | Schema do banco, stack, padrões de código |
+| `APOLLO_PRD.md` | Personas, user stories, requisitos funcionais |
+| `APOLLO_ROADMAP.md` | Sprints, status atual, workflow |
+| `APOLLO_AI_GUIDE.md` | Este arquivo — divisão de tarefas entre AIs |
+| `JULES_RULES.md` | Regras operacionais do agente Jules |
 
 ---
 
-*Última atualização: 15/04/2026*
+*Última atualização: 16/04/2026*
