@@ -198,6 +198,19 @@ export default function CheckoutPage() {
       alert("A loja está fechada.");
       return;
     }
+
+    if (deliveryType === 'delivery') {
+      const activeAddress = getActiveAddress();
+      const isNewAddress = selectedAddressId === 'new';
+
+      const checkLat = isNewAddress ? addressForm.lat : activeAddress?.lat;
+      const checkLng = isNewAddress ? addressForm.lng : activeAddress?.lng;
+
+      if (checkLat == null || checkLng == null) {
+        alert('Endereço inválido — por favor, revise e busque o CEP novamente para garantir que a localização foi encontrada.');
+        return;
+      }
+    }
     if (items.length === 0 || !user) return
 
     if (deliveryType === 'delivery' && selectedAddressId === 'new' && addressForm.fee === 0) {

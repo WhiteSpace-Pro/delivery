@@ -32,6 +32,13 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
   }, [])
 
   const handleConfirm = async () => {
+    if (order.delivery_type === 'delivery') {
+      const orderAddress = (order as any).addresses;
+      if (!order.delivery_address_id || !orderAddress || orderAddress.lat == null || orderAddress.lng == null) {
+        alert('Endereço inválido — entre em contato com o cliente antes de despachar.');
+        return;
+      }
+    }
     if (!selectedDriverId) return
     setIsSubmitting(true)
     try {
