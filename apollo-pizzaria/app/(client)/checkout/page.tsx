@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Check, Loader2, Camera, Copy, MapPin } from 'lucide-react'
+import { ArrowLeft, Check, Loader2, Camera, Copy, MapPin, AlertCircle } from 'lucide-react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { useCart } from '@/contexts/CartContext'
 import { useUser } from '@/hooks/useUser'
 import { createClient } from '@/lib/supabase/client'
@@ -38,6 +39,7 @@ export default function CheckoutPage() {
   const [selectedAddressId, setSelectedAddressId] = useState<string>('')
   const [savedAddresses, setSavedAddresses] = useState<Address[]>([])
   const [calculatingFee, setCalculatingFee] = useState(false)
+  const [showLocationAlert, setShowLocationAlert] = useState(false)
   const [loading, setLoading] = useState(false)
   const [isStoreOpen, setIsStoreOpen] = useState(true)
 
@@ -207,10 +209,17 @@ export default function CheckoutPage() {
       const checkLng = isNewAddress ? addressForm.lng : activeAddress?.lng;
 
       if (checkLat == null || checkLng == null) {
-        alert('Endereço inválido — por favor, revise e busque o CEP novamente para garantir que a localização foi encontrada.');
-        return;
+        if (!showLocationAlert) {
+          setShowLocationAlert(true);
+          return;
+        }
       }
     }
+
+    await processCheckout()
+  }
+
+  const processCheckout = async () => {
     if (items.length === 0 || !user) return
 
     if (deliveryType === 'delivery' && selectedAddressId === 'new' && addressForm.fee === 0) {
@@ -319,7 +328,8 @@ export default function CheckoutPage() {
     setTimeout(() => setCopiedBrCode(false), 2000)
   }
 
-  if (userLoading) return <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-center"><Loader2 size={40} className="text-apollo-orange animate-spin" /></div>
+  if (userLoading)
+return <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-center"><Loader2 size={40} className="text-apollo-orange animate-spin" /></div>
 
   if (showPixScreen) {
     return (
@@ -486,6 +496,53 @@ export default function CheckoutPage() {
 
                      {calculatingFee && <div className="text-center text-xs text-apollo-orange animate-pulse">Calculando distância real...</div>}
                      {addressForm.fee > 0 && <div className="bg-apollo-orange/10 p-4 rounded-xl text-center text-apollo-orange font-bold text-sm border border-apollo-orange/20 animate-in zoom-in">Taxa de entrega: R$ {addressForm.fee.toFixed(2).replace('.', ',')}</div>}
+
+             {showLocationAlert && deliveryType === 'delivery' && (
+               <div className="mt-4 animate-in fade-in slide-in-from-top-2">
+                 <Alert variant="destructive" className="bg-red-500/10 border-red-500/50 mb-4">
+                   <AlertCircle className="h-4 w-4" />
+                   <AlertDescription>
+                     Este endereço não possui localização confirmada. A entrega pode ser prejudicada.
+                   </AlertDescription>
+                 </Alert>
+                 <div className="flex gap-3">
+                   <button
+                     type="button"
+                     onClick={() => {
+                       setShowLocationAlert(false);
+                       setSelectedAddressId('new');
+                       setAddressForm(prev => ({
+                         ...prev,
+                         zipcode: '',
+                         street: '',
+                         number: '',
+                         complement: '',
+                         neighborhood: '',
+                         fee: 0,
+                         regionNotFound: false,
+                         shouldSave: false,
+                         lat: undefined as unknown as number,
+                         lng: undefined as unknown as number
+                       }));
+                     }}
+                     className="flex-1 py-3 text-sm font-bold bg-zinc-800 text-white rounded-xl hover:bg-zinc-700 transition-colors"
+                   >
+                     Digitar endereço novamente
+                   </button>
+                   <button
+                     type="button"
+                     onClick={(e) => {
+                       e.preventDefault();
+                       void processCheckout();
+                     }}
+                     className="flex-1 py-3 text-sm font-bold bg-apollo-orange text-white rounded-xl hover:bg-apollo-orange/90 transition-colors"
+                   >
+                     Continuar mesmo assim
+                   </button>
+                 </div>
+               </div>
+             )}
+
                      <label className="flex items-center gap-3 cursor-pointer mt-2">
                        <input
                          type="checkbox"
