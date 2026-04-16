@@ -48,15 +48,24 @@ export function ProblemModal({ orderId, deliveryId, position, onClose, onReporte
 
     try {
       let photoUrl: string | null = null
+      let storagePath: string | null = null
+      let storageBucket: string | null = null
+      let expiresAtStr: string | null = null
 
       if (photo) {
-        const path = `${TENANT_ID}/${orderId}/problem_${Date.now()}.jpg`
+        const path = `${TENANT_ID}/entregas/${orderId}/problem_${Date.now()}.jpg`
         const { error: uploadErr } = await supabase.storage
           .from('delivery-photos')
           .upload(path, photo, { contentType: photo.type, upsert: false })
         if (!uploadErr) {
           const { data } = supabase.storage.from('delivery-photos').getPublicUrl(path)
           photoUrl = data.publicUrl
+          storagePath = path
+          storageBucket = 'delivery-photos'
+
+          const expiresAt = new Date()
+          expiresAt.setDate(expiresAt.getDate() + 7)
+          expiresAtStr = expiresAt.toISOString()
         }
       }
 
@@ -68,8 +77,11 @@ export function ProblemModal({ orderId, deliveryId, position, onClose, onReporte
         lat: position?.lat ?? null,
         lng: position?.lng ?? null,
         photo_url: photoUrl,
-        observations: observations || null,
-        problem_type: problemType,
+        storage_bucket: storageBucket,
+        storage_path: storagePath,
+        expires_at: expiresAtStr,
+        problem_notes: observations || null,
+        problem_reason: problemType,
       } as never)
 
       // NOTE: does NOT change order status — admin handles it
