@@ -20,6 +20,7 @@ export function InvalidAddressHandler({ addressId, isAdmin, onFixed, onContinueA
   const [errorMsg, setErrorMsg] = useState('')
   const [results, setResults] = useState<any[]>([])
   const [selectedPoint, setSelectedPoint] = useState<any>(null)
+  const [saveToAccount, setSaveToAccount] = useState(currentAddress?.user_id != null)
 
   const [form, setForm] = useState({
     zipcode: currentAddress?.zipcode || '',
@@ -131,7 +132,7 @@ export function InvalidAddressHandler({ addressId, isAdmin, onFixed, onContinueA
     setLoading(true)
     setErrorMsg('')
     try {
-      await updateAddressLocation(addressId, {
+      const updatePayload: any = {
         street: form.street,
         neighborhood: form.neighborhood,
         city: form.city,
@@ -140,7 +141,13 @@ export function InvalidAddressHandler({ addressId, isAdmin, onFixed, onContinueA
         zipcode: form.zipcode,
         lat: point.lat,
         lng: point.lng
-      })
+      };
+
+      if (!isAdmin) {
+        updatePayload.user_id = saveToAccount ? currentAddress?.user_id : null;
+      }
+
+      await updateAddressLocation(addressId, updatePayload)
       onFixed()
     } catch (e) {
       console.error(e)
@@ -307,9 +314,45 @@ export function InvalidAddressHandler({ addressId, isAdmin, onFixed, onContinueA
         <div className="space-y-3 p-4 bg-zinc-900/50 border border-white/5 rounded-xl">
           <p className="text-sm font-bold text-white/90 mb-2">Confirme a localização no mapa:</p>
           <div className="rounded-xl overflow-hidden border border-white/10">
-             <TomTomMap driverLat={selectedPoint.lat} driverLng={selectedPoint.lng} destLat={selectedPoint.lat} destLng={selectedPoint.lng} />
+             <TomTomMap
+                driverLat={selectedPoint.lat}
+                driverLng={selectedPoint.lng}
+                destLat={selectedPoint.lat}
+                destLng={selectedPoint.lng}
+                draggable={true}
+                onDragEnd={async (lat, lng) => {
+                  try {
+                    const res = await fetch(`https://api.tomtom.com/search/2/reverseGeocode/${lat},${lng}.json?key=${process.env.NEXT_PUBLIC_TOMTOM_API_KEY}`);
+                    const data = await res.json();
+                    const address = data.addresses?.[0]?.address;
+                    if (address) {
+                      setSelectedPoint({
+                        lat,
+                        lng,
+                        displayName: [address.streetName, address.municipalitySubdivision || address.municipality, address.extendedPostalCode || address.postalCode].filter(Boolean).join(', ')
+                      });
+                    } else {
+                      setSelectedPoint({ ...selectedPoint, lat, lng });
+                    }
+                  } catch (e) {
+                    console.error(e);
+                    setSelectedPoint({ ...selectedPoint, lat, lng });
+                  }
+                }}
+              />
           </div>
           <p className="text-xs text-white/60 leading-relaxed break-words">{selectedPoint.displayName}</p>
+          {!isAdmin && (
+            <label className="flex items-center gap-3 cursor-pointer mt-2 bg-black/20 p-3 rounded-xl border border-white/5">
+              <input
+                type="checkbox"
+                checked={saveToAccount}
+                onChange={e => setSaveToAccount(e.target.checked)}
+                className="w-4 h-4 accent-apollo-orange"
+              />
+              <span className="text-xs font-medium text-white/80">Salvar este endereço na minha conta para uso futuro</span>
+            </label>
+          )}
           {errorMsg && <p className="text-xs font-bold text-red-500">{errorMsg}</p>}
           <div className="flex gap-2 pt-2">
             <button

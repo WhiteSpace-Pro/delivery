@@ -12,7 +12,8 @@ export async function updateAddressLocation(addressId: string, updates: {
   zipcode?: string,
   lat: number,
   lng: number,
-  delivery_fee?: number
+  delivery_fee?: number,
+  user_id?: string | null
 }) {
   const { error } = await supabaseAdmin
     .from('addresses')

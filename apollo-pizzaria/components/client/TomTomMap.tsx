@@ -18,6 +18,8 @@ interface TomTomMapProps {
   driverLng: number | null
   destLat?: number | null
   destLng?: number | null
+  draggable?: boolean
+  onDragEnd?: (lat: number, lng: number) => void
 }
 
 async function fetchRoutePoints(
@@ -57,7 +59,7 @@ function drawRouteOnMap(map: any, coordinates: [number, number][]) {
   }
 }
 
-export function TomTomMap({ driverLat, driverLng, destLat, destLng }: TomTomMapProps) {
+export function TomTomMap({ driverLat, driverLng, destLat, destLng, draggable, onDragEnd }: TomTomMapProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<any>(null)
   const driverMarkerRef = useRef<any>(null)
@@ -92,9 +94,16 @@ export function TomTomMap({ driverLat, driverLng, destLat, destLng }: TomTomMapP
 
         // Driver pin
         if (driverLat && driverLng) {
-          driverMarkerRef.current = new tt.Marker({ color: '#D4941A' })
+          driverMarkerRef.current = new tt.Marker({ color: '#D4941A', draggable })
             .setLngLat([driverLng, driverLat])
             .addTo(map)
+
+          if (draggable && onDragEnd) {
+            driverMarkerRef.current.on('dragend', () => {
+              const lngLat = driverMarkerRef.current.getLngLat()
+              onDragEnd(lngLat.lat, lngLat.lng)
+            })
+          }
 
           // Draw initial route
           const toLat = destLat ?? STORE_LAT
