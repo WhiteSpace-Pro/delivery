@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import { updateAddressLocation } from '@/app/(admin)/actions/address-actions'
+import { TomTomMap } from '@/components/client/TomTomMap'
 
 interface InvalidAddressHandlerProps {
   addressId: string
@@ -14,9 +15,11 @@ interface InvalidAddressHandlerProps {
 }
 
 export function InvalidAddressHandler({ addressId, isAdmin, onFixed, onContinueAnyway, currentAddress }: InvalidAddressHandlerProps) {
-  const [mode, setMode] = useState<'options' | 'cep' | 'manual'>('options')
+  const [mode, setMode] = useState<'options' | 'cep' | 'manual' | 'results' | 'confirm'>('options')
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
+  const [results, setResults] = useState<any[]>([])
+  const [selectedPoint, setSelectedPoint] = useState<any>(null)
 
   const [form, setForm] = useState({
     zipcode: currentAddress?.zipcode || '',
@@ -39,7 +42,6 @@ export function InvalidAddressHandler({ addressId, isAdmin, onFixed, onContinueA
     }
     setLoading(true)
     try {
-      // 1. Get address from CEP
       const viaCepRes = await fetch(`https://viacep.com.br/ws/${form.zipcode.replace(/\D/g, '')}/json/`)
       const viaCepData = await viaCepRes.json()
       if (viaCepData.erro) {
@@ -48,36 +50,36 @@ export function InvalidAddressHandler({ addressId, isAdmin, onFixed, onContinueA
         return
       }
 
-      // 2. Geocode
+      setForm(prev => ({
+        ...prev,
+        street: viaCepData.logradouro,
+        neighborhood: viaCepData.bairro,
+        city: viaCepData.localidade,
+        state: viaCepData.uf
+      }))
+
       const query = new URLSearchParams({
         street: viaCepData.logradouro,
         number: form.number,
         neighborhood: viaCepData.bairro,
         city: viaCepData.localidade,
-        state: viaCepData.uf
+        state: viaCepData.uf,
+        multi: 'true'
       })
       const geoRes = await fetch(`/api/geocode?${query.toString()}`)
       const geoData = await geoRes.json()
 
-      if (geoData.lat == null || geoData.lng == null) {
+      if (Array.isArray(geoData) && geoData.length > 0) {
+        if (geoData.length === 1) {
+          setSelectedPoint(geoData[0])
+          setMode('confirm')
+        } else {
+          setResults(geoData)
+          setMode('results')
+        }
+      } else {
         setErrorMsg('Não conseguimos localizar no mapa. Tente o endereço livre.')
-        setLoading(false)
-        return
       }
-
-      // Update DB
-      await updateAddressLocation(addressId, {
-        zipcode: form.zipcode,
-        street: viaCepData.logradouro,
-        neighborhood: viaCepData.bairro,
-        city: viaCepData.localidade,
-        state: viaCepData.uf,
-        number: form.number,
-        lat: geoData.lat,
-        lng: geoData.lng
-      })
-
-      onFixed()
     } catch (e) {
       console.error(e)
       setErrorMsg('Erro ao tentar atualizar o endereço')
@@ -99,28 +101,46 @@ export function InvalidAddressHandler({ addressId, isAdmin, onFixed, onContinueA
         number: form.number,
         neighborhood: form.neighborhood,
         city: form.city,
-        state: form.state
+        state: form.state,
+        multi: 'true'
       })
       const geoRes = await fetch(`/api/geocode?${query.toString()}`)
       const geoData = await geoRes.json()
 
-      if (geoData.lat == null || geoData.lng == null) {
+      if (Array.isArray(geoData) && geoData.length > 0) {
+        if (geoData.length === 1) {
+          setSelectedPoint(geoData[0])
+          setMode('confirm')
+        } else {
+          setResults(geoData)
+          setMode('results')
+        }
+      } else {
         setErrorMsg('Localização não encontrada. Verifique o nome da rua e bairro.')
-        setLoading(false)
-        return
       }
+    } catch (e) {
+      console.error(e)
+      setErrorMsg('Erro ao buscar o endereço')
+    } finally {
+      setLoading(false)
+    }
+  }
 
-      // Update DB
+
+  const handleConfirmSelection = async (point: any) => {
+    setLoading(true)
+    setErrorMsg('')
+    try {
       await updateAddressLocation(addressId, {
         street: form.street,
         neighborhood: form.neighborhood,
         city: form.city,
         state: form.state,
         number: form.number,
-        lat: geoData.lat,
-        lng: geoData.lng
+        zipcode: form.zipcode,
+        lat: point.lat,
+        lng: point.lng
       })
-
       onFixed()
     } catch (e) {
       console.error(e)
@@ -254,6 +274,73 @@ export function InvalidAddressHandler({ addressId, isAdmin, onFixed, onContinueA
           </div>
         </div>
       )}
+
+
+      {mode === 'results' && (
+        <div className="space-y-3 p-4 bg-zinc-900/50 border border-white/5 rounded-xl">
+          <p className="text-sm font-bold text-white/90">Foram encontrados múltiplos resultados. Selecione o correto:</p>
+          <div className="space-y-2 max-h-48 overflow-y-auto">
+            {results.map((r, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => { setSelectedPoint(r); setMode('confirm'); }}
+                className="w-full text-left p-3 rounded-xl border border-white/10 hover:border-apollo-orange hover:bg-white/5 transition-all text-xs"
+              >
+                {r.displayName}
+              </button>
+            ))}
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button
+              type="button"
+              onClick={() => { setMode('manual'); setResults([]); }}
+              className="flex-1 py-2 text-xs font-bold bg-zinc-800 text-white rounded-lg hover:bg-zinc-700"
+            >
+              Voltar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mode === 'confirm' && selectedPoint && (
+        <div className="space-y-3 p-4 bg-zinc-900/50 border border-white/5 rounded-xl">
+          <p className="text-sm font-bold text-white/90 mb-2">Confirme a localização no mapa:</p>
+          <div className="rounded-xl overflow-hidden border border-white/10">
+             <TomTomMap driverLat={selectedPoint.lat} driverLng={selectedPoint.lng} destLat={selectedPoint.lat} destLng={selectedPoint.lng} />
+          </div>
+          <p className="text-xs text-white/60 leading-relaxed break-words">{selectedPoint.displayName}</p>
+          {errorMsg && <p className="text-xs font-bold text-red-500">{errorMsg}</p>}
+          <div className="flex gap-2 pt-2">
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => {
+                // If there were multiple results, go back to results list, else go to manual form
+                if (results.length > 1) {
+                  setMode('results');
+                } else {
+                  setMode('manual');
+                  setResults([]);
+                }
+                setSelectedPoint(null);
+              }}
+              className="flex-1 py-2 text-xs font-bold bg-zinc-800 text-white rounded-lg hover:bg-zinc-700 disabled:opacity-50"
+            >
+              Não, tentar novamente
+            </button>
+            <button
+              type="button"
+              disabled={loading}
+              onClick={() => handleConfirmSelection(selectedPoint)}
+              className="flex-1 py-2 text-xs font-bold bg-apollo-orange text-white rounded-lg hover:bg-apollo-orange/90 disabled:opacity-50 flex items-center justify-center"
+            >
+              {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : 'Sim, é esse'}
+            </button>
+          </div>
+        </div>
+      )}
+
     </div>
   )
 }

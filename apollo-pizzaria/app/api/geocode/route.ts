@@ -7,6 +7,7 @@ export async function GET(req: NextRequest) {
   const neighborhood = searchParams.get('neighborhood') || ''
   const city = searchParams.get('city') || ''
   const state = searchParams.get('state') || ''
+  const multi = searchParams.get('multi') === 'true'
 
   // Require at least neighborhood + city to avoid geocoding garbage
   if (!neighborhood && !street) {
@@ -27,6 +28,13 @@ export async function GET(req: NextRequest) {
       const res = await fetch(url)
       const data = await res.json()
       if (data.status === 'OK' && data.results?.length > 0) {
+        if (multi) {
+          return NextResponse.json(data.results.map((r: any) => ({
+            lat: r.geometry.location.lat,
+            lng: r.geometry.location.lng,
+            displayName: r.formatted_address
+          })))
+        }
         const { lat, lng } = data.results[0].geometry.location
         console.log('[geocode] resultado (Google):', lat, lng)
         return NextResponse.json({ lat, lng })
@@ -38,7 +46,7 @@ export async function GET(req: NextRequest) {
 
   // Fallback: Nominatim (OpenStreetMap) — no key required
   try {
-    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(queryString)}&format=json&limit=1&countrycodes=br`
+    const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(queryString)}&format=json&limit=${multi ? 5 : 1}&countrycodes=br`
     const res = await fetch(url, {
       headers: {
         'User-Agent': 'ApolloDelivery/1.0',
@@ -47,6 +55,13 @@ export async function GET(req: NextRequest) {
     })
     const data = await res.json()
     if (data?.length > 0) {
+      if (multi) {
+        return NextResponse.json(data.map((d: any) => ({
+          lat: parseFloat(d.lat),
+          lng: parseFloat(d.lon),
+          displayName: d.display_name
+        })))
+      }
       const lat = parseFloat(data[0].lat)
       const lng = parseFloat(data[0].lon)
       console.log('[geocode] resultado (Nominatim):', lat, lng)
@@ -58,11 +73,18 @@ export async function GET(req: NextRequest) {
       const fallbackQuery = [neighborhood, city, state, 'Brasil'].filter(Boolean).join(', ')
       console.log('[geocode] retry com bairro:', fallbackQuery)
       const res2 = await fetch(
-        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fallbackQuery)}&format=json&limit=1&countrycodes=br`,
+        `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(fallbackQuery)}&format=json&limit=${multi ? 5 : 1}&countrycodes=br`,
         { headers: { 'User-Agent': 'ApolloDelivery/1.0', 'Accept-Language': 'pt-BR,pt;q=0.9' } }
       )
       const data2 = await res2.json()
       if (data2?.length > 0) {
+        if (multi) {
+          return NextResponse.json(data2.map((d: any) => ({
+            lat: parseFloat(d.lat),
+            lng: parseFloat(d.lon),
+            displayName: d.display_name
+          })))
+        }
         const lat = parseFloat(data2[0].lat)
         const lng = parseFloat(data2[0].lon)
         console.log('[geocode] resultado fallback (bairro):', lat, lng)
