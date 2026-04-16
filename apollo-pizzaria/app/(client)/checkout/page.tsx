@@ -398,8 +398,13 @@ export default function CheckoutPage() {
                       const val = e.target.value.replace(/\D/g, '').slice(0, 11);
                       let masked = val;
                       if (val.length > 2) masked = `(${val.slice(0, 2)}) ${val.slice(2)}`;
-                      if (val.length > 6) masked = `(${val.slice(0, 2)}) ${val.slice(2, 6)}-${val.slice(6)}`;
-                      if (val.length > 10) masked = `(${val.slice(0, 2)}) ${val.slice(2, 7)}-${val.slice(7)}`;
+                      if (val.length > 6) {
+                        if (val.length <= 10) {
+                          masked = `(${val.slice(0, 2)}) ${val.slice(2, 6)}-${val.slice(6)}`;
+                        } else {
+                          masked = `(${val.slice(0, 2)}) ${val.slice(2, 7)}-${val.slice(7)}`;
+                        }
+                      }
                       setCustomerPhone(masked);
                     }}
                     className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm focus:border-apollo-orange outline-none transition-all"
