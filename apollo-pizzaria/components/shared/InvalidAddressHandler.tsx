@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { Alert, AlertDescription } from '@/components/ui/alert'
 import { AlertCircle, Loader2 } from 'lucide-react'
 import { updateAddressLocation } from '@/app/(admin)/actions/address-actions'
@@ -9,7 +9,7 @@ import { TomTomMap } from '@/components/client/TomTomMap'
 interface InvalidAddressHandlerProps {
   addressId: string
   isAdmin: boolean
-  onFixed: () => void
+  onFixed: (data?: any) => void
   onContinueAnyway?: (e?: any) => void
   currentAddress?: any
 }
@@ -30,6 +30,33 @@ export function InvalidAddressHandler({ addressId, isAdmin, onFixed, onContinueA
     city: currentAddress?.city || 'Belo Horizonte',
     state: currentAddress?.state || 'MG'
   })
+
+    useEffect(() => {
+    if (mode === 'confirm' && selectedPoint && !selectedPoint.street) {
+      const fetchReverse = async () => {
+        try {
+          const res = await fetch(`https://api.tomtom.com/search/2/reverseGeocode/${selectedPoint.lat},${selectedPoint.lng}.json?key=${process.env.NEXT_PUBLIC_TOMTOM_API_KEY}`);
+          const data = await res.json();
+          const address = data.addresses?.[0]?.address;
+          if (address) {
+            setSelectedPoint((prev: any) => ({
+              ...prev,
+              displayName: [address.streetName, address.streetNumber, address.municipalitySubdivision || address.municipality, address.extendedPostalCode || address.postalCode].filter(Boolean).join(', '),
+              street: address.streetName || form.street,
+              number: address.streetNumber || form.number,
+              neighborhood: address.municipalitySubdivision || address.municipality || form.neighborhood,
+              zipcode: address.extendedPostalCode || address.postalCode || form.zipcode,
+              city: address.municipality || form.city,
+              state: address.countrySubdivision || form.state
+            }));
+          }
+        } catch (e) {
+          console.error(e);
+        }
+      };
+      fetchReverse();
+    }
+  }, [mode, selectedPoint, form]);
 
   const handleCEP = async () => {
     setErrorMsg('')
@@ -133,12 +160,12 @@ export function InvalidAddressHandler({ addressId, isAdmin, onFixed, onContinueA
     setErrorMsg('')
     try {
       const updatePayload: any = {
-        street: form.street,
-        neighborhood: form.neighborhood,
-        city: form.city,
-        state: form.state,
-        number: form.number,
-        zipcode: form.zipcode,
+        street: point.street || form.street,
+        neighborhood: point.neighborhood || form.neighborhood,
+        city: point.city || form.city,
+        state: point.state || form.state,
+        number: point.number || form.number,
+        zipcode: point.zipcode || form.zipcode,
         lat: point.lat,
         lng: point.lng
       };
@@ -148,7 +175,7 @@ export function InvalidAddressHandler({ addressId, isAdmin, onFixed, onContinueA
       }
 
       await updateAddressLocation(addressId, updatePayload)
-      onFixed()
+      onFixed(updatePayload)
     } catch (e) {
       console.error(e)
       setErrorMsg('Erro ao tentar atualizar o endereço')
@@ -326,10 +353,22 @@ export function InvalidAddressHandler({ addressId, isAdmin, onFixed, onContinueA
                     const data = await res.json();
                     const address = data.addresses?.[0]?.address;
                     if (address) {
+                      const newStreet = address.streetName || form.street;
+                      const newNeighborhood = address.municipalitySubdivision || address.municipality || form.neighborhood;
+                      const newZipcode = address.extendedPostalCode || address.postalCode || form.zipcode;
+                      const newNumber = address.streetNumber || form.number;
+                      const newCity = address.municipality || form.city;
+                      const newState = address.countrySubdivision || form.state;
                       setSelectedPoint({
                         lat,
                         lng,
-                        displayName: [address.streetName, address.municipalitySubdivision || address.municipality, address.extendedPostalCode || address.postalCode].filter(Boolean).join(', ')
+                        displayName: [newStreet, newNumber, newNeighborhood, newZipcode].filter(Boolean).join(', '),
+                        street: newStreet,
+                        number: newNumber,
+                        neighborhood: newNeighborhood,
+                        zipcode: newZipcode,
+                        city: newCity,
+                        state: newState
                       });
                     } else {
                       setSelectedPoint({ ...selectedPoint, lat, lng });

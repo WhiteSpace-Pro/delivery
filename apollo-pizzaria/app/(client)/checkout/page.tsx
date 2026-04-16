@@ -39,7 +39,8 @@ export default function CheckoutPage() {
   const [selectedAddressId, setSelectedAddressId] = useState<string>('')
   const [savedAddresses, setSavedAddresses] = useState<Address[]>([])
   const [calculatingFee, setCalculatingFee] = useState(false)
-  const [showLocationAlert, setShowLocationAlert] = useState(false)
+  const [allowProceedWithInvalidLocation, setAllowProceedWithInvalidLocation] = useState(false)
+
   const [loading, setLoading] = useState(false)
   const [isStoreOpen, setIsStoreOpen] = useState(true)
 
@@ -162,6 +163,8 @@ export default function CheckoutPage() {
     }
   }
 
+  const resetInvalidLocationFlag = () => { setAllowProceedWithInvalidLocation(false); }
+
   const handleCalculateFee = async () => {
     if (!addressForm.street || !addressForm.number || !addressForm.neighborhood) {
       alert('Preencha rua, número e bairro para calcular o frete.')
@@ -194,6 +197,14 @@ export default function CheckoutPage() {
   const deliveryFee = deliveryType === 'pickup' ? 0 : (selectedAddressId === 'new' ? addressForm.fee : (getActiveAddress()?.delivery_fee || 0))
   const finalTotal = subtotal + deliveryFee
 
+
+  const activeAddressForValidation = getActiveAddress();
+  const checkLat = selectedAddressId === 'new' ? addressForm.lat : activeAddressForValidation?.lat;
+  const checkLng = selectedAddressId === 'new' ? addressForm.lng : activeAddressForValidation?.lng;
+  const isInvalidLocation = deliveryType === 'delivery' && (!checkLat || !checkLng);
+  const isFinalizarDisabled = loading || !isStoreOpen || (isInvalidLocation && !allowProceedWithInvalidLocation) || (deliveryType === 'delivery' && selectedAddressId === 'new' && addressForm.fee === 0);
+
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!isStoreOpen) {
@@ -202,18 +213,11 @@ export default function CheckoutPage() {
     }
 
     if (deliveryType === 'delivery') {
-      const activeAddress = getActiveAddress();
-      const isNewAddress = selectedAddressId === 'new';
 
-      const checkLat = isNewAddress ? addressForm.lat : activeAddress?.lat;
-      const checkLng = isNewAddress ? addressForm.lng : activeAddress?.lng;
 
-      if (!checkLat || !checkLng) {
-        if (!showLocationAlert) {
-          setShowLocationAlert(true);
-          return;
-        }
-      }
+
+
+
     }
 
     await processCheckout()
@@ -490,7 +494,7 @@ return <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-cente
                      </div>
                      <div className="space-y-1">
                         <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Bairro</label>
-                        <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Bairro" value={addressForm.neighborhood} readOnly={!addressForm.regionNotFound} onChange={e => setAddressForm(prev => ({...prev, neighborhood: e.target.value}))} />
+                        <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Bairro" value={addressForm.neighborhood} readOnly={!addressForm.regionNotFound} onChange={e => { resetInvalidLocationFlag(); setAddressForm(prev => ({...prev, neighborhood: e.target.value})); }} />
                      </div>
 
 
@@ -521,23 +525,6 @@ return <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-cente
                    <p className="text-xs text-white/40">Av. Jequitinhonha, 218 - Vera Cruz</p>
                 </div>
              )}
-          {showLocationAlert && deliveryType === 'delivery' && (
-             <InvalidAddressHandler
-               addressId={selectedAddressId !== 'new' ? selectedAddressId : 'new'}
-               isAdmin={false}
-               currentAddress={getActiveAddress() || addressForm}
-               onFixed={() => {
-                 setShowLocationAlert(false);
-                 // Just proceed to checkout as it's now fixed
-                 void processCheckout();
-               }}
-               onContinueAnyway={(e) => {
-                 // The component triggers this as a regular click handler.
-                 e?.preventDefault?.();
-                 void processCheckout();
-               }}
-             />
-           )}
           </section>
 
           <section className="bg-[#1C1C1C] rounded-2xl p-6 border border-[#2A2A2A]">
@@ -576,7 +563,63 @@ return <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-cente
                    <span className="text-3xl font-playfair font-bold text-apollo-orange italic">R$ {finalTotal.toFixed(2).replace('.', ',')}</span>
                 </div>
              </div>
-             <button type="submit" disabled={loading || !isStoreOpen} className="w-full bg-apollo-orange h-16 rounded-xl font-bold text-lg shadow-xl shadow-apollo-orange/20 transition-all disabled:opacity-50 active:scale-[0.98]">
+
+             {isInvalidLocation && !allowProceedWithInvalidLocation && (
+               <div className="mb-6">
+                 <InvalidAddressHandler
+                   addressId={selectedAddressId !== 'new' ? selectedAddressId : 'new'}
+                   isAdmin={false}
+                   currentAddress={activeAddressForValidation || addressForm}
+                   onFixed={async (fixedData) => {
+                     // Reverse-geocoded data returned successfully.
+
+                     if (selectedAddressId !== 'new') {
+                        // Refresh the address via API or just mutate locally then calculate fee.
+                        setSavedAddresses(prev => prev.map(a => a.id === selectedAddressId ? { ...a, ...fixedData } : a));
+                        setCalculatingFee(true);
+                        try {
+                          const distanceRes = await fetch(`/api/eta?lat=${fixedData.lat}&lng=${fixedData.lng}`);
+                          const { distanceKm } = await distanceRes.json();
+                          if (distanceKm) {
+                             const newFee = Math.ceil(distanceKm) * 1.00;
+                             setSavedAddresses(prev => prev.map(a => a.id === selectedAddressId ? { ...a, delivery_fee: newFee } : a));
+                          }
+                        } catch (e) {
+                          console.error(e);
+                        }
+                        setCalculatingFee(false);
+                     } else {
+                        // For 'new', we update the form and call calculate fee logic
+                        setAddressForm(prev => ({
+                          ...prev,
+                          ...fixedData,
+                          regionNotFound: false
+                        }));
+                        setCalculatingFee(true);
+                        try {
+                          const distanceRes = await fetch(`/api/eta?lat=${fixedData.lat}&lng=${fixedData.lng}`);
+                          const { distanceKm } = await distanceRes.json();
+                          if (distanceKm) {
+                             setAddressForm(prev => ({ ...prev, fee: Math.ceil(distanceKm) * 1.00 }));
+                          } else {
+                             setAddressForm(prev => ({ ...prev, fee: 0, regionNotFound: true }));
+                          }
+                        } catch (e) {
+                          console.error(e);
+                        }
+                        setCalculatingFee(false);
+                     }
+                   }}
+                   onContinueAnyway={(e) => {
+                     e?.preventDefault?.();
+                     setAllowProceedWithInvalidLocation(true);
+
+                   }}
+                 />
+               </div>
+             )}
+
+             <button type="submit" disabled={isFinalizarDisabled} className="w-full bg-apollo-orange h-16 rounded-xl font-bold text-lg shadow-xl shadow-apollo-orange/20 transition-all disabled:opacity-50 active:scale-[0.98]">
                {loading ? <Loader2 className="animate-spin mx-auto" /> : 'Finalizar Pedido'}
              </button>
           </div>
