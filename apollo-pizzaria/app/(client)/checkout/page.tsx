@@ -70,6 +70,7 @@ export default function CheckoutPage() {
   const [changeFor, setChangeFor] = useState('')
 
   const [showAddressAlert, setShowAddressAlert] = useState(false)
+  const [bypassedAddressAlert, setBypassedAddressAlert] = useState(false)
   const [inlineCorrection, setInlineCorrection] = useState({
     active: false,
     zipcode: '',
@@ -196,6 +197,7 @@ export default function CheckoutPage() {
 
     useEffect(() => {
     if (deliveryType === 'delivery' && selectedAddressId && selectedAddressId !== 'new') {
+      setBypassedAddressAlert(false)
       const activeAddress = savedAddresses.find(a => a.id === selectedAddressId)
       if (activeAddress) {
         if (!activeAddress.lat || !activeAddress.lng || (activeAddress.lat === 0 && activeAddress.lng === 0)) {
@@ -287,7 +289,10 @@ export default function CheckoutPage() {
     return savedAddresses.find(a => a.id === selectedAddressId)
   }
 
-  const deliveryFee = deliveryType === 'pickup' ? 0 : (selectedAddressId === 'new' ? addressForm.fee : (getActiveAddress()?.delivery_fee || 0))
+    const activeAddressForFee = getActiveAddress()
+  const isInvalidCoords = activeAddressForFee && (!activeAddressForFee.lat || !activeAddressForFee.lng || (activeAddressForFee.lat === 0 && activeAddressForFee.lng === 0))
+  const calculatedDeliveryFee = deliveryType === 'pickup' ? 0 : (selectedAddressId === 'new' ? addressForm.fee : (isInvalidCoords && bypassedAddressAlert ? 10 : (activeAddressForFee?.delivery_fee || 0)))
+  const deliveryFee = calculatedDeliveryFee
   const finalTotal = subtotal + deliveryFee
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -527,7 +532,70 @@ export default function CheckoutPage() {
                      <button type="button" onClick={() => setSelectedAddressId('new')} className={cn("p-4 rounded-xl border border-dashed text-sm font-bold", selectedAddressId === 'new' ? "border-apollo-orange text-apollo-orange" : "border-white/20 text-white/40")}>+ Novo Endereço</button>
                    </div>
                  )}
-                 {showAddressAlert && !inlineCorrection.active && selectedAddressId !== 'new' && (
+
+
+
+                 {selectedAddressId === 'new' && (
+                   <div className="space-y-4">
+                     <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-white/40 ml-1">CEP</label>
+                        <input value={addressForm.zipcode} onChange={e => {
+                          const val = e.target.value.replace(/\D/g, '').slice(0, 8);
+                          const masked = val.length > 5 ? `${val.slice(0, 5)}-${val.slice(5)}` : val;
+                          setAddressForm(prev => ({
+                            ...prev,
+                            zipcode: masked,
+                            street: '',
+                            number: '',
+                            neighborhood: '',
+                            fee: 0,
+                            lat: 0,
+                            lng: 0
+                          }));
+                        }} onBlur={handleCEPBlur} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="00000-000" />
+                        {addressForm.regionNotFound && <p className="text-[10px] text-apollo-orange font-bold mt-1">CEP não encontrado. Preencha o endereço manualmente.</p>}
+                     </div>
+                     <div className="grid grid-cols-4 gap-2">
+                        <div className="col-span-3 space-y-1">
+                           <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Rua</label>
+                           <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Rua" value={addressForm.street} readOnly={!addressForm.regionNotFound} onChange={e => setAddressForm(prev => ({...prev, street: e.target.value}))} />
+                        </div>
+                        <div className="col-span-1 space-y-1">
+                           <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Nº</label>
+                           <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm text-center" placeholder="123" value={addressForm.number} onChange={e => setAddressForm(prev => ({...prev, number: e.target.value, fee: 0}))} onBlur={handleCalculateFee} />
+                        </div>
+                     </div>
+                     <div className="space-y-1">
+                        <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Bairro</label>
+                        <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Bairro" value={addressForm.neighborhood} readOnly={!addressForm.regionNotFound} onChange={e => setAddressForm(prev => ({...prev, neighborhood: e.target.value}))} />
+                     </div>
+
+
+                     {calculatingFee && <div className="text-center text-xs text-apollo-orange animate-pulse">Calculando distância real...</div>}
+                     {addressForm.fee > 0 && <div className="bg-apollo-orange/10 p-4 rounded-xl text-center text-apollo-orange font-bold text-sm border border-apollo-orange/20 animate-in zoom-in">Taxa de entrega: R$ {addressForm.fee.toFixed(2).replace('.', ',')}</div>}
+                     <label className="flex items-center gap-3 cursor-pointer mt-2">
+                       <input
+                         type="checkbox"
+                         id="shouldSave"
+                         checked={addressForm.shouldSave}
+                         onChange={e => setAddressForm(prev => ({ ...prev, shouldSave: e.target.checked }))}
+                         className="w-4 h-4 accent-apollo-orange"
+                       />
+                       <span className="text-xs font-medium text-white/60">Salvar este endereço para próximas entregas</span>
+                     </label>
+                   </div>
+                 )}
+               </div>
+             )}
+
+             {deliveryType === 'pickup' && (
+                <div className="bg-[#0D0D0D] p-6 rounded-2xl border border-dashed border-apollo-orange/30 text-center">
+                   <MapPin className="mx-auto text-apollo-orange mb-2" size={32} />
+                   <h3 className="font-bold text-sm">Retirada na Loja</h3>
+                   <p className="text-xs text-white/40">Av. Jequitinhonha, 218 - Vera Cruz</p>
+                </div>
+             )}
+          {showAddressAlert && !inlineCorrection.active && selectedAddressId !== 'new' && (
                    <div className="mt-4 animate-in fade-in zoom-in slide-in-from-top-2">
                      <Alert variant="destructive" className="bg-red-500/10 border-red-500/20">
                        <AlertTriangle className="h-4 w-4" />
@@ -538,7 +606,7 @@ export default function CheckoutPage() {
                      <div className="flex gap-2 mt-3">
                        <button
                          type="button"
-                         onClick={() => setShowAddressAlert(false)}
+                         onClick={() => { setShowAddressAlert(false); setBypassedAddressAlert(true); }}
                          className="flex-1 py-2 rounded-xl border border-white/10 text-xs font-bold text-white/60 hover:bg-white/5 transition-colors"
                        >
                          Continuar mesmo assim
@@ -612,68 +680,6 @@ export default function CheckoutPage() {
                      </div>
                    </div>
                  )}
-
-
-                 {selectedAddressId === 'new' && (
-                   <div className="space-y-4">
-                     <div className="space-y-1">
-                        <label className="text-[10px] uppercase font-bold text-white/40 ml-1">CEP</label>
-                        <input value={addressForm.zipcode} onChange={e => {
-                          const val = e.target.value.replace(/\D/g, '').slice(0, 8);
-                          const masked = val.length > 5 ? `${val.slice(0, 5)}-${val.slice(5)}` : val;
-                          setAddressForm(prev => ({
-                            ...prev,
-                            zipcode: masked,
-                            street: '',
-                            number: '',
-                            neighborhood: '',
-                            fee: 0,
-                            lat: 0,
-                            lng: 0
-                          }));
-                        }} onBlur={handleCEPBlur} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="00000-000" />
-                        {addressForm.regionNotFound && <p className="text-[10px] text-apollo-orange font-bold mt-1">CEP não encontrado. Preencha o endereço manualmente.</p>}
-                     </div>
-                     <div className="grid grid-cols-4 gap-2">
-                        <div className="col-span-3 space-y-1">
-                           <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Rua</label>
-                           <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Rua" value={addressForm.street} readOnly={!addressForm.regionNotFound} onChange={e => setAddressForm(prev => ({...prev, street: e.target.value}))} />
-                        </div>
-                        <div className="col-span-1 space-y-1">
-                           <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Nº</label>
-                           <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm text-center" placeholder="123" value={addressForm.number} onChange={e => setAddressForm(prev => ({...prev, number: e.target.value, fee: 0}))} onBlur={handleCalculateFee} />
-                        </div>
-                     </div>
-                     <div className="space-y-1">
-                        <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Bairro</label>
-                        <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Bairro" value={addressForm.neighborhood} readOnly={!addressForm.regionNotFound} onChange={e => setAddressForm(prev => ({...prev, neighborhood: e.target.value}))} />
-                     </div>
-
-
-                     {calculatingFee && <div className="text-center text-xs text-apollo-orange animate-pulse">Calculando distância real...</div>}
-                     {addressForm.fee > 0 && <div className="bg-apollo-orange/10 p-4 rounded-xl text-center text-apollo-orange font-bold text-sm border border-apollo-orange/20 animate-in zoom-in">Taxa de entrega: R$ {addressForm.fee.toFixed(2).replace('.', ',')}</div>}
-                     <label className="flex items-center gap-3 cursor-pointer mt-2">
-                       <input
-                         type="checkbox"
-                         id="shouldSave"
-                         checked={addressForm.shouldSave}
-                         onChange={e => setAddressForm(prev => ({ ...prev, shouldSave: e.target.checked }))}
-                         className="w-4 h-4 accent-apollo-orange"
-                       />
-                       <span className="text-xs font-medium text-white/60">Salvar este endereço para próximas entregas</span>
-                     </label>
-                   </div>
-                 )}
-               </div>
-             )}
-
-             {deliveryType === 'pickup' && (
-                <div className="bg-[#0D0D0D] p-6 rounded-2xl border border-dashed border-apollo-orange/30 text-center">
-                   <MapPin className="mx-auto text-apollo-orange mb-2" size={32} />
-                   <h3 className="font-bold text-sm">Retirada na Loja</h3>
-                   <p className="text-xs text-white/40">Av. Jequitinhonha, 218 - Vera Cruz</p>
-                </div>
-             )}
           </section>
 
           <section className="bg-[#1C1C1C] rounded-2xl p-6 border border-[#2A2A2A]">
