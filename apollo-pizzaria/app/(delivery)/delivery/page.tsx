@@ -25,6 +25,7 @@ interface DeliveryOrder {
     street: string
     number: string
     neighborhood: string
+    city?: string
     complement: string | null
     lat: number | null
     lng: number | null
@@ -38,6 +39,7 @@ export default function DeliveryPage() {
   const [toggleLoading, setToggleLoading] = useState(false)
   const [orders, setOrders] = useState<DeliveryOrder[]>([])
   const [confirmOrder, setConfirmOrder] = useState<DeliveryOrder | null>(null)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   const firstOrder = orders[0]
   const { position } = useGPSTracking({
@@ -102,6 +104,49 @@ export default function DeliveryPage() {
     }
   }, [isOnline, fetchOrders])
 
+
+
+  const getAddressDisplay = (order: DeliveryOrder) => {
+    if (!order.addresses) return 'Belo Horizonte, MG';
+    const parts = [order.addresses.street, order.addresses.number].filter(Boolean);
+    if (parts.length > 0) return parts.join(', ');
+    return 'Belo Horizonte, MG';
+  };
+
+  const getNeighborhoodDisplay = (order: DeliveryOrder) => {
+    return order.addresses?.neighborhood || '';
+  };
+
+
+
+
+  const handleNavigate = (order: DeliveryOrder) => {
+    if (order.addresses?.lat != null && order.addresses?.lng != null) {
+      window.open(`https://www.google.com/maps/dir/?api=1&destination=${order.addresses.lat},${order.addresses.lng}&travelmode=driving`, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    if (order.addresses) {
+      const parts = [
+        order.addresses.street,
+        order.addresses.number,
+        order.addresses.neighborhood,
+        order.addresses.city || 'Belo Horizonte',
+        'MG'
+      ].filter(Boolean);
+
+      if (parts.length > 2) { // Ensure at least something meaningful is there
+        const destination = encodeURIComponent(parts.join(', '));
+        window.open(`https://www.google.com/maps/dir/?api=1&destination=${destination}&travelmode=driving`, '_blank', 'noopener,noreferrer');
+        return;
+      }
+    }
+
+    setToastMessage('Endereço não disponível');
+    setTimeout(() => setToastMessage(null), 3000);
+  };
+
+
   const handleToggleOnline = async () => {
     if (!user) return
     setToggleLoading(true)
@@ -143,8 +188,8 @@ export default function DeliveryPage() {
                 <div className="flex items-start gap-3">
                   <MapPin className="text-apollo-orange mt-1 shrink-0" size={20} />
                   <div>
-                      <p className="font-bold text-white/90">{order.addresses?.street}, {order.addresses?.number}</p>
-                      <p className="text-sm text-white/50">{order.addresses?.neighborhood}</p>
+                      <p className="font-bold text-white/90">{getAddressDisplay(order)}</p>
+                      <p className="text-sm text-white/50">{getNeighborhoodDisplay(order)}</p>
                   </div>
                 </div>
 
@@ -188,7 +233,7 @@ export default function DeliveryPage() {
               </div>
 
               <div className="grid grid-cols-2 gap-2 pt-2">
-                 <a href={`https://www.google.com/maps/dir/?api=1&destination=${order.addresses?.lat},${order.addresses?.lng}&travelmode=driving`} target="_blank" rel="noopener noreferrer" className="bg-zinc-800 text-white font-bold py-4 rounded-2xl text-xs flex items-center justify-center gap-2 hover:bg-zinc-700 transition-all"><Navigation size={14} /> NAVEGAR</a>
+                 <button onClick={() => handleNavigate(order)} className="bg-zinc-800 text-white font-bold py-4 rounded-2xl text-xs flex items-center justify-center gap-2 hover:bg-zinc-700 transition-all"><Navigation size={14} /> NAVEGAR</button>
                  <button onClick={() => setConfirmOrder(order)} className="bg-apollo-orange text-white font-bold py-4 rounded-2xl text-xs flex items-center justify-center gap-2 shadow-lg shadow-apollo-orange/20 transition-all">✓ ENTREGUE</button>
               </div>
             </div>
@@ -197,6 +242,11 @@ export default function DeliveryPage() {
       )}
 
       {confirmOrder && <ConfirmModal orderId={confirmOrder.id} deliveryId={user!.id} position={position} onClose={() => setConfirmOrder(null)} onConfirmed={() => { setConfirmOrder(null); void fetchOrders(); }} />}
+      {toastMessage && (
+        <div className="fixed bottom-24 left-1/2 -translate-x-1/2 bg-zinc-800 text-white px-6 py-3 rounded-full shadow-2xl text-sm font-bold z-50 animate-in fade-in slide-in-from-bottom-4 transition-all">
+          {toastMessage}
+        </div>
+      )}
     </div>
   )
 }

@@ -19,6 +19,7 @@ export default function OrderSuccessPage() {
 
   useEffect(() => {
     clearCart()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const [uploading, setUploading] = useState(false)
