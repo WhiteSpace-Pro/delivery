@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
-import { ArrowLeft, Check, Loader2, Camera, Copy, MapPin, AlertCircle } from 'lucide-react'
-import { Alert, AlertDescription } from '@/components/ui/alert'
+import { ArrowLeft, Check, Loader2, Camera, Copy, MapPin} from 'lucide-react'
+import { InvalidAddressHandler } from '@/components/shared/InvalidAddressHandler'
 import { useCart } from '@/contexts/CartContext'
 import { useUser } from '@/hooks/useUser'
 import { createClient } from '@/lib/supabase/client'
@@ -522,50 +522,22 @@ return <div className="min-h-screen bg-[#0D0D0D] flex items-center justify-cente
                 </div>
              )}
           {showLocationAlert && deliveryType === 'delivery' && (
-               <div className="mt-4 animate-in fade-in slide-in-from-top-2">
-                 <Alert variant="destructive" className="bg-red-500/10 border-red-500/50 mb-4">
-                   <AlertCircle className="h-4 w-4" />
-                   <AlertDescription>
-                     Este endereço não possui localização confirmada. A entrega pode ser prejudicada.
-                   </AlertDescription>
-                 </Alert>
-                 <div className="flex gap-3">
-                   <button
-                     type="button"
-                     onClick={() => {
-                       setShowLocationAlert(false);
-                       setSelectedAddressId('new');
-                       setAddressForm(prev => ({
-                         ...prev,
-                         zipcode: '',
-                         street: '',
-                         number: '',
-                         complement: '',
-                         neighborhood: '',
-                         fee: 0,
-                         regionNotFound: false,
-                         shouldSave: false,
-                         lat: undefined as unknown as number,
-                         lng: undefined as unknown as number
-                       }));
-                     }}
-                     className="flex-1 py-3 text-sm font-bold bg-zinc-800 text-white rounded-xl hover:bg-zinc-700 transition-colors"
-                   >
-                     Digitar endereço novamente
-                   </button>
-                   <button
-                     type="button"
-                     onClick={(e) => {
-                       e.preventDefault();
-                       void processCheckout();
-                     }}
-                     className="flex-1 py-3 text-sm font-bold bg-apollo-orange text-white rounded-xl hover:bg-apollo-orange/90 transition-colors"
-                   >
-                     Continuar mesmo assim
-                   </button>
-                 </div>
-               </div>
-             )}
+             <InvalidAddressHandler
+               addressId={selectedAddressId !== 'new' ? selectedAddressId : 'new'}
+               isAdmin={false}
+               currentAddress={getActiveAddress() || addressForm}
+               onFixed={() => {
+                 setShowLocationAlert(false);
+                 // Just proceed to checkout as it's now fixed
+                 void processCheckout();
+               }}
+               onContinueAnyway={(e) => {
+                 // The component triggers this as a regular click handler.
+                 e?.preventDefault?.();
+                 void processCheckout();
+               }}
+             />
+           )}
           </section>
 
           <section className="bg-[#1C1C1C] rounded-2xl p-6 border border-[#2A2A2A]">

@@ -4,8 +4,7 @@ import { useState, useEffect } from 'react'
 import { assignDriverAndSend, getAvailableDrivers } from '@/app/(admin)/actions/order-actions'
 import { OrderWithItems, Profile } from '@/types'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
-import { Alert, AlertDescription } from '@/components/ui/alert'
-import { AlertCircle } from 'lucide-react'
+import { InvalidAddressHandler } from '@/components/shared/InvalidAddressHandler'
 
 interface DriverAssignModalProps {
   order: OrderWithItems
@@ -18,7 +17,7 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
   const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
-  const [errorMsg, setErrorMsg] = useState<string | null>(null)
+  const [showAddressFix, setShowAddressFix] = useState(false)
 
   useEffect(() => {
     async function fetchDrivers() {
@@ -38,7 +37,7 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
     if (order.delivery_type === 'delivery') {
       const orderAddress = (order as any).addresses;
       if (!order.delivery_address_id || !orderAddress || orderAddress.lat == null || orderAddress.lng == null) {
-        setErrorMsg('Endereço sem localização válida — entre em contato com o cliente antes de despachar');
+        setShowAddressFix(true);
         return;
       }
     }
@@ -62,14 +61,18 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
             Atribuir motoboy — Pedido #${order.id.slice(-4)}
           </DialogTitle>
         </DialogHeader>
-          {errorMsg && (
-            <Alert variant="destructive" className="bg-red-50 text-red-600 border-red-200 mt-4">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription className="ml-2 font-medium">
-                {errorMsg}
-              </AlertDescription>
-            </Alert>
-          )}
+          {showAddressFix ? (
+          <InvalidAddressHandler
+            addressId={order.delivery_address_id!}
+            isAdmin={true}
+            onFixed={() => {
+              setShowAddressFix(false);
+              alert('Endereço corrigido com sucesso! Você já pode despachar o pedido. Atualize a página se os dados não refletirem imediatamente.');
+              onClose();
+            }}
+            currentAddress={(order as any).addresses}
+          />
+        ) : null}
 
 
         <div className="py-4 space-y-3">
