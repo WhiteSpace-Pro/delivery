@@ -4,6 +4,7 @@
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getStartOfCurrentShift } from '@/lib/turno'
+import { calculateDeliveryFee } from '@/lib/maps/distance'
 import { OrderStatus } from '@/types/enums'
 import { revalidatePath } from 'next/cache'
 
@@ -236,4 +237,86 @@ export async function confirmWithoutReceipt(orderId: string, userId: string) {
     .eq('tenant_id', TENANT_ID)
   if (error) throw new Error('Failed to confirm order without receipt')
   revalidatePath('/admin')
+}
+
+export async function updateOrderAddress(
+  orderId: string,
+  deliveryAddressId: string,
+  zipcode: string,
+  number: string
+) {
+  await requireAdmin()
+
+  // 1. Fetch address details from ViaCEP
+  const viaCepRes = await fetch(`https://viacep.com.br/ws/${zipcode.replace(/\D/g, '')}/json/`)
+  const viaCepData = await viaCepRes.json()
+
+  if (viaCepData.erro) {
+    throw new Error('CEP não encontrado')
+  }
+
+  const { logradouro, bairro, localidade, uf } = viaCepData
+
+  const fullAddress = `${logradouro}, ${number} - ${bairro}, ${localidade} - ${uf}, ${zipcode}`
+
+  // 2. Fetch coords and fee from TomTom
+
+  const { coords, fee } = await calculateDeliveryFee(fullAddress)
+
+  if (!coords) {
+    throw new Error('Não foi possível encontrar as coordenadas para este endereço')
+  }
+
+  // 3. Update the existing address
+  const { error: addressError } = await supabaseAdmin
+    .from('addresses')
+    .update({
+      zipcode: zipcode.replace(/\D/g, ''),
+      street: logradouro,
+      neighborhood: bairro,
+      city: localidade,
+      state: uf,
+      number,
+      lat: coords.lat,
+      lng: coords.lng
+    } as any)
+    .eq('id', deliveryAddressId)
+    .eq('tenant_id', TENANT_ID)
+
+  if (addressError) {
+    console.error('Error updating address:', addressError)
+    throw new Error('Falha ao atualizar endereço')
+  }
+
+  // 4. Update the order fee and total
+  // First, get the current order to calculate new total
+  const { data: orderData, error: fetchOrderError } = await supabaseAdmin
+    .from('orders')
+    .select('subtotal, discount, change_for')
+    .eq('id', orderId)
+    .eq('tenant_id', TENANT_ID)
+    .single()
+
+  if (fetchOrderError || !orderData) {
+    throw new Error('Falha ao buscar pedido para atualizar frete')
+  }
+
+  const newTotal = (Number(orderData.subtotal) || 0) + fee - (Number(orderData.discount) || 0)
+
+  const { error: orderError } = await supabaseAdmin
+    .from('orders')
+    .update({
+      delivery_fee: fee,
+      total_amount: newTotal
+    } as any)
+    .eq('id', orderId)
+    .eq('tenant_id', TENANT_ID)
+
+  if (orderError) {
+    console.error('Error updating order fee:', orderError)
+    throw new Error('Falha ao atualizar valor do frete no pedido')
+  }
+
+  revalidatePath('/admin', 'page')
+  return { success: true, coords, fee }
 }
