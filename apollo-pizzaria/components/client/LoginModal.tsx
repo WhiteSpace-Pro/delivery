@@ -60,7 +60,11 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
   const handleSuccess = () => {
     onSuccess?.()
     onClose()
-    if (redirectToCheckout) router.push('/checkout')
+    if (redirectToCheckout) {
+      router.push('/checkout')
+    } else {
+      window.location.reload()
+    }
   }
 
   const resetAll = () => {
