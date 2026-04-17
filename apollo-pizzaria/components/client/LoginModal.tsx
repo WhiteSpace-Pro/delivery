@@ -57,9 +57,25 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
     setError(null)
   }
 
-  const handleSuccess = () => {
+  const handleSuccess = async () => {
     onSuccess?.()
     onClose()
+
+    // Check role for redirection
+    try {
+      const { data: profile } = await supabase.from('profiles').select('role').single()
+      if (profile?.role === 'delivery') {
+        router.push('/delivery')
+        return
+      }
+      if (['admin', 'kitchen', 'dev', 'superadmin'].includes(profile?.role || '')) {
+        router.push('/admin')
+        return
+      }
+    } catch (e) {
+      console.error('Failed to get role for redirect', e)
+    }
+
     if (redirectToCheckout) {
       router.push('/checkout')
     } else {

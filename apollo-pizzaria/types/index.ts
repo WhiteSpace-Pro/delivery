@@ -17,6 +17,7 @@ export interface OrderItemWithProduct extends OrderItem {
 }
 
 export interface OrderWithItems extends Order {
+  display_id?: string | null;
   order_items: OrderItemWithProduct[];
   profiles: Profile;
 }

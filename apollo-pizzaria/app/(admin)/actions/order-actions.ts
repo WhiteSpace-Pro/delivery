@@ -4,7 +4,6 @@
 import { supabaseAdmin } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { getStartOfCurrentShift } from '@/lib/turno'
-import { calculateDeliveryFee } from '@/lib/maps/distance'
 import { OrderStatus } from '@/types/enums'
 import { revalidatePath } from 'next/cache'
 
@@ -243,80 +242,112 @@ export async function updateOrderAddress(
   orderId: string,
   deliveryAddressId: string,
   zipcode: string,
-  number: string
+  number: string,
+  freeText?: string
 ) {
   await requireAdmin()
 
-  // 1. Fetch address details from ViaCEP
-  const viaCepRes = await fetch(`https://viacep.com.br/ws/${zipcode.replace(/\D/g, '')}/json/`)
-  const viaCepData = await viaCepRes.json()
-
-  if (viaCepData.erro) {
-    throw new Error('CEP não encontrado')
+  if (!deliveryAddressId || deliveryAddressId === 'undefined') {
+    throw new Error('ID do endereço de entrega ausente.');
   }
 
-  const { logradouro, bairro, localidade, uf } = viaCepData
+  let finalLat = 0;
+  let finalLng = 0;
+  let finalFee = 0;
+  let updatePayload: any = {};
 
-  const fullAddress = `${logradouro}, ${number} - ${bairro}, ${localidade} - ${uf}, ${zipcode}`
+  if (freeText) {
+    // Option 2: Nominatim
+    const nomRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(freeText)}&format=json&limit=1`, {
+      headers: { 'User-Agent': 'ApolloPizzaria/1.0' }
+    });
+    const nomData = await nomRes.json();
+    if (!nomData || nomData.length === 0) {
+      throw new Error('Não foi possível encontrar as coordenadas para este texto livre');
+    }
+    finalLat = parseFloat(nomData[0].lat);
+    finalLng = parseFloat(nomData[0].lon);
 
-  // 2. Fetch coords and fee from TomTom
+    const { getRouteDistance } = await import('@/lib/maps/distance');
+    const distance = await getRouteDistance({ lat: finalLat, lng: finalLng });
+    finalFee = Math.ceil(distance) * 1.00;
 
-  const { coords, fee } = await calculateDeliveryFee(fullAddress)
+    updatePayload = { lat: finalLat, lng: finalLng };
+  } else {
+    // Option 1: ViaCEP + TomTom
+    const viaCepRes = await fetch(`https://viacep.com.br/ws/${zipcode.replace(/\D/g, '')}/json/`);
+    const viaCepData = await viaCepRes.json();
 
-  if (!coords) {
-    throw new Error('Não foi possível encontrar as coordenadas para este endereço')
-  }
+    if (viaCepData.erro) {
+      throw new Error('CEP não encontrado');
+    }
 
-  // 3. Update the existing address
-  const { error: addressError } = await supabaseAdmin
-    .from('addresses')
-    .update({
+    const { logradouro, bairro, localidade, uf } = viaCepData;
+    const fullAddress = `${logradouro}, ${number} - ${bairro}, ${localidade} - ${uf}, ${zipcode}`;
+
+    const { calculateDeliveryFee } = await import('@/lib/maps/distance');
+    const { coords, fee } = await calculateDeliveryFee(fullAddress);
+
+    if (!coords) {
+      throw new Error('Não foi possível encontrar as coordenadas para este endereço');
+    }
+
+    finalLat = coords.lat;
+    finalLng = coords.lng;
+    finalFee = fee;
+
+    updatePayload = {
       zipcode: zipcode.replace(/\D/g, ''),
       street: logradouro,
       neighborhood: bairro,
       city: localidade,
       state: uf,
       number,
-      lat: coords.lat,
-      lng: coords.lng
-    } as any)
+      lat: finalLat,
+      lng: finalLng
+    };
+  }
+
+  // 3. Update the existing address
+  const { error: addressError } = await supabaseAdmin
+    .from('addresses')
+    .update(updatePayload)
     .eq('id', deliveryAddressId)
-    .eq('tenant_id', TENANT_ID)
+    .eq('tenant_id', TENANT_ID);
 
   if (addressError) {
-    console.error('Error updating address:', addressError)
-    throw new Error('Falha ao atualizar endereço')
+    console.error('Error updating address:', addressError);
+    throw new Error('Falha ao atualizar endereço');
   }
 
   // 4. Update the order fee and total
-  // First, get the current order to calculate new total
   const { data: orderData, error: fetchOrderError } = await supabaseAdmin
     .from('orders')
     .select('subtotal, discount, change_for')
     .eq('id', orderId)
     .eq('tenant_id', TENANT_ID)
-    .single()
+    .single();
 
   if (fetchOrderError || !orderData) {
-    throw new Error('Falha ao buscar pedido para atualizar frete')
+    throw new Error('Falha ao buscar pedido para atualizar frete');
   }
 
-  const newTotal = (Number(orderData.subtotal) || 0) + fee - (Number(orderData.discount) || 0)
+  const newTotal = (Number(orderData.subtotal) || 0) + finalFee - (Number(orderData.discount) || 0);
 
   const { error: orderError } = await supabaseAdmin
     .from('orders')
     .update({
-      delivery_fee: fee,
+      delivery_fee: finalFee,
       total_amount: newTotal
     } as any)
     .eq('id', orderId)
-    .eq('tenant_id', TENANT_ID)
+    .eq('tenant_id', TENANT_ID);
 
   if (orderError) {
-    console.error('Error updating order fee:', orderError)
-    throw new Error('Falha ao atualizar valor do frete no pedido')
+    console.error('Error updating order fee:', orderError);
+    throw new Error('Falha ao atualizar valor do frete no pedido');
   }
 
-  revalidatePath('/admin', 'page')
-  return { success: true, coords, fee }
+  revalidatePath('/admin', 'page');
+  return { success: true };
 }

@@ -19,6 +19,8 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
 
   const [zipcode, setZipcode] = useState('')
   const [number, setNumber] = useState('')
+  const [freeText, setFreeText] = useState('')
+  const [searchType, setSearchType] = useState<'cep' | 'freetext'>('cep')
   const [isUpdatingAddress, setIsUpdatingAddress] = useState(false)
   const [addressError, setAddressError] = useState('')
 
@@ -29,16 +31,24 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
   });
 
   const handleUpdateAddress = async () => {
-    if (!zipcode || !number) {
+    if (searchType === 'cep' && (!zipcode || !number)) {
       setAddressError('Preencha CEP e número')
+      return
+    }
+    if (searchType === 'freetext' && !freeText) {
+      setAddressError('Preencha o endereço completo')
       return
     }
     setIsUpdatingAddress(true)
     setAddressError('')
     try {
-      await updateOrderAddress(order.id, deliveryAddress.id, zipcode, number)
+      if (!deliveryAddress?.id) {
+        setAddressError('Pedido não tem um endereço vinculado. Cancele e recrie o pedido.')
+        setIsUpdatingAddress(false)
+        return
+      }
+      await updateOrderAddress(order.id, deliveryAddress.id, zipcode, number, searchType === 'freetext' ? freeText : undefined)
       setIsValidAddress(true)
-      // Recarregar os motoboys para garantir estado correto e mostrar UI liberada
     } catch (error: any) {
       setAddressError(error.message || 'Falha ao corrigir endereço')
     } finally {
@@ -79,7 +89,7 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
       <DialogContent className="bg-white rounded-2xl sm:max-w-[400px]">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-[#0D0D0D]">
-            Atribuir motoboy — Pedido #${order.id.slice(-4)}
+            Atribuir motoboy — Pedido #${order.display_id || order.id.slice(-4).toUpperCase()}
           </DialogTitle>
         </DialogHeader>
 
@@ -95,34 +105,59 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
             </p>
 
             <div className="space-y-3 pt-2">
-              <div>
-                <label className="text-xs font-bold text-red-800 mb-1 block">CEP</label>
-                <input
-                  type="text"
-                  value={zipcode}
-                  onChange={e => setZipcode(e.target.value)}
-                  placeholder="00000-000"
-                  className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm"
-                  disabled={isUpdatingAddress}
-                />
+              <div className="flex gap-4 mb-2">
+                <label className="flex items-center gap-2 text-xs font-bold text-red-800 cursor-pointer">
+                  <input type="radio" checked={searchType === 'cep'} onChange={() => setSearchType('cep')} className="accent-red-600" /> CEP + Número
+                </label>
+                <label className="flex items-center gap-2 text-xs font-bold text-red-800 cursor-pointer">
+                  <input type="radio" checked={searchType === 'freetext'} onChange={() => setSearchType('freetext')} className="accent-red-600" /> Texto Livre
+                </label>
               </div>
-              <div>
-                <label className="text-xs font-bold text-red-800 mb-1 block">Número</label>
-                <input
-                  type="text"
-                  value={number}
-                  onChange={e => setNumber(e.target.value)}
-                  placeholder="Ex: 123"
-                  className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm"
-                  disabled={isUpdatingAddress}
-                />
-              </div>
+
+              {searchType === 'cep' ? (
+                <>
+                  <div>
+                    <label className="text-xs font-bold text-red-800 mb-1 block">CEP</label>
+                    <input
+                      type="text"
+                      value={zipcode}
+                      onChange={e => setZipcode(e.target.value)}
+                      placeholder="00000-000"
+                      className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
+                      disabled={isUpdatingAddress}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-bold text-red-800 mb-1 block">Número</label>
+                    <input
+                      type="text"
+                      value={number}
+                      onChange={e => setNumber(e.target.value)}
+                      placeholder="Ex: 123"
+                      className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
+                      disabled={isUpdatingAddress}
+                    />
+                  </div>
+                </>
+              ) : (
+                <div>
+                  <label className="text-xs font-bold text-red-800 mb-1 block">Endereço Completo</label>
+                  <input
+                    type="text"
+                    value={freeText}
+                    onChange={e => setFreeText(e.target.value)}
+                    placeholder="Rua, Número, Bairro, Cidade - Estado"
+                    className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
+                    disabled={isUpdatingAddress}
+                  />
+                </div>
+              )}
 
               {addressError && <p className="text-xs text-red-600 font-bold">{addressError}</p>}
 
               <button
                 onClick={handleUpdateAddress}
-                disabled={isUpdatingAddress || !zipcode || !number}
+                disabled={isUpdatingAddress || (searchType === 'cep' ? (!zipcode || !number) : !freeText)}
                 className="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-50"
               >
                 {isUpdatingAddress ? 'Corrigindo...' : 'Corrigir e Recalcular Frete'}

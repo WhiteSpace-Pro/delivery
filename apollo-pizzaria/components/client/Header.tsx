@@ -28,7 +28,7 @@ interface HeaderProps {
 export function Header({ userName }: HeaderProps) {
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [isLoginOpen, setIsLoginOpen] = useState(false);
-  const { user } = useUser();
+  const { user, profile } = useUser();
   const supabase = createClient();
 
   const handleLogout = async () => {
@@ -51,9 +51,9 @@ export function Header({ userName }: HeaderProps) {
 
             {user ? (
               <div className="flex items-center gap-4">
-                {userName && (
+                {(profile?.full_name?.split(' ')[0] || userName || user.email?.split('@')[0]) && (
                   <span className="text-[14px] font-dm text-[#8A8480] hidden sm:inline">
-                    Olá, {userName}
+                    Olá, {profile?.full_name?.split(' ')[0] || userName || user.email?.split('@')[0]}
                   </span>
                 )}
                 <Link href="/meus-pedidos" className="text-sm font-medium hover:text-[#E85D24] transition-colors flex items-center gap-2">

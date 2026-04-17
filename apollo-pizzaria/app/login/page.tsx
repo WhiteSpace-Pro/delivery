@@ -64,7 +64,7 @@ function LoginContent() {
 
       const defaultDest = roleRedirects[profile.role] ?? '/'
       const adminRoles = ['dev', 'superadmin', 'admin', 'kitchen']
-      const deliveryRoles = ['delivery']
+      const deliveryRoles = ['dev', 'superadmin', 'delivery']
 
       let destino = defaultDest
       if (redirectPath) {

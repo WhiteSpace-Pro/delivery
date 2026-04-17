@@ -245,7 +245,7 @@ export default function CheckoutPage() {
 
     if (result.coords) {
       try {
-        const { error } = await supabase.from('addresses').update({
+        const { data, error } = await supabase.from('addresses').update({
           zipcode: inlineCorrection.zipcode,
           number: inlineCorrection.number,
           street: inlineCorrection.street,
@@ -253,9 +253,10 @@ export default function CheckoutPage() {
           lat: result.coords.lat,
           lng: result.coords.lng,
           delivery_fee: result.fee
-        } as any).eq('id', selectedAddressId)
+        } as any).eq('id', selectedAddressId).select()
 
         if (error) throw error
+        if (!data || data.length === 0) throw new Error('Não foi possível atualizar o endereço no banco de dados. Tente adicionar um novo endereço.')
 
         // Update local state to reflect the fix
         setSavedAddresses(prev => prev.map(a =>
@@ -472,7 +473,7 @@ export default function CheckoutPage() {
   }
 
   return (
-    <div className="min-h-screen bg-[#0D0D0D] text-white font-dm pb-32">
+    <div className="min-h-screen bg-[#0D0D0D] text-white font-dm pb-48">
        <div className="max-w-xl mx-auto p-4 md:p-6">
         <header className="mb-8">
           <button onClick={() => router.back()} className="flex items-center gap-2 text-white/40 hover:text-white transition-colors mb-4 text-xs font-bold uppercase tracking-widest">
