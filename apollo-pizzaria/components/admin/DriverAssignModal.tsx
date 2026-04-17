@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { assignDriverAndSend, getAvailableDrivers, updateOrderAddress } from '@/app/(admin)/actions/order-actions'
 import { OrderWithItems, Profile } from '@/types'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import { SimplePreviewMap } from './SimplePreviewMap'
 
 interface DriverAssignModalProps {
   order: OrderWithItems
@@ -23,6 +24,9 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
   const [searchType, setSearchType] = useState<'cep' | 'freetext'>('cep')
   const [isUpdatingAddress, setIsUpdatingAddress] = useState(false)
   const [addressError, setAddressError] = useState('')
+  const [suggestions, setSuggestions] = useState<any[]>([])
+  const [isSearchingNom, setIsSearchingNom] = useState(false)
+  const [selectedCoords, setSelectedCoords] = useState<{lat: number, lng: number} | null>(null)
 
   const deliveryAddress = (order as any).addresses
   const [isValidAddress, setIsValidAddress] = useState(() => {
@@ -42,12 +46,19 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
     setIsUpdatingAddress(true)
     setAddressError('')
     try {
-      if (!deliveryAddress?.id) {
+      if (!order.delivery_address_id) {
         setAddressError('Pedido não tem um endereço vinculado. Cancele e recrie o pedido.')
         setIsUpdatingAddress(false)
         return
       }
-      await updateOrderAddress(order.id, deliveryAddress.id, zipcode, number, searchType === 'freetext' ? freeText : undefined)
+      await updateOrderAddress(
+        order.id,
+        order.delivery_address_id,
+        zipcode,
+        number,
+        searchType === 'freetext' ? selectedCoords?.lat : undefined,
+        searchType === 'freetext' ? selectedCoords?.lng : undefined
+      )
       setIsValidAddress(true)
     } catch (error: any) {
       setAddressError(error.message || 'Falha ao corrigir endereço')
@@ -56,6 +67,29 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
     }
   }
 
+
+  useEffect(() => {
+    if (searchType !== 'freetext' || freeText.length < 3 || selectedCoords) {
+      setSuggestions([])
+      return
+    }
+    const timer = setTimeout(async () => {
+      setIsSearchingNom(true)
+      try {
+        const query = encodeURIComponent(`${freeText}, Belo Horizonte, MG`)
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=5`, {
+          headers: { 'User-Agent': 'ApolloPizzaria/1.0' }
+        })
+        const data = await res.json()
+        setSuggestions(data || [])
+      } catch (err) {
+        console.error('Nominatim error', err)
+      } finally {
+        setIsSearchingNom(false)
+      }
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [freeText, searchType, selectedCoords])
 
   useEffect(() => {
     async function fetchDrivers() {
@@ -140,16 +174,51 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
                   </div>
                 </>
               ) : (
-                <div>
+                <div className="relative">
                   <label className="text-xs font-bold text-red-800 mb-1 block">Endereço Completo</label>
                   <input
                     type="text"
                     value={freeText}
-                    onChange={e => setFreeText(e.target.value)}
-                    placeholder="Rua, Número, Bairro, Cidade - Estado"
-                    className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
+                    onChange={e => {
+                      setFreeText(e.target.value)
+                      setSelectedCoords(null)
+                    }}
+                    placeholder="Ex: Av Amazonas, 1000, Centro"
+                    className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black focus:outline-none focus:border-red-400"
                     disabled={isUpdatingAddress}
                   />
+                  {isSearchingNom && (
+                    <div className="absolute right-3 top-9">
+                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-red-500 border-t-transparent" />
+                    </div>
+                  )}
+                  {suggestions.length > 0 && !selectedCoords && (
+                    <ul className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                      {suggestions.map((s, idx) => (
+                        <li
+                          key={idx}
+                          className="px-4 py-2 hover:bg-red-50 cursor-pointer text-xs text-gray-800 border-b border-gray-100 last:border-0"
+                          onClick={() => {
+                            setFreeText(s.display_name)
+                            setSelectedCoords({ lat: parseFloat(s.lat), lng: parseFloat(s.lon) })
+                            setSuggestions([])
+                          }}
+                        >
+                          {s.display_name}
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              )}
+
+              {searchType === 'freetext' && selectedCoords && (
+                <div className="mt-2 relative">
+                  <div className="text-xs font-bold text-green-700 flex justify-between">
+                    <span>Localização Encontrada:</span>
+                    <button type="button" onClick={() => setSelectedCoords(null)} className="text-gray-500 hover:text-red-500 underline">Alterar</button>
+                  </div>
+                  <SimplePreviewMap lat={selectedCoords.lat} lng={selectedCoords.lng} />
                 </div>
               )}
 
@@ -157,7 +226,7 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
 
               <button
                 onClick={handleUpdateAddress}
-                disabled={isUpdatingAddress || (searchType === 'cep' ? (!zipcode || !number) : !freeText)}
+                disabled={isUpdatingAddress || (searchType === 'cep' ? (!zipcode || !number) : !selectedCoords)}
                 className="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-50"
               >
                 {isUpdatingAddress ? 'Corrigindo...' : 'Corrigir e Recalcular Frete'}

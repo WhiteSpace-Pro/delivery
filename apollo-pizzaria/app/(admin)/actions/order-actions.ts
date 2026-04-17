@@ -243,7 +243,8 @@ export async function updateOrderAddress(
   deliveryAddressId: string,
   zipcode: string,
   number: string,
-  freeText?: string
+  freeTextLat?: number,
+  freeTextLng?: number
 ) {
   await requireAdmin()
 
@@ -256,17 +257,9 @@ export async function updateOrderAddress(
   let finalFee = 0;
   let updatePayload: any = {};
 
-  if (freeText) {
-    // Option 2: Nominatim
-    const nomRes = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(freeText)}&format=json&limit=1`, {
-      headers: { 'User-Agent': 'ApolloPizzaria/1.0' }
-    });
-    const nomData = await nomRes.json();
-    if (!nomData || nomData.length === 0) {
-      throw new Error('Não foi possível encontrar as coordenadas para este texto livre');
-    }
-    finalLat = parseFloat(nomData[0].lat);
-    finalLng = parseFloat(nomData[0].lon);
+  if (freeTextLat !== undefined && freeTextLng !== undefined) {
+    finalLat = freeTextLat;
+    finalLng = freeTextLng;
 
     const { getRouteDistance } = await import('@/lib/maps/distance');
     const distance = await getRouteDistance({ lat: finalLat, lng: finalLng });
