@@ -70,8 +70,7 @@ export default function CheckoutPage() {
   const [changeFor, setChangeFor] = useState('')
 
   const [showAddressAlert, setShowAddressAlert] = useState(false)
-  const [bypassedAddressAlert, setBypassedAddressAlert] = useState(false)
-  const [inlineCorrection, setInlineCorrection] = useState({
+    const [inlineCorrection, setInlineCorrection] = useState({
     active: false,
     zipcode: '',
     number: '',
@@ -197,8 +196,7 @@ export default function CheckoutPage() {
 
     useEffect(() => {
     if (deliveryType === 'delivery' && selectedAddressId && selectedAddressId !== 'new') {
-      setBypassedAddressAlert(false)
-      const activeAddress = savedAddresses.find(a => a.id === selectedAddressId)
+            const activeAddress = savedAddresses.find(a => a.id === selectedAddressId)
       if (activeAddress) {
         if (!activeAddress.lat || !activeAddress.lng || (activeAddress.lat === 0 && activeAddress.lng === 0)) {
           setShowAddressAlert(true)
@@ -291,7 +289,7 @@ export default function CheckoutPage() {
 
     const activeAddressForFee = getActiveAddress()
   const isInvalidCoords = activeAddressForFee && (!activeAddressForFee.lat || !activeAddressForFee.lng || (activeAddressForFee.lat === 0 && activeAddressForFee.lng === 0))
-  const calculatedDeliveryFee = deliveryType === 'pickup' ? 0 : (selectedAddressId === 'new' ? addressForm.fee : (isInvalidCoords && bypassedAddressAlert ? 10 : (activeAddressForFee?.delivery_fee || 0)))
+  const calculatedDeliveryFee = deliveryType === 'pickup' ? 0 : (selectedAddressId === 'new' ? addressForm.fee : (isInvalidCoords ? 10 : (activeAddressForFee?.delivery_fee || 0)))
   const deliveryFee = calculatedDeliveryFee
   const finalTotal = subtotal + deliveryFee
 
@@ -606,7 +604,7 @@ export default function CheckoutPage() {
                      <div className="flex gap-2 mt-3">
                        <button
                          type="button"
-                         onClick={() => { setShowAddressAlert(false); setBypassedAddressAlert(true); }}
+                         onClick={() => setShowAddressAlert(false)}
                          className="flex-1 py-2 rounded-xl border border-white/10 text-xs font-bold text-white/60 hover:bg-white/5 transition-colors"
                        >
                          Continuar mesmo assim
@@ -700,7 +698,7 @@ export default function CheckoutPage() {
              )}
           </section>
 
-          <div className="bg-[#1C1C1C] rounded-2xl p-6 border border-[#2A2A2A] sticky bottom-4 shadow-2xl">
+          <div className="bg-[#1C1C1C] rounded-2xl p-6 border border-[#2A2A2A] shadow-2xl mt-6">
              <div className="space-y-3 mb-6">
                 <div className="flex justify-between text-sm">
                    <span className="text-white/40">Subtotal</span>
