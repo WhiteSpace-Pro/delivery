@@ -1,12 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseAdmin } from '@/lib/supabase/admin'
 
-function normalizePhone(phone: string): string {
-  const digits = phone.replace(/\D/g, '')
-  if (digits.startsWith('55') && digits.length >= 12) return `+${digits}`
-  return `+55${digits}`
-}
-
 export async function POST(req: NextRequest) {
   try {
     const { identifier } = await req.json()
@@ -39,14 +33,18 @@ export async function POST(req: NextRequest) {
         loginEmail: authUser.email!.toLowerCase(),
       })
     } else {
-      // Phone lookup — query profiles.phone first
-      const normalized = normalizePhone(identifier)
+      // Phone lookup — query profiles.phone
+      const digits = identifier.replace(/\D/g, '');
+      if (digits.length < 10) return NextResponse.json({ found: false })
 
-      const { data: profile } = await supabaseAdmin
+      const { data: profiles } = await supabaseAdmin
         .from('profiles')
         .select('id, full_name, phone')
-        .eq('phone', normalized)
-        .maybeSingle()
+        .ilike('phone', `%${digits.slice(-8)}%`)
+
+      if (!profiles || profiles.length === 0) return NextResponse.json({ found: false })
+
+      const profile = profiles.find(p => p.phone && p.phone.replace(/\D/g, '').endsWith(digits.slice(-10)))
 
       if (!profile) return NextResponse.json({ found: false })
 

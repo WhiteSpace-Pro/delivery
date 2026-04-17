@@ -68,6 +68,22 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
   }
 
 
+
+  const handleMapDrag = async (newLat: number, newLng: number) => {
+    setSelectedCoords({ lat: newLat, lng: newLng });
+    try {
+      const res = await fetch(`/api/geocode?lat=${newLat}&lng=${newLng}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.address) {
+          setFreeText(data.address);
+        }
+      }
+    } catch (e) {
+      console.error('Failed to reverse geocode', e);
+    }
+  }
+
   useEffect(() => {
     if (searchType !== 'freetext' || freeText.length < 3 || selectedCoords) {
       setSuggestions([])
@@ -218,7 +234,7 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
                     <span>Localização Encontrada:</span>
                     <button type="button" onClick={() => setSelectedCoords(null)} className="text-gray-500 hover:text-red-500 underline">Alterar</button>
                   </div>
-                  <SimplePreviewMap lat={selectedCoords.lat} lng={selectedCoords.lng} />
+                  <SimplePreviewMap lat={selectedCoords.lat} lng={selectedCoords.lng} onLocationChange={handleMapDrag} />
                 </div>
               )}
 
