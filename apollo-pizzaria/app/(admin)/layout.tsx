@@ -101,36 +101,24 @@ export default function AdminLayout({
           </button>
 
           <div className="ml-auto flex items-center gap-4">
-            {isLoading ? (
-              <div className="animate-pulse flex items-center gap-4">
-                <div className="flex flex-col items-end mr-2 gap-1">
-                  <div className="h-4 w-24 bg-gray-200 rounded"></div>
-                  <div className="h-3 w-16 bg-gray-200 rounded"></div>
-                </div>
-                <div className="w-10 h-10 rounded-full bg-gray-200"></div>
-              </div>
-            ) : (
-              <>
-                <div className="flex flex-col items-end mr-2">
-                  <p className="font-bold text-sm leading-none">
-                    {profile?.full_name || 'Usuário'}
-                  </p>
-                  <p className="text-xs text-[#0D0D0D]/60 capitalize">
-                    {profile?.role}
-                  </p>
-                </div>
-                <div className="w-10 h-10 rounded-full bg-apollo-orange/10 border border-apollo-orange/20 flex items-center justify-center text-apollo-orange font-bold">
-                  {profile?.full_name?.charAt(0) || 'U'}
-                </div>
-                <button
-                  onClick={handleLogout}
-                  className="p-2 text-[#0D0D0D]/60 hover:text-red-500 transition-colors"
-                  title="Sair"
-                >
-                  <LogOut size={20} />
-                </button>
-              </>
-            )}
+            <div className="flex flex-col items-end mr-2">
+              <p className="font-bold text-sm leading-none">
+                {isLoading ? 'Carregando...' : (profile?.full_name || 'Usuário')}
+              </p>
+              <p className="text-xs text-[#0D0D0D]/60 capitalize">
+                {isLoading ? '...' : (profile?.role || '')}
+              </p>
+            </div>
+            <div className="w-10 h-10 rounded-full bg-apollo-orange/10 border border-apollo-orange/20 flex items-center justify-center text-apollo-orange font-bold">
+              {isLoading ? '...' : (profile?.full_name?.charAt(0) || 'U')}
+            </div>
+            <button
+              onClick={handleLogout}
+              className="p-2 text-[#0D0D0D]/60 hover:text-red-500 transition-colors"
+              title="Sair"
+            >
+              <LogOut size={20} />
+            </button>
           </div>
         </header>
 
