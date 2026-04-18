@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { assignDriverAndSend, getAvailableDrivers, updateOrderAddress } from '@/app/(admin)/actions/order-actions'
+import { assignDriverAndSend, getAvailableDrivers, updateOrderAddress, calculateAddressFee } from '@/app/(admin)/actions/order-actions'
 import { OrderWithItems, Profile } from '@/types'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
 import { SimplePreviewMap } from './SimplePreviewMap'
@@ -18,17 +18,23 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
 
-  const [zipcode, setZipcode] = useState('')
-  const [number, setNumber] = useState('')
-  const [freeText, setFreeText] = useState('')
-  const [searchType, setSearchType] = useState<'cep' | 'freetext'>('cep')
-  const [isUpdatingAddress, setIsUpdatingAddress] = useState(false)
-  const [addressError, setAddressError] = useState('')
-  const [suggestions, setSuggestions] = useState<any[]>([])
-  const [isSearchingNom, setIsSearchingNom] = useState(false)
-  const [selectedCoords, setSelectedCoords] = useState<{lat: number, lng: number} | null>(null)
-
   const deliveryAddress = (order as any).addresses
+
+  const [searchType, setSearchType] = useState<'cep' | 'map'>('cep')
+  const [zipcode, setZipcode] = useState(deliveryAddress?.zipcode || '')
+  const [number, setNumber] = useState(deliveryAddress?.number || '')
+  const [street, setStreet] = useState(deliveryAddress?.street || '')
+  const [neighborhood, setNeighborhood] = useState(deliveryAddress?.neighborhood || '')
+  const [complement, setComplement] = useState(deliveryAddress?.complement || '')
+  const [selectedCoords, setSelectedCoords] = useState<{lat: number, lng: number} | null>({ lat: deliveryAddress?.lat || -19.9077, lng: deliveryAddress?.lng || -43.8948 })
+
+  const [isUpdatingAddress, setIsUpdatingAddress] = useState(false)
+  const [isCalculatingFee, setIsCalculatingFee] = useState(false)
+  const [addressError, setAddressError] = useState('')
+  const [predictedFee, setPredictedFee] = useState<number | null>(null)
+
+  const oldFee = Number(order.delivery_fee) || 0;
+
   const [isValidAddress, setIsValidAddress] = useState(() => {
     if (!deliveryAddress) return true; // If no address (e.g. withdrawal), it's valid
     return deliveryAddress.lat != null && deliveryAddress.lat !== 0 && deliveryAddress.lng != null && deliveryAddress.lng !== 0;
@@ -39,8 +45,8 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
       setAddressError('Preencha CEP e número')
       return
     }
-    if (searchType === 'freetext' && !freeText) {
-      setAddressError('Preencha o endereço completo')
+    if (searchType === 'map' && (!street || !number || !selectedCoords)) {
+      setAddressError('Preencha os dados do mapa e o número')
       return
     }
     setIsUpdatingAddress(true)
@@ -56,8 +62,11 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
         order.delivery_address_id,
         zipcode,
         number,
-        searchType === 'freetext' ? selectedCoords?.lat : undefined,
-        searchType === 'freetext' ? selectedCoords?.lng : undefined
+        searchType === 'map' ? selectedCoords?.lat : undefined,
+        searchType === 'map' ? selectedCoords?.lng : undefined,
+        street,
+        neighborhood,
+        complement
       )
       setIsValidAddress(true)
     } catch (error: any) {
@@ -67,37 +76,61 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
     }
   }
 
-
-
-  const handleMapDrag = (newLat: number, newLng: number, address?: string) => {
+  const handleMapDrag = async (newLat: number, newLng: number) => {
     setSelectedCoords({ lat: newLat, lng: newLng });
-    if (address) {
-      setFreeText(address);
+    try {
+      const res = await fetch(`/api/geocode?lat=${newLat}&lng=${newLng}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.address) {
+          const parts = data.address.split(',');
+          if (parts.length > 0) setStreet(parts[0].trim());
+          if (parts.length > 2) setNeighborhood(parts[2].split('-')[0].trim());
+        }
+      }
+    } catch (e) {
+      console.error('Failed to reverse geocode', e);
     }
   }
 
-  useEffect(() => {
-    if (searchType !== 'freetext' || freeText.length < 3 || selectedCoords) {
-      setSuggestions([])
-      return
+  const calculatePredictedFee = async () => {
+    setAddressError('');
+    setIsCalculatingFee(true);
+    try {
+      const fee = await calculateAddressFee({
+        street,
+        number,
+        neighborhood,
+        city: 'Belo Horizonte',
+        state: 'MG',
+        lat: searchType === 'map' ? selectedCoords?.lat : undefined,
+        lng: searchType === 'map' ? selectedCoords?.lng : undefined,
+        zipcode: searchType === 'cep' ? zipcode : undefined
+      });
+      setPredictedFee(fee);
+    } catch (e: any) {
+      setAddressError(e.message || 'Erro ao calcular frete');
+    } finally {
+      setIsCalculatingFee(false);
     }
-    const timer = setTimeout(async () => {
-      setIsSearchingNom(true)
+  }
+
+  const handleCepChange = async (val: string) => {
+    const raw = val.replace(/\D/g, '');
+    setZipcode(val);
+    if (raw.length === 8) {
       try {
-        const query = encodeURIComponent(`${freeText}, Belo Horizonte, MG`)
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${query}&format=json&limit=5`, {
-          headers: { 'User-Agent': 'ApolloPizzaria/1.0' }
-        })
-        const data = await res.json()
-        setSuggestions(data || [])
-      } catch (err) {
-        console.error('Nominatim error', err)
-      } finally {
-        setIsSearchingNom(false)
+        const res = await fetch(`https://viacep.com.br/ws/${raw}/json/`);
+        const data = await res.json();
+        if (!data.erro) {
+          setStreet(data.logradouro);
+          setNeighborhood(data.bairro);
+        }
+      } catch (e) {
+        // ignore
       }
-    }, 500)
-    return () => clearTimeout(timer)
-  }, [freeText, searchType, selectedCoords])
+    }
+  }
 
   useEffect(() => {
     async function fetchDrivers() {
@@ -120,8 +153,7 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
       await assignDriverAndSend(order.id, selectedDriverId)
       onClose()
     } catch (error) {
-      console.error('Failed to assign driver:', error)
-    } finally {
+      console.error('Failed to assign driver', error)
       setIsSubmitting(false)
     }
   }
@@ -135,109 +167,166 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
           </DialogTitle>
         </DialogHeader>
 
+        {!isValidAddress ? (
+          <div className="py-4">
+            <div className="bg-red-50 p-4 rounded-xl border border-red-100 mb-4">
+              <p className="text-sm text-red-800 font-bold mb-1">Endereço inválido ou incompleto</p>
+              <p className="text-xs text-red-600 mb-4">Por favor, corrija o endereço antes de despachar o pedido.</p>
 
-        {deliveryAddress && !isValidAddress ? (
-          <div className="py-4 space-y-4 bg-red-50 p-4 rounded-xl border border-red-100">
-            <h3 className="font-bold text-red-800 flex items-center gap-2">
-              ⚠️ Endereço Inválido
-            </h3>
-            <p className="text-sm text-red-600">
-              O endereço do pedido está sem coordenadas (lat/lng).
-              Para atribuir um motoboy, corrija o endereço abaixo informando CEP e Número.
-            </p>
-
-            <div className="space-y-3 pt-2">
-              <div className="flex gap-4 mb-2">
+              <div className="flex gap-4 mb-4">
                 <label className="flex items-center gap-2 text-xs font-bold text-red-800 cursor-pointer">
                   <input type="radio" checked={searchType === 'cep'} onChange={() => setSearchType('cep')} className="accent-red-600" /> CEP + Número
                 </label>
                 <label className="flex items-center gap-2 text-xs font-bold text-red-800 cursor-pointer">
-                  <input type="radio" checked={searchType === 'freetext'} onChange={() => setSearchType('freetext')} className="accent-red-600" /> Texto Livre
+                  <input type="radio" checked={searchType === 'map'} onChange={() => setSearchType('map')} className="accent-red-600" /> Mapa
                 </label>
               </div>
 
               {searchType === 'cep' ? (
                 <>
-                  <div>
+                  <div className="mb-2">
                     <label className="text-xs font-bold text-red-800 mb-1 block">CEP</label>
                     <input
                       type="text"
                       value={zipcode}
-                      onChange={e => setZipcode(e.target.value)}
-                      placeholder="00000-000"
+                      onChange={e => handleCepChange(e.target.value)}
+                      placeholder="Ex: 30130-000"
+                      className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
+                      disabled={isUpdatingAddress}
+                      maxLength={9}
+                    />
+                  </div>
+                  <div className="mb-2">
+                    <label className="text-xs font-bold text-red-800 mb-1 block">Rua</label>
+                    <input
+                      type="text"
+                      value={street}
+                      onChange={e => setStreet(e.target.value)}
                       className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
                       disabled={isUpdatingAddress}
                     />
                   </div>
-                  <div>
-                    <label className="text-xs font-bold text-red-800 mb-1 block">Número</label>
+                  <div className="flex gap-2 mb-2">
+                    <div className="flex-1">
+                      <label className="text-xs font-bold text-red-800 mb-1 block">Número</label>
+                      <input
+                        type="text"
+                        value={number}
+                        onChange={e => setNumber(e.target.value)}
+                        placeholder="Ex: 123"
+                        className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
+                        disabled={isUpdatingAddress}
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-xs font-bold text-red-800 mb-1 block">Bairro</label>
+                      <input
+                        type="text"
+                        value={neighborhood}
+                        onChange={e => setNeighborhood(e.target.value)}
+                        className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
+                        disabled={isUpdatingAddress}
+                      />
+                    </div>
+                  </div>
+                  <div className="mb-4">
+                    <label className="text-xs font-bold text-red-800 mb-1 block">Complemento (opcional)</label>
                     <input
                       type="text"
-                      value={number}
-                      onChange={e => setNumber(e.target.value)}
-                      placeholder="Ex: 123"
+                      value={complement}
+                      onChange={e => setComplement(e.target.value)}
                       className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
                       disabled={isUpdatingAddress}
                     />
                   </div>
                 </>
               ) : (
-                <div className="relative">
-                  <label className="text-xs font-bold text-red-800 mb-1 block">Endereço Completo</label>
-                  <input
-                    type="text"
-                    value={freeText}
-                    onChange={e => {
-                      setFreeText(e.target.value)
-                      setSelectedCoords(null)
-                    }}
-                    placeholder="Ex: Av Amazonas, 1000, Centro"
-                    className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black focus:outline-none focus:border-red-400"
-                    disabled={isUpdatingAddress}
-                  />
-                  {isSearchingNom && (
-                    <div className="absolute right-3 top-9">
-                      <div className="animate-spin rounded-full h-4 w-4 border-2 border-red-500 border-t-transparent" />
-                    </div>
-                  )}
-                  {suggestions.length > 0 && !selectedCoords && (
-                    <ul className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
-                      {suggestions.map((s, idx) => (
-                        <li
-                          key={idx}
-                          className="px-4 py-2 hover:bg-red-50 cursor-pointer text-xs text-gray-800 border-b border-gray-100 last:border-0"
-                          onClick={() => {
-                            setFreeText(s.display_name)
-                            setSelectedCoords({ lat: parseFloat(s.lat), lng: parseFloat(s.lon) })
-                            setSuggestions([])
-                          }}
-                        >
-                          {s.display_name}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              )}
-
-              {searchType === 'freetext' && selectedCoords && (
-                <div className="mt-2 relative">
-                  <div className="text-xs font-bold text-green-700 flex justify-between">
-                    <span>Localização Encontrada:</span>
-                    <button type="button" onClick={() => setSelectedCoords(null)} className="text-gray-500 hover:text-red-500 underline">Alterar</button>
+                <>
+                  <div className="mb-2 relative">
+                    <label className="text-xs font-bold text-red-800 mb-1 block">Arraste o pino para o local exato</label>
+                    <SimplePreviewMap lat={selectedCoords?.lat || -19.9077} lng={selectedCoords?.lng || -43.8948} onLocationChange={handleMapDrag} />
                   </div>
-                  <SimplePreviewMap lat={selectedCoords.lat} lng={selectedCoords.lng} onLocationChange={handleMapDrag} />
-                </div>
+                  <div className="mb-2 mt-4">
+                    <label className="text-xs font-bold text-red-800 mb-1 block">Rua (encontrada no mapa)</label>
+                    <input
+                      type="text"
+                      value={street}
+                      onChange={e => setStreet(e.target.value)}
+                      className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
+                      disabled={isUpdatingAddress}
+                    />
+                  </div>
+                  <div className="flex gap-2 mb-2">
+                    <div className="flex-1">
+                      <label className="text-xs font-bold text-red-800 mb-1 block">Número</label>
+                      <input
+                        type="text"
+                        value={number}
+                        onChange={e => setNumber(e.target.value)}
+                        placeholder="Obrigatório"
+                        className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
+                        disabled={isUpdatingAddress}
+                      />
+                    </div>
+                    <div className="flex-1">
+                      <label className="text-xs font-bold text-red-800 mb-1 block">Bairro</label>
+                      <input
+                        type="text"
+                        value={neighborhood}
+                        onChange={e => setNeighborhood(e.target.value)}
+                        className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
+                        disabled={isUpdatingAddress}
+                      />
+                    </div>
+                  </div>
+                  <div className="mb-4">
+                    <label className="text-xs font-bold text-red-800 mb-1 block">Complemento (opcional)</label>
+                    <input
+                      type="text"
+                      value={complement}
+                      onChange={e => setComplement(e.target.value)}
+                      className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
+                      disabled={isUpdatingAddress}
+                    />
+                  </div>
+                </>
               )}
 
-              {addressError && <p className="text-xs text-red-600 font-bold">{addressError}</p>}
+              {addressError && <p className="text-xs text-red-600 font-bold mb-2">{addressError}</p>}
+
+              {predictedFee !== null ? (
+                <div className="bg-white rounded-lg p-3 mb-4 text-center border border-red-200">
+                  <p className="text-xs text-gray-500 mb-1">
+                    {predictedFee === oldFee
+                      ? "O frete permanecerá o mesmo:"
+                      : `Frete atualizado de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(oldFee)} para:`}
+                  </p>
+                  <p className="text-lg font-bold text-red-600">
+                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(predictedFee)}
+                  </p>
+                  <button
+                    onClick={() => setPredictedFee(null)}
+                    className="text-xs text-gray-400 underline mt-1 hover:text-gray-600"
+                  >
+                    Recalcular
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={calculatePredictedFee}
+                  disabled={isCalculatingFee || (searchType === 'cep' ? (!zipcode || !number) : (!selectedCoords || !number))}
+                  className="w-full py-2 bg-red-100 text-red-700 hover:bg-red-200 text-xs font-bold rounded-lg transition-colors disabled:opacity-50 mb-2"
+                >
+                  {isCalculatingFee ? 'Calculando...' : 'Verificar Frete'}
+                </button>
+              )}
 
               <button
                 onClick={handleUpdateAddress}
-                disabled={isUpdatingAddress || (searchType === 'cep' ? (!zipcode || !number) : !selectedCoords)}
+                disabled={isUpdatingAddress || predictedFee === null}
                 className="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-50"
               >
-                {isUpdatingAddress ? 'Corrigindo...' : 'Corrigir e Recalcular Frete'}
+                {isUpdatingAddress ? 'Corrigindo...' : 'Confirmar e Atualizar Endereço'}
               </button>
             </div>
           </div>

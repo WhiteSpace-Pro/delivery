@@ -3,7 +3,7 @@
 import { useEffect, useRef } from 'react'
 import '@tomtom-international/web-sdk-maps/dist/maps.css'
 
-export function SimplePreviewMap({ lat, lng, onLocationChange }: { lat: number, lng: number, onLocationChange?: (lat: number, lng: number, address?: string) => void }) {
+export function SimplePreviewMap({ lat, lng, onLocationChange }: { lat: number, lng: number, onLocationChange?: (lat: number, lng: number) => void }) {
   const mapContainer = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -31,20 +31,9 @@ export function SimplePreviewMap({ lat, lng, onLocationChange }: { lat: number, 
         .addTo(map)
 
       if (onLocationChange) {
-        marker.on('dragend', async () => {
+        marker.on('dragend', () => {
           const lngLat = marker.getLngLat()
-          let address: string | undefined
-          const key = process.env.NEXT_PUBLIC_TOMTOM_API_KEY || ''
-          if (key) {
-            try {
-              const res = await fetch(
-                `https://api.tomtom.com/search/2/reverseGeocode/${lngLat.lat},${lngLat.lng}.json?key=${key}`
-              )
-              const data = await res.json()
-              address = data.addresses?.[0]?.address?.freeformAddress
-            } catch { /* ignore */ }
-          }
-          onLocationChange(lngLat.lat, lngLat.lng, address)
+          onLocationChange(lngLat.lat, lngLat.lng)
         })
       }
     }

@@ -244,7 +244,10 @@ export async function updateOrderAddress(
   zipcode: string,
   number: string,
   freeTextLat?: number,
-  freeTextLng?: number
+  freeTextLng?: number,
+  street?: string,
+  neighborhood?: string,
+  complement?: string
 ) {
   await requireAdmin()
 
@@ -265,7 +268,15 @@ export async function updateOrderAddress(
     const distance = await getRouteDistance({ lat: finalLat, lng: finalLng });
     finalFee = Math.ceil(distance) * 1.00;
 
-    updatePayload = { lat: finalLat, lng: finalLng };
+    updatePayload = {
+      lat: finalLat,
+      lng: finalLng,
+      street: street,
+      number: number,
+      neighborhood: neighborhood,
+      complement: complement,
+      zipcode: zipcode
+    };
   } else {
     // Option 1: ViaCEP + TomTom
     const viaCepRes = await fetch(`https://viacep.com.br/ws/${zipcode.replace(/\D/g, '')}/json/`);
@@ -276,7 +287,9 @@ export async function updateOrderAddress(
     }
 
     const { logradouro, bairro, localidade, uf } = viaCepData;
-    const fullAddress = `${logradouro}, ${number} - ${bairro}, ${localidade} - ${uf}, ${zipcode}`;
+    const resolvedStreet = street || logradouro;
+    const resolvedNeighborhood = neighborhood || bairro;
+    const fullAddress = `${resolvedStreet}, ${number} - ${resolvedNeighborhood}, ${localidade} - ${uf}, ${zipcode}`;
 
     const { calculateDeliveryFee } = await import('@/lib/maps/distance');
     const { coords, fee } = await calculateDeliveryFee(fullAddress);
@@ -291,11 +304,12 @@ export async function updateOrderAddress(
 
     updatePayload = {
       zipcode: zipcode.replace(/\D/g, ''),
-      street: logradouro,
-      neighborhood: bairro,
+      street: resolvedStreet,
+      neighborhood: resolvedNeighborhood,
       city: localidade,
       state: uf,
-      number,
+      number: number,
+      complement: complement,
       lat: finalLat,
       lng: finalLng
     };
@@ -325,7 +339,9 @@ export async function updateOrderAddress(
     throw new Error('Falha ao buscar pedido para atualizar frete');
   }
 
-  const newTotal = (Number(orderData.subtotal) || 0) + finalFee - (Number(orderData.discount) || 0);
+  const subtotal = Number(orderData.subtotal) || 0;
+  const discount = Number(orderData.discount) || 0;
+  const newTotal = subtotal + finalFee - discount;
 
   const { error: orderError } = await supabaseAdmin
     .from('orders')
@@ -338,9 +354,24 @@ export async function updateOrderAddress(
 
   if (orderError) {
     console.error('Error updating order fee:', orderError);
-    throw new Error('Falha ao atualizar valor do frete no pedido');
+    throw new Error('Falha ao atualizar frete do pedido');
   }
 
   revalidatePath('/admin', 'page');
   return { success: true };
+}
+
+export async function calculateAddressFee(addressData: { street: string, number: string, neighborhood: string, city: string, state: string, lat?: number, lng?: number, zipcode?: string }) {
+  await requireAdmin()
+  const { calculateDeliveryFee, getRouteDistance } = await import('@/lib/maps/distance');
+
+  if (addressData.lat !== undefined && addressData.lng !== undefined) {
+    const distance = await getRouteDistance({ lat: addressData.lat, lng: addressData.lng });
+    return Math.ceil(distance) * 1.00;
+  } else {
+    const fullAddress = `${addressData.street}, ${addressData.number} - ${addressData.neighborhood}, ${addressData.city} - ${addressData.state}, ${addressData.zipcode || ''}`;
+    const { fee, coords } = await calculateDeliveryFee(fullAddress);
+    if (!coords) throw new Error('Failed to find coordinates');
+    return fee;
+  }
 }
