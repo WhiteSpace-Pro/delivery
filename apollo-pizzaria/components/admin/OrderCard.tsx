@@ -80,8 +80,9 @@ export function OrderCard({ order, onOpenDetail, onMoveToNext }: OrderCardProps)
 
       let summary = `${item.quantity}× ${productName}${item.size ? ' ' + item.size : ''}`
 
-      if (product?.type === 'combo' && product.combo_items && product.combo_items.length > 0) {
-        const comboDetails = product.combo_items.map((ci: any) => {
+      const comboItemsArray = product?.["combo_items!combo_items_combo_id_fkey"] || product?.combo_items;
+      if (product?.type === 'combo' && comboItemsArray && comboItemsArray.length > 0) {
+        const comboDetails = comboItemsArray.map((ci: any) => {
           const ciProduct = ci['products!combo_items_product_id_fkey'] || ci.products
           return `${ci.quantity}x ${ciProduct?.name || 'Item'}`
         }).join(', ')
