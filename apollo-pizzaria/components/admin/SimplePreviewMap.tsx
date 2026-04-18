@@ -1,15 +1,13 @@
-
 'use client'
 
 import { useEffect, useRef } from 'react'
 import '@tomtom-international/web-sdk-maps/dist/maps.css'
 
-export function SimplePreviewMap({ lat, lng }: { lat: number, lng: number }) {
+export function SimplePreviewMap({ lat, lng, onLocationChange }: { lat: number, lng: number, onLocationChange?: (lat: number, lng: number) => void }) {
   const mapContainer = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     let map: any = null
-    // marker will be held by map
 
     async function initMap() {
       if (!mapContainer.current) return
@@ -20,24 +18,32 @@ export function SimplePreviewMap({ lat, lng }: { lat: number, lng: number }) {
         container: mapContainer.current,
         center: [lng, lat],
         zoom: 16,
-        dragPan: false,
+        dragPan: true,
         scrollZoom: false
       })
 
       const el = document.createElement('div')
-      el.className = 'w-6 h-6 rounded-full bg-red-600 border-2 border-white shadow-lg flex items-center justify-center'
+      el.className = 'w-6 h-6 rounded-full bg-red-600 border-2 border-white shadow-lg flex items-center justify-center cursor-pointer'
       el.innerHTML = '<div class="w-2 h-2 rounded-full bg-white"></div>'
 
-      new tt.Marker({ element: el })
+      const marker = new tt.Marker({ element: el, draggable: !!onLocationChange })
         .setLngLat([lng, lat])
         .addTo(map)
+
+      if (onLocationChange) {
+        marker.on('dragend', () => {
+          const lngLat = marker.getLngLat()
+          onLocationChange(lngLat.lat, lngLat.lng)
+        })
+      }
     }
     initMap()
 
     return () => {
       if (map) map.remove()
     }
-  }, [lat, lng])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lat, lng]) // Intentional: Do not include onLocationChange to prevent re-rendering map when dragging
 
   return <div ref={mapContainer} className="w-full h-40 bg-gray-100 rounded-lg overflow-hidden mt-2" />
 }

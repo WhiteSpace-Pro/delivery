@@ -35,7 +35,7 @@ export default function AdminLayout({
   // Removed early return for isLoading to fix layout hydration and ensure header renders
 
   return (
-    <div className="min-h-screen bg-[#F8F7F5] flex font-dm text-[#0D0D0D]">
+    <div className="min-h-screen bg-[#F8F7F5] font-dm text-[#0D0D0D]">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex w-60 flex-col fixed inset-y-0 border-r border-[#0D0D0D]/10 bg-white z-50">
         <div className="p-6">

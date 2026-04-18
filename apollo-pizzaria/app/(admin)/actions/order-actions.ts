@@ -344,3 +344,75 @@ export async function updateOrderAddress(
   revalidatePath('/admin', 'page');
   return { success: true };
 }
+
+export async function previewAddressFee(
+  lat: number,
+  lng: number
+): Promise<{ fee: number; distanceKm: number }> {
+  await requireAdmin()
+  const { getRouteDistance } = await import('@/lib/maps/distance')
+  const distanceKm = await getRouteDistance({ lat, lng })
+  const fee = Math.max(Math.ceil(distanceKm) * 1.0, 3.0)
+  return { fee, distanceKm }
+}
+
+export async function saveAddressCorrection(
+  orderId: string,
+  deliveryAddressId: string,
+  data: {
+    street: string
+    number: string
+    neighborhood: string
+    complement?: string
+    lat: number
+    lng: number
+  }
+): Promise<void> {
+  await requireAdmin()
+
+  if (!deliveryAddressId) throw new Error('ID do endereço ausente.')
+
+  const { getRouteDistance } = await import('@/lib/maps/distance')
+  const distanceKm = await getRouteDistance({ lat: data.lat, lng: data.lng })
+  const fee = Math.max(Math.ceil(distanceKm) * 1.0, 3.0)
+
+  const { error: addrErr } = await supabaseAdmin
+    .from('addresses')
+    .update({
+      street: data.street,
+      number: data.number,
+      neighborhood: data.neighborhood,
+      complement: data.complement ?? null,
+      lat: data.lat,
+      lng: data.lng,
+    })
+    .eq('id', deliveryAddressId)
+    .eq('tenant_id', TENANT_ID)
+
+  if (addrErr) {
+    console.error('Error updating address:', addrErr)
+    throw new Error('Falha ao atualizar endereço')
+  }
+
+  const { data: orderData, error: fetchErr } = await supabaseAdmin
+    .from('orders')
+    .select('subtotal, discount')
+    .eq('id', orderId)
+    .eq('tenant_id', TENANT_ID)
+    .single()
+
+  if (fetchErr || !orderData) throw new Error('Falha ao buscar pedido')
+
+  const newTotal =
+    (Number(orderData.subtotal) || 0) + fee - (Number(orderData.discount) || 0)
+
+  const { error: orderErr } = await supabaseAdmin
+    .from('orders')
+    .update({ delivery_fee: fee, total_amount: newTotal } as any)
+    .eq('id', orderId)
+    .eq('tenant_id', TENANT_ID)
+
+  if (orderErr) throw new Error('Falha ao atualizar frete')
+
+  revalidatePath('/admin', 'page')
+}

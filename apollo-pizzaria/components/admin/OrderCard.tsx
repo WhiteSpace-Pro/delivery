@@ -134,7 +134,7 @@ export function OrderCard({ order, onOpenDetail, onMoveToNext }: OrderCardProps)
          )}
       </div>
 
-      <p className="text-[#374151] text-xs line-clamp-2 mb-3 leading-relaxed">
+      <p className="text-[#0D0D0D] text-sm font-bold line-clamp-2 mb-3 leading-relaxed">
         {itemsSummary}
       </p>
 
