@@ -12,6 +12,22 @@ import { placeOrder } from './actions/checkout-actions'
 import { calculateDeliveryFee } from '@/lib/maps/distance'
 import Image from 'next/image'
 
+
+const TOMTOM_KEY = process.env.NEXT_PUBLIC_TOMTOM_API_KEY || ''
+const SEARCH_LAT = -19.9077
+const SEARCH_LNG = -43.8948
+
+interface TomTomSuggestion {
+  address: {
+    streetName?: string
+    municipalitySubdivision?: string
+    municipality?: string
+    postalCode?: string
+    freeformAddress: string
+  }
+  position: { lat: number; lon: number }
+}
+
 const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
 
 interface Address {
@@ -69,6 +85,11 @@ export default function CheckoutPage() {
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'cash' | 'credit_card' | 'debit_card'>('pix')
   const [changeFor, setChangeFor] = useState('')
 
+
+  const [streetSuggestions, setStreetSuggestions] = useState<TomTomSuggestion[]>([])
+  const [isSearchingStreet, setIsSearchingStreet] = useState(false)
+  const [isStreetSelected, setIsStreetSelected] = useState(false)
+
   const [showAddressAlert, setShowAddressAlert] = useState(false)
     const [inlineCorrection, setInlineCorrection] = useState({
     active: false,
@@ -79,6 +100,38 @@ export default function CheckoutPage() {
     searching: false
   })
   const subtotal = items.reduce((acc, item) => acc + item.total_price, 0)
+
+
+  useEffect(() => {
+    if (isStreetSelected || addressForm.street.length < 3) {
+      setStreetSuggestions([])
+      return
+    }
+    const timer = setTimeout(async () => {
+      setIsSearchingStreet(true)
+      try {
+        const q = encodeURIComponent(addressForm.street)
+        const res = await fetch(
+          `https://api.tomtom.com/search/2/search/${q}.json?key=${TOMTOM_KEY}&countrySet=BR&lat=${SEARCH_LAT}&lon=${SEARCH_LNG}&radius=20000&language=pt-BR`
+        )
+        const data = await res.json()
+        setStreetSuggestions((data.results ?? []).slice(0, 6))
+      } catch { /* ignore */ }
+      finally { setIsSearchingStreet(false) }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [addressForm.street, isStreetSelected])
+
+  const handleSelectStreetSuggestion = (s: TomTomSuggestion) => {
+    setAddressForm(prev => ({
+      ...prev,
+      street: s.address.streetName || s.address.freeformAddress,
+      neighborhood: s.address.municipalitySubdivision || prev.neighborhood,
+      ...(s.address.postalCode && { zipcode: s.address.postalCode })
+    }))
+    setStreetSuggestions([])
+    setIsStreetSelected(true)
+  }
 
   useEffect(() => {
     const saved = localStorage.getItem('apollo-checkout-pix')
@@ -557,7 +610,35 @@ export default function CheckoutPage() {
                      <div className="grid grid-cols-4 gap-2">
                         <div className="col-span-3 space-y-1">
                            <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Rua</label>
-                           <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Rua" value={addressForm.street} readOnly={!addressForm.regionNotFound} onChange={e => setAddressForm(prev => ({...prev, street: e.target.value}))} />
+                           <div className="relative">
+                              <input
+                                className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm"
+                                placeholder="Rua"
+                                value={addressForm.street}
+                                onChange={e => {
+                                  setIsStreetSelected(false)
+                                  setAddressForm(prev => ({...prev, street: e.target.value}))
+                                }}
+                              />
+                              {isSearchingStreet && (
+                                <div className="absolute right-3 top-3.5">
+                                  <Loader2 className="w-4 h-4 animate-spin text-apollo-orange" />
+                                </div>
+                              )}
+                              {streetSuggestions.length > 0 && (
+                                <ul className="absolute z-10 w-full mt-1 bg-[#1A1A1A] border border-[#2A2A2A] rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                                  {streetSuggestions.map((s, i) => (
+                                    <li
+                                      key={i}
+                                      className="px-4 py-3 hover:bg-[#2A2A2A] cursor-pointer text-xs text-white border-b border-[#2A2A2A] last:border-0"
+                                      onClick={() => handleSelectStreetSuggestion(s)}
+                                    >
+                                      {s.address.streetName ? `${s.address.streetName}${s.address.municipalitySubdivision ? ` - ${s.address.municipalitySubdivision}` : ''}, ${s.address.municipality || 'Belo Horizonte'}` : s.address.freeformAddress}
+                                    </li>
+                                  ))}
+                                </ul>
+                              )}
+                           </div>
                         </div>
                         <div className="col-span-1 space-y-1">
                            <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Nº</label>
