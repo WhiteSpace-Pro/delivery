@@ -69,18 +69,10 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
 
 
 
-  const handleMapDrag = async (newLat: number, newLng: number) => {
+  const handleMapDrag = (newLat: number, newLng: number, address?: string) => {
     setSelectedCoords({ lat: newLat, lng: newLng });
-    try {
-      const res = await fetch(`/api/geocode?lat=${newLat}&lng=${newLng}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.address) {
-          setFreeText(data.address);
-        }
-      }
-    } catch (e) {
-      console.error('Failed to reverse geocode', e);
+    if (address) {
+      setFreeText(address);
     }
   }
 

@@ -9,7 +9,8 @@ import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { placeOrder } from './actions/checkout-actions'
-import { calculateDeliveryFee } from '@/lib/maps/distance'
+import { calculateDeliveryFee, getRouteDistance } from '@/lib/maps/distance'
+import { CheckoutPinMap, type PinAddressData } from '@/components/client/CheckoutPinMap'
 import Image from 'next/image'
 
 const TENANT_ID = '496c5a35-6843-4061-b3ab-159d15a0cbc6'
@@ -68,6 +69,8 @@ export default function CheckoutPage() {
 
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'cash' | 'credit_card' | 'debit_card'>('pix')
   const [changeFor, setChangeFor] = useState('')
+
+  const [addressMode, setAddressMode] = useState<'cep' | 'pin'>('cep')
 
   const [showAddressAlert, setShowAddressAlert] = useState(false)
     const [inlineCorrection, setInlineCorrection] = useState({
@@ -191,6 +194,25 @@ export default function CheckoutPage() {
     } else {
       setAddressForm(prev => ({ ...prev, regionNotFound: true, fee: 0 }))
     }
+    setCalculatingFee(false)
+  }
+
+  const handlePinConfirm = async (data: PinAddressData) => {
+    setCalculatingFee(true)
+    const distanceKm = await getRouteDistance({ lat: data.lat, lng: data.lng })
+    const fee = Math.max(Math.ceil(distanceKm) * 1.0, 3.0)
+    setAddressForm(prev => ({
+      ...prev,
+      street: data.street,
+      number: data.number,
+      neighborhood: data.neighborhood,
+      zipcode: '',
+      lat: data.lat,
+      lng: data.lng,
+      fee,
+      regionNotFound: false,
+    }))
+    setAddressMode('cep')
     setCalculatingFee(false)
   }
 
@@ -536,6 +558,18 @@ export default function CheckoutPage() {
 
                  {selectedAddressId === 'new' && (
                    <div className="space-y-4">
+                     <div className="flex bg-[#0D0D0D] rounded-xl p-1 border border-white/5">
+                       <button type="button" onClick={() => setAddressMode('cep')} className={cn("flex-1 py-2 rounded-lg text-xs font-bold transition-all", addressMode === 'cep' ? "bg-apollo-orange text-white" : "text-white/40")}>Por CEP</button>
+                       <button type="button" onClick={() => setAddressMode('pin')} className={cn("flex-1 py-2 rounded-lg text-xs font-bold transition-all", addressMode === 'pin' ? "bg-apollo-orange text-white" : "text-white/40")}>PIN no Mapa</button>
+                     </div>
+
+                     {addressMode === 'pin' ? (
+                       <CheckoutPinMap
+                         onConfirm={handlePinConfirm}
+                         onCancel={() => setAddressMode('cep')}
+                       />
+                     ) : (
+                     <div className="space-y-4">
                      <div className="space-y-1">
                         <label className="text-[10px] uppercase font-bold text-white/40 ml-1">CEP</label>
                         <input value={addressForm.zipcode} onChange={e => {
@@ -582,6 +616,8 @@ export default function CheckoutPage() {
                        />
                        <span className="text-xs font-medium text-white/60">Salvar este endereço para próximas entregas</span>
                      </label>
+                   </div>
+                     )}
                    </div>
                  )}
                </div>
