@@ -216,6 +216,24 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
                                   {item.is_half && halfProduct?.name ? `½ ${product?.name ?? ""} / ½ ${halfProduct.name}` : (product?.name ?? "")}
                                 </p>
                                 <p className="text-[10px] text-[#666] font-bold uppercase">{item.size} {edge ? `• Borda ${edge.name}` : ''}</p>
+                                {(() => {
+                                  const comboItemsArray = product?.["combo_items!combo_items_combo_id_fkey"] || product?.combo_items;
+                                  if (product?.type === 'combo' && comboItemsArray && comboItemsArray.length > 0) {
+                                    return (
+                                      <div className="mt-1 flex flex-col gap-0.5">
+                                        {comboItemsArray.map((ci: any, idx: number) => {
+                                      const ciProduct = ci['products!combo_items_product_id_fkey'] || ci.products
+                                      return (
+                                        <p key={idx} className="text-xs text-[#666]">
+                                          + {ci.quantity}x {ciProduct?.name || 'Item'}
+                                        </p>
+                                      )
+                                    })}
+                                  </div>
+                                    );
+                                  }
+                                  return null;
+                                })()}
                                 {item.observations && <p className="text-xs text-apollo-orange italic mt-1 font-medium">{item.observations}</p>}
                              </div>
                           </div>

@@ -77,7 +77,19 @@ export function OrderCard({ order, onOpenDetail, onMoveToNext }: OrderCardProps)
     ?.map(item => {
       const product = (item as any)['products!order_items_product_id_fkey'] || (item as any).products
       const productName = product?.name ?? `Item #${item.product_id?.slice(-4)}`
-      return `${item.quantity}× ${productName}${item.size ? ' ' + item.size : ''}`
+
+      let summary = `${item.quantity}× ${productName}${item.size ? ' ' + item.size : ''}`
+
+      const comboItemsArray = product?.["combo_items!combo_items_combo_id_fkey"] || product?.combo_items;
+      if (product?.type === 'combo' && comboItemsArray && comboItemsArray.length > 0) {
+        const comboDetails = comboItemsArray.map((ci: any) => {
+          const ciProduct = ci['products!combo_items_product_id_fkey'] || ci.products
+          return `${ci.quantity}x ${ciProduct?.name || 'Item'}`
+        }).join(', ')
+        summary += ` (${comboDetails})`
+      }
+
+      return summary
     })
     .join(', ')
 
