@@ -448,7 +448,7 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
                       <button
                         type="button"
                         onClick={() => handleConflictChoose('pin')}
-                        className="flex-1 py-1.5 text-xs font-bold bg-white border border-yellow-300 rounded-lg hover:bg-yellow-50"
+                        className="flex-1 py-1.5 text-xs font-bold text-yellow-800 bg-white border border-yellow-300 rounded-lg hover:bg-yellow-50"
                       >
                         Posição do pin
                       </button>
