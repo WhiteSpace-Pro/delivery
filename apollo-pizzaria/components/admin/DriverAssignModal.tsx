@@ -30,6 +30,21 @@ interface TomTomSuggestion {
   position: { lat: number; lon: number }
 }
 
+interface TomTomReverseGeocodeAddress {
+  streetName?: string
+  municipalitySubdivision?: string
+  streetNumber?: string
+  freeformAddress?: string
+}
+
+interface TomTomReverseGeocodeResult {
+  address?: TomTomReverseGeocodeAddress
+}
+
+interface TomTomReverseGeocodeResponse {
+  addresses?: TomTomReverseGeocodeResult[]
+}
+
 function haversineKm(
   lat1: number,
   lon1: number,
@@ -101,6 +116,7 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
   // Save
   const [isSaving, setIsSaving] = useState(false)
   const [addressError, setAddressError] = useState('')
+  const latestPinDragRequestRef = useRef(0)
 
   useEffect(() => {
     pinCoordsRef.current = pinCoords
@@ -197,10 +213,80 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
     setAddressError('')
   }
 
+  const geocodeNumberFromStreet = async (
+    street: string,
+    streetNumber: string
+  ): Promise<{ lat: number; lng: number } | null> => {
+    const query = encodeURIComponent(`${street}, ${streetNumber}, Belo Horizonte, MG`)
+    const res = await fetch(
+      `https://api.tomtom.com/search/2/geocode/${query}.json?key=${TOMTOM_KEY}&countrySet=BR&limit=1`
+    )
+    const data: { results?: Array<{ position?: { lat?: number; lon?: number } }> } =
+      await res.json()
+    const firstResult = data.results?.[0]
+    if (
+      firstResult?.position?.lat == null ||
+      firstResult.position.lon == null
+    ) {
+      return null
+    }
+    return {
+      lat: firstResult.position.lat,
+      lng: firstResult.position.lon,
+    }
+  }
+
   const handlePinDrag = (lat: number, lng: number) => {
     setPinCoords({ lat, lng })
     setFeeInfo(null)
     setShowConflict(false)
+    setAddressError('')
+
+    const currentRequestId = Date.now()
+    latestPinDragRequestRef.current = currentRequestId
+
+    void (async () => {
+      try {
+        const res = await fetch(
+          `https://api.tomtom.com/search/2/reverseGeocode/${lat},${lng}.json?key=${TOMTOM_KEY}&language=pt-BR`
+        )
+        const data: TomTomReverseGeocodeResponse = await res.json()
+        const address = data.addresses?.[0]?.address
+        if (!address || latestPinDragRequestRef.current !== currentRequestId) return
+
+        const draggedStreet = address.streetName?.trim() || ''
+        const draggedNeighborhood = address.municipalitySubdivision?.trim() || ''
+        const draggedNumber = address.streetNumber?.trim() || ''
+        const previousNumber = number.trim()
+
+        const searchLabel =
+          [draggedStreet, draggedNeighborhood].filter(Boolean).join(' - ') ||
+          address.freeformAddress ||
+          ''
+
+        if (searchLabel) setSearchQuery(searchLabel)
+        setSelectedStreet(draggedStreet || selectedStreet)
+        setSelectedNeighborhood(draggedNeighborhood)
+        setIsAddressSelected(true)
+
+        if (draggedNumber) {
+          if (previousNumber && previousNumber !== draggedNumber) {
+            const coordsFromTypedNumber = await geocodeNumberFromStreet(
+              draggedStreet || selectedStreet,
+              previousNumber
+            )
+            if (latestPinDragRequestRef.current !== currentRequestId) return
+            setNumberCoords(coordsFromTypedNumber)
+            setShowConflict(true)
+          } else {
+            setNumberCoords(null)
+          }
+          setNumber(draggedNumber)
+        }
+      } catch {
+        // ignore reverse geocode failures when dragging
+      }
+    })()
   }
 
   const handleConflictChoose = (choice: 'pin' | 'number') => {
