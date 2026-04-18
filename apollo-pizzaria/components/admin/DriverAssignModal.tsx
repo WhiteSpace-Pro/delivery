@@ -25,6 +25,8 @@ interface TomTomSuggestion {
   address: {
     streetName?: string
     municipalitySubdivision?: string
+    municipality?: string
+    postalCode?: string
     freeformAddress: string
   }
   position: { lat: number; lon: number }
@@ -396,7 +398,7 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
                       className="px-4 py-2 hover:bg-red-50 cursor-pointer text-xs text-gray-800 border-b border-gray-100 last:border-0"
                       onClick={() => handleSelectSuggestion(s)}
                     >
-                      {s.address.freeformAddress}
+                      {s.address.streetName ? `${s.address.streetName}${s.address.municipalitySubdivision ? ` - ${s.address.municipalitySubdivision}` : ''}, ${s.address.municipality || 'Belo Horizonte'}` : s.address.freeformAddress}
                     </li>
                   ))}
                 </ul>
