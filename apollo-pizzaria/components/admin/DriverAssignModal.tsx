@@ -1,10 +1,51 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { assignDriverAndSend, getAvailableDrivers, updateOrderAddress, calculateAddressFee } from '@/app/(admin)/actions/order-actions'
+import { useState, useEffect, useRef } from 'react'
+import {
+  assignDriverAndSend,
+  getAvailableDrivers,
+  previewAddressFee,
+  saveAddressCorrection,
+} from '@/app/(admin)/actions/order-actions'
 import { OrderWithItems, Profile } from '@/types'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from '@/components/ui/dialog'
 import { SimplePreviewMap } from './SimplePreviewMap'
+
+const TOMTOM_KEY = process.env.NEXT_PUBLIC_TOMTOM_API_KEY || ''
+const SEARCH_LAT = -19.9077
+const SEARCH_LNG = -43.8948
+
+interface TomTomSuggestion {
+  address: {
+    streetName?: string
+    municipalitySubdivision?: string
+    freeformAddress: string
+  }
+  position: { lat: number; lon: number }
+}
+
+function haversineKm(
+  lat1: number,
+  lon1: number,
+  lat2: number,
+  lon2: number
+): number {
+  const R = 6371
+  const dLat = ((lat2 - lat1) * Math.PI) / 180
+  const dLon = ((lon2 - lon1) * Math.PI) / 180
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) ** 2
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
+}
 
 interface DriverAssignModalProps {
   order: OrderWithItems
@@ -13,138 +54,200 @@ interface DriverAssignModalProps {
 }
 
 export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
-  const [drivers, setDrivers] = useState<Profile[]>([])
-  const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null)
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [isLoading, setIsLoading] = useState(true)
-
   const deliveryAddress = (order as any).addresses
 
-  const [searchType, setSearchType] = useState<'cep' | 'map'>('cep')
-  const [zipcode, setZipcode] = useState(deliveryAddress?.zipcode || '')
-  const [number, setNumber] = useState(deliveryAddress?.number || '')
-  const [street, setStreet] = useState(deliveryAddress?.street || '')
-  const [neighborhood, setNeighborhood] = useState(deliveryAddress?.neighborhood || '')
-  const [complement, setComplement] = useState(deliveryAddress?.complement || '')
-  const [selectedCoords, setSelectedCoords] = useState<{lat: number, lng: number} | null>({ lat: deliveryAddress?.lat || -19.9077, lng: deliveryAddress?.lng || -43.8948 })
-
-  const [isUpdatingAddress, setIsUpdatingAddress] = useState(false)
-  const [isCalculatingFee, setIsCalculatingFee] = useState(false)
-  const [addressError, setAddressError] = useState('')
-  const [predictedFee, setPredictedFee] = useState<number | null>(null)
-
-  const oldFee = Number(order.delivery_fee) || 0;
-
   const [isValidAddress, setIsValidAddress] = useState(() => {
-    if (!deliveryAddress) return true; // If no address (e.g. withdrawal), it's valid
-    return deliveryAddress.lat != null && deliveryAddress.lat !== 0 && deliveryAddress.lng != null && deliveryAddress.lng !== 0;
-  });
+    if (!deliveryAddress) return true
+    return (
+      deliveryAddress.lat != null &&
+      deliveryAddress.lat !== 0 &&
+      deliveryAddress.lng != null &&
+      deliveryAddress.lng !== 0
+    )
+  })
 
-  const handleUpdateAddress = async () => {
-    if (searchType === 'cep' && (!zipcode || !number)) {
-      setAddressError('Preencha CEP e número')
-      return
-    }
-    if (searchType === 'map' && (!street || !number || !selectedCoords)) {
-      setAddressError('Preencha os dados do mapa e o número')
-      return
-    }
-    setIsUpdatingAddress(true)
-    setAddressError('')
-    try {
-      if (!order.delivery_address_id) {
-        setAddressError('Pedido não tem um endereço vinculado. Cancele e recrie o pedido.')
-        setIsUpdatingAddress(false)
-        return
-      }
-      await updateOrderAddress(
-        order.id,
-        order.delivery_address_id,
-        zipcode,
-        number,
-        searchType === 'map' ? selectedCoords?.lat : undefined,
-        searchType === 'map' ? selectedCoords?.lng : undefined,
-        street,
-        neighborhood,
-        complement
-      )
-      setIsValidAddress(true)
-    } catch (error: any) {
-      setAddressError(error.message || 'Falha ao corrigir endereço')
-    } finally {
-      setIsUpdatingAddress(false)
-    }
-  }
+  // Driver selection
+  const [drivers, setDrivers] = useState<Profile[]>([])
+  const [selectedDriverId, setSelectedDriverId] = useState<string | null>(null)
+  const [isLoadingDrivers, setIsLoadingDrivers] = useState(true)
+  const [isSubmitting, setIsSubmitting] = useState(false)
 
-  const handleMapDrag = async (newLat: number, newLng: number) => {
-    setSelectedCoords({ lat: newLat, lng: newLng });
-    try {
-      const res = await fetch(`/api/geocode?lat=${newLat}&lng=${newLng}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.address) {
-          const parts = data.address.split(',');
-          if (parts.length > 0) setStreet(parts[0].trim());
-          if (parts.length > 2) setNeighborhood(parts[2].split('-')[0].trim());
-        }
-      }
-    } catch (e) {
-      console.error('Failed to reverse geocode', e);
-    }
-  }
+  // Address search
+  const [searchQuery, setSearchQuery] = useState('')
+  const [suggestions, setSuggestions] = useState<TomTomSuggestion[]>([])
+  const [isSearching, setIsSearching] = useState(false)
+  const [isAddressSelected, setIsAddressSelected] = useState(false)
 
-  const calculatePredictedFee = async () => {
-    setAddressError('');
-    setIsCalculatingFee(true);
-    try {
-      const fee = await calculateAddressFee({
-        street,
-        number,
-        neighborhood,
-        city: 'Belo Horizonte',
-        state: 'MG',
-        lat: searchType === 'map' ? selectedCoords?.lat : undefined,
-        lng: searchType === 'map' ? selectedCoords?.lng : undefined,
-        zipcode: searchType === 'cep' ? zipcode : undefined
-      });
-      setPredictedFee(fee);
-    } catch (e: any) {
-      setAddressError(e.message || 'Erro ao calcular frete');
-    } finally {
-      setIsCalculatingFee(false);
-    }
-  }
+  // Selected address data
+  const [selectedStreet, setSelectedStreet] = useState('')
+  const [selectedNeighborhood, setSelectedNeighborhood] = useState('')
+  const [pinCoords, setPinCoords] = useState<{ lat: number; lng: number } | null>(null)
+  const pinCoordsRef = useRef<{ lat: number; lng: number } | null>(null)
 
-  const handleCepChange = async (val: string) => {
-    const raw = val.replace(/\D/g, '');
-    setZipcode(val);
-    if (raw.length === 8) {
-      try {
-        const res = await fetch(`https://viacep.com.br/ws/${raw}/json/`);
-        const data = await res.json();
-        if (!data.erro) {
-          setStreet(data.logradouro);
-          setNeighborhood(data.bairro);
-        }
-      } catch (e) {
-        // ignore
-      }
-    }
-  }
+  // Number & complement
+  const [number, setNumber] = useState(deliveryAddress?.number ?? '')
+  const [complement, setComplement] = useState(deliveryAddress?.complement ?? '')
+
+  // Number-vs-pin conflict
+  const [numberCoords, setNumberCoords] = useState<{ lat: number; lng: number } | null>(null)
+  const [showConflict, setShowConflict] = useState(false)
+  const [isRefiningNumber, setIsRefiningNumber] = useState(false)
+
+  // Fee preview
+  const [feeInfo, setFeeInfo] = useState<{ fee: number; distanceKm: number } | null>(null)
+  const [isCalculatingFee, setIsCalculatingFee] = useState(false)
+  const originalFee = order.delivery_fee
+
+  // Save
+  const [isSaving, setIsSaving] = useState(false)
+  const [addressError, setAddressError] = useState('')
 
   useEffect(() => {
-    async function fetchDrivers() {
-      try {
-        const data = await getAvailableDrivers()
-        if (data) setDrivers(data as any)
-      } catch (error) {
-        console.error('Failed to fetch drivers:', error)
-      } finally {
-        setIsLoading(false)
-      }
-    }
-    fetchDrivers()
+    pinCoordsRef.current = pinCoords
+  }, [pinCoords])
+
+  useEffect(() => {
+    getAvailableDrivers()
+      .then(data => { if (data) setDrivers(data as any) })
+      .catch(console.error)
+      .finally(() => setIsLoadingDrivers(false))
   }, [])
+
+  // TomTom autocomplete — only runs while no address is selected yet
+  useEffect(() => {
+    if (isAddressSelected || searchQuery.length < 3) {
+      setSuggestions([])
+      return
+    }
+    const timer = setTimeout(async () => {
+      setIsSearching(true)
+      try {
+        const q = encodeURIComponent(searchQuery)
+        const res = await fetch(
+          `https://api.tomtom.com/search/2/search/${q}.json?key=${TOMTOM_KEY}&countrySet=BR&lat=${SEARCH_LAT}&lon=${SEARCH_LNG}&radius=20000&language=pt-BR`
+        )
+        const data = await res.json()
+        setSuggestions((data.results ?? []).slice(0, 6))
+      } catch { /* ignore */ }
+      finally { setIsSearching(false) }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [searchQuery, isAddressSelected])
+
+  // Number refinement — compare geocoded-with-number to current pin
+  useEffect(() => {
+    if (!selectedStreet || !number) {
+      setNumberCoords(null)
+      setShowConflict(false)
+      return
+    }
+    const timer = setTimeout(async () => {
+      setIsRefiningNumber(true)
+      try {
+        const query = encodeURIComponent(
+          `${selectedStreet}, ${number}, Belo Horizonte, MG`
+        )
+        const res = await fetch(
+          `https://api.tomtom.com/search/2/geocode/${query}.json?key=${TOMTOM_KEY}&countrySet=BR&limit=1`
+        )
+        const data = await res.json()
+        const result = data.results?.[0]
+        if (!result) return
+        const coords = { lat: result.position.lat as number, lng: result.position.lon as number }
+        setNumberCoords(coords)
+        const current = pinCoordsRef.current
+        if (current) {
+          const dist = haversineKm(current.lat, current.lng, coords.lat, coords.lng)
+          if (dist > 0.1) {
+            setShowConflict(true)
+          } else {
+            setPinCoords(coords)
+            setFeeInfo(null)
+          }
+        }
+      } catch { /* ignore */ }
+      finally { setIsRefiningNumber(false) }
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [selectedStreet, number])
+
+  const handleSearchChange = (val: string) => {
+    setSearchQuery(val)
+    if (isAddressSelected) {
+      setIsAddressSelected(false)
+      setSelectedStreet('')
+      setSelectedNeighborhood('')
+      setPinCoords(null)
+      setNumberCoords(null)
+      setShowConflict(false)
+      setFeeInfo(null)
+    }
+  }
+
+  const handleSelectSuggestion = (s: TomTomSuggestion) => {
+    setSearchQuery(s.address.freeformAddress)
+    setSelectedStreet(s.address.streetName || s.address.freeformAddress)
+    setSelectedNeighborhood(s.address.municipalitySubdivision || '')
+    setPinCoords({ lat: s.position.lat, lng: s.position.lon })
+    setSuggestions([])
+    setIsAddressSelected(true)
+    setFeeInfo(null)
+    setShowConflict(false)
+    setNumberCoords(null)
+    setAddressError('')
+  }
+
+  const handlePinDrag = (lat: number, lng: number) => {
+    setPinCoords({ lat, lng })
+    setFeeInfo(null)
+    setShowConflict(false)
+  }
+
+  const handleConflictChoose = (choice: 'pin' | 'number') => {
+    if (choice === 'number' && numberCoords) {
+      setPinCoords(numberCoords)
+    }
+    setFeeInfo(null)
+    setShowConflict(false)
+  }
+
+  const handleCalculateFee = async () => {
+    if (!pinCoords) return
+    setIsCalculatingFee(true)
+    setAddressError('')
+    try {
+      const result = await previewAddressFee(pinCoords.lat, pinCoords.lng)
+      setFeeInfo(result)
+    } catch (e: any) {
+      setAddressError(e.message || 'Erro ao calcular frete')
+    } finally {
+      setIsCalculatingFee(false)
+    }
+  }
+
+  const handleSaveAddress = async () => {
+    if (!pinCoords || !feeInfo || !order.delivery_address_id) {
+      setAddressError('Preencha o endereço, número e calcule o frete antes de confirmar.')
+      return
+    }
+    setIsSaving(true)
+    setAddressError('')
+    try {
+      await saveAddressCorrection(order.id, order.delivery_address_id, {
+        street: selectedStreet,
+        number,
+        neighborhood: selectedNeighborhood,
+        complement: complement || undefined,
+        lat: pinCoords.lat,
+        lng: pinCoords.lng,
+      })
+      setIsValidAddress(true)
+    } catch (e: any) {
+      setAddressError(e.message || 'Erro ao salvar endereço')
+    } finally {
+      setIsSaving(false)
+    }
+  }
 
   const handleConfirm = async () => {
     if (!selectedDriverId) return
@@ -152,187 +255,188 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
     try {
       await assignDriverAndSend(order.id, selectedDriverId)
       onClose()
-    } catch (error) {
-      console.error('Failed to assign driver', error)
+    } catch (e) {
+      console.error('Failed to assign driver:', e)
+    } finally {
       setIsSubmitting(false)
     }
   }
 
+  const canCalculateFee = !!pinCoords && !showConflict && !isRefiningNumber
+  const canSave = canCalculateFee && !!feeInfo && !!number.trim()
+  const feeChanged = feeInfo !== null && feeInfo.fee !== originalFee
+
   return (
     <Dialog open onOpenChange={onClose}>
-      <DialogContent className="bg-white rounded-2xl sm:max-w-[400px]">
+      <DialogContent className="bg-white rounded-2xl sm:max-w-[440px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold text-[#0D0D0D]">
-            Atribuir motoboy — Pedido #${order.display_id || order.id.slice(-4).toUpperCase()}
+            Atribuir motoboy — Pedido #{order.display_id || order.id.slice(-4).toUpperCase()}
           </DialogTitle>
         </DialogHeader>
 
-        {!isValidAddress ? (
-          <div className="py-4">
-            <div className="bg-red-50 p-4 rounded-xl border border-red-100 mb-4">
-              <p className="text-sm text-red-800 font-bold mb-1">Endereço inválido ou incompleto</p>
-              <p className="text-xs text-red-600 mb-4">Por favor, corrija o endereço antes de despachar o pedido.</p>
+        {deliveryAddress && !isValidAddress ? (
+          <div className="py-4 space-y-4 bg-red-50 p-4 rounded-xl border border-red-100">
+            <h3 className="font-bold text-red-800 flex items-center gap-2">
+              ⚠️ Endereço Inválido
+            </h3>
+            <p className="text-sm text-red-600">
+              Endereço sem coordenadas. Busque o logradouro abaixo para corrigir.
+            </p>
 
-              <div className="flex gap-4 mb-4">
-                <label className="flex items-center gap-2 text-xs font-bold text-red-800 cursor-pointer">
-                  <input type="radio" checked={searchType === 'cep'} onChange={() => setSearchType('cep')} className="accent-red-600" /> CEP + Número
-                </label>
-                <label className="flex items-center gap-2 text-xs font-bold text-red-800 cursor-pointer">
-                  <input type="radio" checked={searchType === 'map'} onChange={() => setSearchType('map')} className="accent-red-600" /> Mapa
-                </label>
-              </div>
-
-              {searchType === 'cep' ? (
-                <>
-                  <div className="mb-2">
-                    <label className="text-xs font-bold text-red-800 mb-1 block">CEP</label>
-                    <input
-                      type="text"
-                      value={zipcode}
-                      onChange={e => handleCepChange(e.target.value)}
-                      placeholder="Ex: 30130-000"
-                      className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
-                      disabled={isUpdatingAddress}
-                      maxLength={9}
-                    />
-                  </div>
-                  <div className="mb-2">
-                    <label className="text-xs font-bold text-red-800 mb-1 block">Rua</label>
-                    <input
-                      type="text"
-                      value={street}
-                      onChange={e => setStreet(e.target.value)}
-                      className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
-                      disabled={isUpdatingAddress}
-                    />
-                  </div>
-                  <div className="flex gap-2 mb-2">
-                    <div className="flex-1">
-                      <label className="text-xs font-bold text-red-800 mb-1 block">Número</label>
-                      <input
-                        type="text"
-                        value={number}
-                        onChange={e => setNumber(e.target.value)}
-                        placeholder="Ex: 123"
-                        className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
-                        disabled={isUpdatingAddress}
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <label className="text-xs font-bold text-red-800 mb-1 block">Bairro</label>
-                      <input
-                        type="text"
-                        value={neighborhood}
-                        onChange={e => setNeighborhood(e.target.value)}
-                        className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
-                        disabled={isUpdatingAddress}
-                      />
-                    </div>
-                  </div>
-                  <div className="mb-4">
-                    <label className="text-xs font-bold text-red-800 mb-1 block">Complemento (opcional)</label>
-                    <input
-                      type="text"
-                      value={complement}
-                      onChange={e => setComplement(e.target.value)}
-                      className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
-                      disabled={isUpdatingAddress}
-                    />
-                  </div>
-                </>
-              ) : (
-                <>
-                  <div className="mb-2 relative">
-                    <label className="text-xs font-bold text-red-800 mb-1 block">Arraste o pino para o local exato</label>
-                    <SimplePreviewMap lat={selectedCoords?.lat || -19.9077} lng={selectedCoords?.lng || -43.8948} onLocationChange={handleMapDrag} />
-                  </div>
-                  <div className="mb-2 mt-4">
-                    <label className="text-xs font-bold text-red-800 mb-1 block">Rua (encontrada no mapa)</label>
-                    <input
-                      type="text"
-                      value={street}
-                      onChange={e => setStreet(e.target.value)}
-                      className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
-                      disabled={isUpdatingAddress}
-                    />
-                  </div>
-                  <div className="flex gap-2 mb-2">
-                    <div className="flex-1">
-                      <label className="text-xs font-bold text-red-800 mb-1 block">Número</label>
-                      <input
-                        type="text"
-                        value={number}
-                        onChange={e => setNumber(e.target.value)}
-                        placeholder="Obrigatório"
-                        className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
-                        disabled={isUpdatingAddress}
-                      />
-                    </div>
-                    <div className="flex-1">
-                      <label className="text-xs font-bold text-red-800 mb-1 block">Bairro</label>
-                      <input
-                        type="text"
-                        value={neighborhood}
-                        onChange={e => setNeighborhood(e.target.value)}
-                        className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
-                        disabled={isUpdatingAddress}
-                      />
-                    </div>
-                  </div>
-                  <div className="mb-4">
-                    <label className="text-xs font-bold text-red-800 mb-1 block">Complemento (opcional)</label>
-                    <input
-                      type="text"
-                      value={complement}
-                      onChange={e => setComplement(e.target.value)}
-                      className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black"
-                      disabled={isUpdatingAddress}
-                    />
-                  </div>
-                </>
-              )}
-
-              {addressError && <p className="text-xs text-red-600 font-bold mb-2">{addressError}</p>}
-
-              {predictedFee !== null ? (
-                <div className="bg-white rounded-lg p-3 mb-4 text-center border border-red-200">
-                  <p className="text-xs text-gray-500 mb-1">
-                    {predictedFee === oldFee
-                      ? "O frete permanecerá o mesmo:"
-                      : `Frete atualizado de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(oldFee)} para:`}
-                  </p>
-                  <p className="text-lg font-bold text-red-600">
-                    {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(predictedFee)}
-                  </p>
-                  <button
-                    onClick={() => setPredictedFee(null)}
-                    className="text-xs text-gray-400 underline mt-1 hover:text-gray-600"
-                  >
-                    Recalcular
-                  </button>
+            {/* Search field */}
+            <div className="relative">
+              <label className="text-xs font-bold text-red-800 mb-1 block">
+                Buscar logradouro
+              </label>
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={e => handleSearchChange(e.target.value)}
+                placeholder="Ex: Rua Leopoldo Gomes, esquina com Belém"
+                className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black focus:outline-none focus:border-red-400"
+                disabled={isSaving}
+              />
+              {isSearching && (
+                <div className="absolute right-3 top-9">
+                  <div className="animate-spin rounded-full h-4 w-4 border-2 border-red-500 border-t-transparent" />
                 </div>
-              ) : (
-                <button
-                  onClick={calculatePredictedFee}
-                  disabled={isCalculatingFee || (searchType === 'cep' ? (!zipcode || !number) : (!selectedCoords || !number))}
-                  className="w-full py-2 bg-red-100 text-red-700 hover:bg-red-200 text-xs font-bold rounded-lg transition-colors disabled:opacity-50 mb-2"
-                >
-                  {isCalculatingFee ? 'Calculando...' : 'Verificar Frete'}
-                </button>
               )}
-
-              <button
-                onClick={handleUpdateAddress}
-                disabled={isUpdatingAddress || predictedFee === null}
-                className="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-50"
-              >
-                {isUpdatingAddress ? 'Corrigindo...' : 'Confirmar e Atualizar Endereço'}
-              </button>
+              {suggestions.length > 0 && (
+                <ul className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-xl max-h-48 overflow-y-auto">
+                  {suggestions.map((s, i) => (
+                    <li
+                      key={i}
+                      className="px-4 py-2 hover:bg-red-50 cursor-pointer text-xs text-gray-800 border-b border-gray-100 last:border-0"
+                      onClick={() => handleSelectSuggestion(s)}
+                    >
+                      {s.address.freeformAddress}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
+
+            {/* Number & Complement — always visible once address selected */}
+            {isAddressSelected && (
+              <>
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="text-xs font-bold text-red-800 mb-1 block">
+                      Número
+                    </label>
+                    <input
+                      type="text"
+                      value={number}
+                      onChange={e => { setNumber(e.target.value); setFeeInfo(null) }}
+                      placeholder="Ex: 123"
+                      className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black focus:outline-none focus:border-red-400"
+                      disabled={isSaving}
+                    />
+                    {isRefiningNumber && (
+                      <p className="text-xs text-red-400 mt-1">Refinando posição...</p>
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-xs font-bold text-red-800 mb-1 block">
+                      Ponto de referência
+                    </label>
+                    <input
+                      type="text"
+                      value={complement}
+                      onChange={e => setComplement(e.target.value)}
+                      placeholder="Ex: próx. ao mercado"
+                      className="w-full bg-white border border-red-200 rounded-lg p-2.5 text-sm text-black focus:outline-none focus:border-red-400"
+                      disabled={isSaving}
+                    />
+                  </div>
+                </div>
+
+                {/* Pin-vs-number conflict */}
+                {showConflict && (
+                  <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 space-y-2">
+                    <p className="text-xs font-bold text-yellow-800">
+                      O número diverge da posição do pin. Qual usar?
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => handleConflictChoose('pin')}
+                        className="flex-1 py-1.5 text-xs font-bold bg-white border border-yellow-300 rounded-lg hover:bg-yellow-50"
+                      >
+                        Posição do pin
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleConflictChoose('number')}
+                        className="flex-1 py-1.5 text-xs font-bold bg-yellow-400 border border-yellow-400 rounded-lg hover:bg-yellow-500 text-white"
+                      >
+                        Posição do número
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Map with draggable pin */}
+                {pinCoords && (
+                  <div>
+                    <p className="text-xs text-red-700 mb-1 font-medium">
+                      Arraste o pin para ajuste fino
+                    </p>
+                    <SimplePreviewMap
+                      lat={pinCoords.lat}
+                      lng={pinCoords.lng}
+                      onLocationChange={handlePinDrag}
+                    />
+                  </div>
+                )}
+
+                {/* Fee calculation */}
+                <button
+                  type="button"
+                  onClick={handleCalculateFee}
+                  disabled={!canCalculateFee || isCalculatingFee}
+                  className="w-full py-2.5 bg-orange-500 hover:bg-orange-600 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {isCalculatingFee ? 'Calculando frete...' : 'Calcular Frete'}
+                </button>
+
+                {feeInfo && (
+                  <div className={`rounded-lg p-3 text-sm space-y-1 ${feeChanged ? 'bg-amber-50 border border-amber-200' : 'bg-green-50 border border-green-200'}`}>
+                    <p className={`font-bold ${feeChanged ? 'text-amber-800' : 'text-green-800'}`}>
+                      Frete calculado: R$ {feeInfo.fee.toFixed(2)}
+                      {' '}({feeInfo.distanceKm.toFixed(1)} km)
+                    </p>
+                    {feeChanged && (
+                      <p className="text-xs text-amber-700">
+                        ⚠️ Diferente do valor anterior (R$ {originalFee.toFixed(2)}) — será atualizado ao confirmar.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {addressError && (
+                  <p className="text-xs text-red-600 font-bold">{addressError}</p>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleSaveAddress}
+                  disabled={!canSave || isSaving}
+                  className="w-full py-2.5 bg-red-600 hover:bg-red-700 text-white text-sm font-bold rounded-lg transition-colors disabled:opacity-50"
+                >
+                  {isSaving ? 'Salvando...' : 'Confirmar Endereço'}
+                </button>
+              </>
+            )}
+
+            {!isAddressSelected && addressError && (
+              <p className="text-xs text-red-600 font-bold">{addressError}</p>
+            )}
           </div>
         ) : (
           <div className="py-4 space-y-3">
-            {isLoading ? (
+            {isLoadingDrivers ? (
               <p className="text-center py-4 text-[#666] text-sm animate-pulse">
                 Carregando motoboys...
               </p>
