@@ -366,15 +366,19 @@ export default function CheckoutPage() {
       const activeAddress = getActiveAddress()
       const isNewAddress = selectedAddressId === 'new'
 
+      const isInvalidCoordsSubmit = activeAddress && (!activeAddress.lat || !activeAddress.lng || (activeAddress.lat === 0 && activeAddress.lng === 0));
+      const actualDeliveryFee = deliveryType === 'pickup' ? 0 : (isNewAddress ? Number(addressForm.fee) : (isInvalidCoordsSubmit ? 10 : Number(activeAddress?.delivery_fee || 0)));
+      const actualFinalTotal = subtotal + actualDeliveryFee;
+
       const generatedOrderId = await placeOrder({
         customer_id: user.id,
         customer_name: customerName || null,
         customer_phone: customerPhone || null,
         delivery_type: deliveryType,
         delivery_address_id: activeAddress?.id ?? null,
-        delivery_fee: deliveryFee,
+        delivery_fee: actualDeliveryFee,
         subtotal,
-        total_amount: finalTotal,
+        total_amount: actualFinalTotal,
         payment_method: paymentMethod,
         change_for: paymentMethod === 'cash' ? Number(changeFor) : null,
         delivery_instructions: isNewAddress ? addressForm.instructions : null,
