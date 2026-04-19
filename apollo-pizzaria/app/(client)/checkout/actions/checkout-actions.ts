@@ -145,28 +145,78 @@ export async function placeOrder(params: PlaceOrderParams) {
   }
 
   // 3. Create order items
-  const orderItems = params.items.map(item => ({
-    tenant_id: TENANT_ID,
-    order_id: order.id,
-    product_id: item.id,
-    quantity: item.quantity,
-    unit_price: item.unit_price,
-    total_price: item.total_price,
-    size: item.size || null,
-    edge_option_id: item.border_id || null,
-    is_half: !!item.half_half,
-    half_product_id: item.half_half ? (halfProductMap[item.half_half as string] || null) : null,
-    observations: item.observations || null,
-  }))
+  for (const item of params.items) {
+    const { data: orderItem, error: itemError } = await supabaseAdmin
+      .from('order_items')
+      .insert({
+        tenant_id: TENANT_ID,
+        order_id: order.id,
+        product_id: item.id,
+        quantity: item.quantity,
+        unit_price: item.unit_price,
+        total_price: item.total_price,
+        size: item.size || null,
+        edge_option_id: item.border_id || null,
+        is_half: !!item.half_half,
+        half_product_id: item.half_half ? (halfProductMap[item.half_half as string] || null) : null,
+        observations: item.observations || null,
+      } as any)
+      .select('id')
+      .single()
 
-  const { error: itemsError } = await supabaseAdmin
-    .from('order_items')
-    .insert(orderItems as any)
+    if (itemError || !orderItem) {
+      console.error('Order item creation error:', itemError)
+      await supabaseAdmin.from('orders').delete().eq('id', order.id)
+      throw new Error('Falha ao criar itens do pedido')
+    }
 
-  if (itemsError) {
-    console.error('Order items creation error:', itemsError)
-    await supabaseAdmin.from('orders').delete().eq('id', order.id)
-    throw new Error('Falha ao criar itens do pedido')
+    if (item.combo_pizzas && item.combo_pizzas.length > 0) {
+      const childItems = [];
+
+      for (const cp of item.combo_pizzas) {
+        childItems.push({
+          tenant_id: TENANT_ID,
+          order_id: order.id,
+          product_id: cp.firstFlavorId,
+          combo_order_item_id: orderItem.id,
+          quantity: 1,
+          unit_price: 0,
+          total_price: 0,
+          is_half: cp.isHalf,
+          half_product_id: cp.secondFlavorId || null,
+          size: item.size || null,
+          edge_option_id: item.border_id || null,
+        });
+      }
+
+      const { data: comboItemDefs } = await supabaseAdmin
+        .from('combo_items' as any)
+        .select('product_id, quantity, products!combo_items_product_id_fkey(type)')
+        .eq('combo_id', item.id);
+
+      if (comboItemDefs) {
+        for (const ci of comboItemDefs) {
+          if ((ci as any).products?.type === 'beverage') {
+            childItems.push({
+              tenant_id: TENANT_ID,
+              order_id: order.id,
+              product_id: (ci as any).product_id,
+              combo_order_item_id: orderItem.id,
+              quantity: (ci as any).quantity,
+              unit_price: 0,
+              total_price: 0,
+            });
+          }
+        }
+      }
+
+      if (childItems.length > 0) {
+        const { error: childError } = await supabaseAdmin.from('order_items').insert(childItems as any);
+        if (childError) {
+          console.error('Child items creation error:', childError)
+        }
+      }
+    }
   }
 
   // 3. Save new address if requested and link to order

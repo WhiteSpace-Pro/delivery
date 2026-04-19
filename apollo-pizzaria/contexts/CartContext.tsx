@@ -8,7 +8,11 @@ export interface CartItem {
   size: string | null;
   border: string | null;
   half_half: string | null;
-  combo_flavors?: string[];
+  combo_pizzas?: {
+    firstFlavorId: string;
+    isHalf: boolean;
+    secondFlavorId: string | null;
+  }[];
   quantity: number;
   unit_price: number;
   total_price: number;
@@ -18,7 +22,7 @@ export interface CartItem {
 interface CartContextType {
   items: CartItem[];
   addItem: (item: CartItem) => void;
-  removeItem: (itemId: string, size: string | null, border: string | null, half_half: string | null, combo_flavors?: string[]) => void;
+  removeItem: (itemId: string, size: string | null, border: string | null, half_half: string | null, combo_pizzas?: CartItem['combo_pizzas']) => void;
   clearCart: () => void;
   totalItems: number;
 }
@@ -63,7 +67,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         item.id === newItem.id &&
         item.size === newItem.size &&
         item.border === newItem.border &&
-        item.half_half === newItem.half_half && JSON.stringify(item.combo_flavors) === JSON.stringify(newItem.combo_flavors)
+        item.half_half === newItem.half_half && JSON.stringify(item.combo_pizzas) === JSON.stringify(newItem.combo_pizzas)
       );
 
       if (existingItemIndex > -1) {
@@ -82,9 +86,9 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     });
   };
 
-  const removeItem = (id: string, size: string | null, border: string | null, half_half: string | null, combo_flavors?: string[]) => {
+  const removeItem = (id: string, size: string | null, border: string | null, half_half: string | null, combo_pizzas?: CartItem['combo_pizzas']) => {
     setItems(prevItems => prevItems.filter(item =>
-      !(item.id === id && item.size === size && item.border === border && item.half_half === half_half && JSON.stringify(item.combo_flavors) === JSON.stringify(combo_flavors))
+      !(item.id === id && item.size === size && item.border === border && item.half_half === half_half && JSON.stringify(item.combo_pizzas) === JSON.stringify(combo_pizzas))
     ));
   };
 

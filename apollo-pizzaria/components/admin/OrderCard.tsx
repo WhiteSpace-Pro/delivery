@@ -73,20 +73,39 @@ export function OrderCard({ order, onOpenDetail, onMoveToNext }: OrderCardProps)
 
   const { isDelayed } = getDelayInfo()
 
-  const itemsSummary = order.order_items
+  const topLevelItems = order.order_items?.filter(item => !(item as any).combo_order_item_id) || [];
+
+  const itemsSummary = topLevelItems
     ?.map(item => {
       const product = (item as any)['products!order_items_product_id_fkey'] || (item as any).products
       const productName = product?.name ?? `Item #${item.product_id?.slice(-4)}`
 
       let summary = `${item.quantity}× ${productName}${item.size ? ' ' + item.size : ''}`
 
-      const comboItemsArray = product?.["combo_items!combo_items_combo_id_fkey"] || product?.combo_items;
-      if (product?.type === 'combo' && comboItemsArray && comboItemsArray.length > 0) {
-        const comboDetails = comboItemsArray.map((ci: any) => {
-          const ciProduct = ci['products!combo_items_product_id_fkey'] || ci.products
-          return `${ci.quantity}x ${ciProduct?.name || 'Item'}`
-        }).join(', ')
-        summary += ` (${comboDetails})`
+      if (product?.type === 'combo') {
+        const comboChildren = order.order_items?.filter(child => (child as any).combo_order_item_id === item.id) || [];
+        if (comboChildren.length > 0) {
+          const comboDetails = comboChildren.map((ci: any) => {
+            const ciProduct = ci['products!order_items_product_id_fkey'] || ci.products;
+            const ciHalfProduct = ci['products!order_items_half_product_id_fkey'] || ci.half_product;
+            let name = ciProduct?.name || 'Item';
+            if (ci.is_half && ciHalfProduct?.name) {
+              name = `½ ${name} / ½ ${ciHalfProduct.name}`;
+            }
+            return `${ci.quantity}x ${name}`;
+          }).join(', ');
+          summary += ` (${comboDetails})`;
+        } else {
+          // Fallback to legacy structure if no children found
+          const comboItemsArray = product?.["combo_items!combo_items_combo_id_fkey"] || product?.combo_items;
+          if (comboItemsArray && comboItemsArray.length > 0) {
+            const comboDetails = comboItemsArray.map((ci: any) => {
+              const ciProduct = ci['products!combo_items_product_id_fkey'] || ci.products
+              return `${ci.quantity}x ${ciProduct?.name || 'Item'}`
+            }).join(', ')
+            summary += ` (${comboDetails})`
+          }
+        }
       }
 
       return summary

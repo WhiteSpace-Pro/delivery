@@ -26,9 +26,9 @@ export function CartItemRow({
                 + {item.half_half}
               </span>
             )}
-            {item.combo_flavors && item.combo_flavors.length > 0 && (
+            {item.combo_pizzas && item.combo_pizzas.length > 0 && (
               <span className="text-[#8A8480] font-normal block text-xs mt-0.5">
-                Sabores: {item.combo_flavors.join(", ")}
+                Sabores: {item.combo_pizzas.map(p => p.isHalf && p.secondFlavorId ? `½ ${p.firstFlavorId} / ½ ${p.secondFlavorId}` : p.firstFlavorId).join(", ")}
               </span>
             )}
           </h4>
