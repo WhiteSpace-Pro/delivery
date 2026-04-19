@@ -247,20 +247,38 @@ export default function CheckoutPage() {
     setCalculatingFee(false)
   }
 
-    useEffect(() => {
+  useEffect(() => {
     if (deliveryType === 'delivery' && selectedAddressId && selectedAddressId !== 'new') {
-            const activeAddress = savedAddresses.find(a => a.id === selectedAddressId)
+      const activeAddress = savedAddresses.find(a => a.id === selectedAddressId)
       if (activeAddress) {
         if (!activeAddress.lat || !activeAddress.lng || (activeAddress.lat === 0 && activeAddress.lng === 0)) {
           setShowAddressAlert(true)
         } else {
           setShowAddressAlert(false)
+
+          // Se o endereço tem coordenadas mas a taxa está zerada, recalcula automaticamente
+          if (!activeAddress.delivery_fee || activeAddress.delivery_fee === 0) {
+            setCalculatingFee(true)
+            const fullAddress = `${activeAddress.street}, ${activeAddress.number}, ${activeAddress.neighborhood}, ${(activeAddress as any).city || 'Belo Horizonte'}, ${(activeAddress as any).state || 'MG'}`
+
+            calculateDeliveryFee(fullAddress)
+              .then(async (result) => {
+                if (result.coords && result.fee > 0) {
+                  // Atualiza estado local
+                  setSavedAddresses(prev => prev.map(a => a.id === activeAddress.id ? { ...a, delivery_fee: result.fee } : a))
+                  // Persiste no banco para não recalcular na próxima vez
+                  await supabase.from('addresses').update({ delivery_fee: result.fee }).eq('id', activeAddress.id)
+                }
+              })
+              .catch(console.error)
+              .finally(() => setCalculatingFee(false))
+          }
         }
       }
     } else {
       setShowAddressAlert(false)
     }
-  }, [deliveryType, selectedAddressId, savedAddresses])
+  }, [deliveryType, selectedAddressId, savedAddresses, supabase])
 
   const handleInlineCepBlur = async () => {
     const cep = inlineCorrection.zipcode.replace(/\D/g, '')
