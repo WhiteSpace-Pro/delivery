@@ -73,44 +73,7 @@ export function OrderCard({ order, onOpenDetail, onMoveToNext }: OrderCardProps)
 
   const { isDelayed } = getDelayInfo()
 
-  const topLevelItems = order.order_items?.filter(item => !(item as any).combo_order_item_id) || [];
 
-  const itemsSummary = topLevelItems
-    ?.map(item => {
-      const product = (item as any)['products!order_items_product_id_fkey'] || (item as any).products
-      const productName = product?.name ?? `Item #${item.product_id?.slice(-4)}`
-
-      let summary = `${item.quantity}× ${productName}${item.size ? ' ' + item.size : ''}`
-
-      if (product?.type === 'combo') {
-        const comboChildren = order.order_items?.filter(child => (child as any).combo_order_item_id === item.id) || [];
-        if (comboChildren.length > 0) {
-          const comboDetails = comboChildren.map((ci: any) => {
-            const ciProduct = ci['products!order_items_product_id_fkey'] || ci.products;
-            const ciHalfProduct = ci['products!order_items_half_product_id_fkey'] || ci.half_product;
-            let name = ciProduct?.name || 'Item';
-            if (ci.is_half && ciHalfProduct?.name) {
-              name = `½ ${name} / ½ ${ciHalfProduct.name}`;
-            }
-            return `${ci.quantity}x ${name}`;
-          }).join(', ');
-          summary += ` (${comboDetails})`;
-        } else {
-          // Fallback to legacy structure if no children found
-          const comboItemsArray = product?.["combo_items!combo_items_combo_id_fkey"] || product?.combo_items;
-          if (comboItemsArray && comboItemsArray.length > 0) {
-            const comboDetails = comboItemsArray.map((ci: any) => {
-              const ciProduct = ci['products!combo_items_product_id_fkey'] || ci.products
-              return `${ci.quantity}x ${ciProduct?.name || 'Item'}`
-            }).join(', ')
-            summary += ` (${comboDetails})`
-          }
-        }
-      }
-
-      return summary
-    })
-    .join(', ')
 
   const actionLabels: Record<string, string> = {
     pending: '✓ Confirmar',
@@ -165,9 +128,73 @@ export function OrderCard({ order, onOpenDetail, onMoveToNext }: OrderCardProps)
          )}
       </div>
 
-      <p className="text-[#0D0D0D] text-sm font-bold line-clamp-2 mb-3 leading-relaxed">
-        {itemsSummary}
-      </p>
+      <div className="text-[#0D0D0D] text-sm mb-3 space-y-1.5 flex flex-col">
+        {order.order_items?.filter(item => !(item as any).combo_order_item_id).map((item: any) => {
+          const product = item['products!order_items_product_id_fkey'] || item.products;
+          const halfProduct = item['products!order_items_half_product_id_fkey'] || item.half_product;
+          const productName = product?.name ?? `Item #${item.product_id?.slice(-4)}`;
+
+          // Rendering do Combo
+          if (product?.type === 'combo') {
+            const comboChildren = order.order_items?.filter((child: any) => child.combo_order_item_id === item.id) || [];
+
+            return (
+              <div key={item.id} className="flex flex-col gap-0.5">
+                <span className="font-bold">{item.quantity}× {productName} {item.size || ''}</span>
+
+                {comboChildren.length > 0 ? (
+                  <div className="ml-2 flex flex-col gap-0.5 text-xs text-zinc-600 font-medium">
+                    {comboChildren.map((child: any, idx: number) => {
+                      const childProduct = child['products!order_items_product_id_fkey'] || child.products;
+                      const childHalfProduct = child['products!order_items_half_product_id_fkey'] || child.half_product;
+                      let childName = childProduct?.name || 'Item';
+
+                      if (child.is_half && childHalfProduct?.name) {
+                        childName = `½ ${childName} / ½ ${childHalfProduct.name}`;
+                      }
+
+                      if (childProduct?.type === 'pizza') {
+                        // Numeração visual baseada no index para facilitar conferência (a bebida vem depois ou não recebe a flag 'Pizza')
+                        return <span key={child.id}>Pizza {String(idx + 1).padStart(2, '0')} {child.size || ''} - {childName}</span>;
+                      }
+                      // Caso for bebida ou outros
+                      return <span key={child.id}>{child.quantity}× {childName}</span>;
+                    })}
+                  </div>
+                ) : (
+                  // Fallback Legado (caso exista algum combo velho sem as FK de filhos registradas em order_items)
+                  (() => {
+                    const comboItemsArray = product?.["combo_items!combo_items_combo_id_fkey"] || product?.combo_items;
+                    if (comboItemsArray && comboItemsArray.length > 0) {
+                      return (
+                        <div className="ml-2 flex flex-col gap-0.5 text-xs text-zinc-600 font-medium">
+                          {comboItemsArray.map((ci: any, idx: number) => {
+                            const ciProduct = ci['products!combo_items_product_id_fkey'] || ci.products;
+                            return <span key={idx}>{ci.quantity}× {ciProduct?.name || 'Item'}</span>;
+                          })}
+                        </div>
+                      )
+                    }
+                    return null;
+                  })()
+                )}
+              </div>
+            )
+          }
+
+          // Rendering Avulso (Pizza ou Bebida fora do combo)
+          let finalName = productName;
+          if (item.is_half && halfProduct?.name) {
+            finalName = `½ ${finalName} / ½ ${halfProduct.name}`;
+          }
+
+          return (
+            <div key={item.id} className="font-bold">
+              {item.quantity}× {finalName} {item.size || ''}
+            </div>
+          );
+        })}
+      </div>
 
       <div className="flex justify-between items-center mt-auto">
         <div className="flex flex-col">
