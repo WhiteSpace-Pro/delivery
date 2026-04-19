@@ -44,6 +44,7 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
   const [showToast, setShowToast] = useState(false);
   const [imgError, setImgError] = useState(false);
   const [comboPizzas, setComboPizzas] = useState<{ firstFlavorId: string; isHalf: boolean; secondFlavorId: string | null; }[]>([]);
+  const [comboBeverage, setComboBeverage] = useState<{ id: string; name: string; quantity: number } | null>(null);
 
   const supabase = createClient();
 
@@ -57,6 +58,7 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
         setIsHalfAndHalf(false);
         setSecondFlavorId("");
         setComboPizzas([]);
+        setComboBeverage(null);
       }
 
       const fetchFlavors = async () => {
@@ -84,8 +86,30 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
         }
       };
 
+      const fetchComboItems = async () => {
+        if (product && product.type === 'combo') {
+          const { data } = await supabase
+            .from('combo_items' as any)
+            .select('product_id, quantity, products!combo_items_product_id_fkey(name, type)')
+            .eq('combo_id', product.id)
+            .eq('tenant_id', tenantId);
+
+          if (data) {
+            const beverageItem = data.find((ci: any) => ci.products?.type === 'beverage');
+            if (beverageItem) {
+              setComboBeverage({
+                id: (beverageItem as any).product_id,
+                name: (beverageItem as any).products.name,
+                quantity: (beverageItem as any).quantity
+              });
+            }
+          }
+        }
+      };
+
       fetchFlavors();
       fetchEdges();
+      fetchComboItems();
     }
   }, [isOpen, tenantId, product, supabase]);
 
@@ -169,6 +193,7 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
       border: isPizza ? (edgeOptions.find(e => e.id === selectedEdgeId)?.name || null) : null,
       half_half: isPizza && isHalfAndHalf ? (secondFlavor?.name || null) : null,
       combo_pizzas: isCombo ? comboPizzas : undefined,
+      combo_beverages: isCombo && comboBeverage ? [comboBeverage] : undefined,
       quantity,
       unit_price: unitPrice,
       total_price: totalPrice,

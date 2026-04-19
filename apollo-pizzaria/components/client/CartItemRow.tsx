@@ -57,18 +57,21 @@ export function CartItemRow({
                 + {item.half_half}
               </span>
             )}
-            {item.combo_pizzas && item.combo_pizzas.length > 0 && (
-              <span className="text-[#8A8480] font-normal block text-xs mt-0.5">
-                Sabores: {item.combo_pizzas.map(p => {
+            {(item.combo_pizzas && item.combo_pizzas.length > 0) || (item.combo_beverages && item.combo_beverages.length > 0) ? (
+              <ul className="text-[#8A8480] font-medium block text-sm mt-3 space-y-1.5 whitespace-normal break-words pl-1 border-l-2 border-[#E85D24]/30 ml-1">
+                {item.combo_pizzas?.map((p, idx) => {
                   const n1 = flavorNames[p.firstFlavorId] || 'Carregando...';
                   if (p.isHalf && p.secondFlavorId) {
                     const n2 = flavorNames[p.secondFlavorId] || 'Carregando...';
-                    return `½ ${n1} + ½ ${n2}`;
+                    return <li key={`pizza-${idx}`} className="ml-2 leading-tight">½ {n1} + ½ {n2}</li>;
                   }
-                  return n1;
-                }).join(" | ")}
-              </span>
-            )}
+                  return <li key={`pizza-${idx}`} className="ml-2 leading-tight">{n1}</li>;
+                })}
+                {item.combo_beverages?.map((b, idx) => (
+                  <li key={`bev-${idx}`} className="ml-2 leading-tight">{b.name}</li>
+                ))}
+              </ul>
+            ) : null}
           </h4>
 
           <div className="flex flex-wrap gap-2 mt-1.5">
