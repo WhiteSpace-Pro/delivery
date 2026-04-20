@@ -221,6 +221,7 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
 
                                 {comboChildren.length > 0 ? (
                                   <div className="mt-1 flex flex-col gap-0.5">
+
                                     {comboChildren.map((child: any) => {
                                       const childProduct = child['products!order_items_product_id_fkey'] || child.products;
                                       const childHalfProduct = child['products!order_items_half_product_id_fkey'] || child.half_product;
@@ -228,12 +229,19 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
                                       if (child.is_half && childHalfProduct?.name) {
                                         childName = `½ ${childName} / ½ ${childHalfProduct.name}`;
                                       }
+
+                                      const childEdge = child['pizza_options!order_items_edge_option_id_fkey'] || child.edge || child['edge:pizza_options!order_items_edge_option_id_fkey'];
+                                      const edgeName = childEdge?.name;
+                                      const edgeText = edgeName && !edgeName.toLowerCase().includes('tradicional') ? `<br/><span class="text-[9px] font-bold uppercase tracking-widest text-[#999] opacity-80">Borda ${edgeName}</span>` : '';
+
                                       return (
-                                        <p key={child.id} className="text-xs text-[#666]">
+                                        <p key={child.id} className="text-xs text-[#666] leading-tight">
                                           + {child.quantity}x {childName}
+                                          {edgeText && <span dangerouslySetInnerHTML={{ __html: edgeText }} />}
                                         </p>
                                       );
                                     })}
+
                                   </div>
                                 ) : (() => {
                                   // Legacy combo items fallback

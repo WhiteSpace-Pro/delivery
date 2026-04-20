@@ -118,7 +118,7 @@ export async function getKanbanOrders() {
     .from("orders")
     .select(`
       *,
-      display_id, pix_receipt_note, pix_receipt_requested, order_items(*, products!order_items_product_id_fkey(name, type, combo_items!combo_items_combo_id_fkey(quantity, products!combo_items_product_id_fkey(name, type))), half_product:products!order_items_half_product_id_fkey(name)),
+      display_id, pix_receipt_note, pix_receipt_requested, order_items(*, products!order_items_product_id_fkey(name, type, combo_items!combo_items_combo_id_fkey(quantity, products!combo_items_product_id_fkey(name, type))), half_product:products!order_items_half_product_id_fkey(name), edge:pizza_options!order_items_edge_option_id_fkey(name)),
       addresses(*),
       customer:profiles!orders_customer_id_fkey(full_name, phone),
       delivery:profiles!orders_assigned_delivery_id_fkey(full_name, phone)
