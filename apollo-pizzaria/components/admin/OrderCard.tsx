@@ -153,10 +153,15 @@ export function OrderCard({ order, onOpenDetail, onMoveToNext }: OrderCardProps)
                         childName = `½ ${childName} / ½ ${childHalfProduct.name}`;
                       }
 
+
                       if (childProduct?.type === 'pizza') {
+                        const edgeName = child['edge:pizza_options!order_items_edge_option_id_fkey']?.name || child.edge?.name;
+                        const edgeText = edgeName && !edgeName.toLowerCase().includes('tradicional') ? ` (Borda ${edgeName})` : '';
+
                         // Numeração visual baseada no index para facilitar conferência (a bebida vem depois ou não recebe a flag 'Pizza')
-                        return <span key={child.id}>Pizza {String(idx + 1).padStart(2, '0')} {child.size || ''} - {childName}</span>;
+                        return <span key={child.id}>Pizza {String(idx + 1).padStart(2, '0')} {child.size || ''} - {childName}{edgeText}</span>;
                       }
+
                       // Caso for bebida ou outros
                       return <span key={child.id}>{child.quantity}× {childName}</span>;
                     })}
@@ -182,17 +187,22 @@ export function OrderCard({ order, onOpenDetail, onMoveToNext }: OrderCardProps)
             )
           }
 
+
           // Rendering Avulso (Pizza ou Bebida fora do combo)
           let finalName = productName;
           if (item.is_half && halfProduct?.name) {
             finalName = `½ ${finalName} / ½ ${halfProduct.name}`;
           }
 
+          const edgeName = item['edge:pizza_options!order_items_edge_option_id_fkey']?.name || item.edge?.name;
+          const edgeText = edgeName && !edgeName.toLowerCase().includes('tradicional') ? ` (Borda ${edgeName})` : '';
+
           return (
             <div key={item.id} className="font-bold">
-              {item.quantity}× {finalName} {item.size || ''}
+              {item.quantity}× {finalName} {item.size || ''}{edgeText}
             </div>
           );
+
         })}
       </div>
 
