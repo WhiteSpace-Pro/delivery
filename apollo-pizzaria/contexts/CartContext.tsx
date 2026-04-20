@@ -12,6 +12,7 @@ export interface CartItem {
     firstFlavorId: string;
     isHalf: boolean;
     secondFlavorId: string | null;
+    edgeId: string | null;
   }[];
   combo_beverages?: {
     id: string;
@@ -29,6 +30,7 @@ interface CartContextType {
   addItem: (item: CartItem) => void;
   removeItem: (itemId: string, size: string | null, border: string | null, half_half: string | null, combo_pizzas?: CartItem['combo_pizzas'], combo_beverages?: CartItem['combo_beverages']) => void;
   clearCart: () => void;
+  updateItem: (oldItemId: string, updatedItem: CartItem) => void;
   totalItems: number;
 }
 
@@ -99,6 +101,17 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     ));
   };
 
+
+  const updateItem = (oldItemId: string, updatedItem: CartItem) => {
+    setItems(prevItems => {
+      const index = prevItems.findIndex(i => i.id === oldItemId);
+      if (index === -1) return prevItems;
+      const newItems = [...prevItems];
+      newItems[index] = updatedItem;
+      return newItems;
+    });
+  };
+
   const clearCart = () => {
     setItems([]);
   };
@@ -106,7 +119,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
   const totalItems = items.reduce((sum, item) => sum + item.quantity, 0);
 
   return (
-    <CartContext.Provider value={{ items, addItem, removeItem, clearCart, totalItems }}>
+    <CartContext.Provider value={{ items, addItem, removeItem, updateItem, clearCart, totalItems }}>
       {children}
     </CartContext.Provider>
   );

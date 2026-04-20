@@ -13,6 +13,7 @@ interface PizzaModalProps {
   onClose: () => void;
   product: Product | null;
   tenantId: string;
+  editItem?: CartItem | null;
 }
 
 function inferCombo(name: string) {
@@ -30,8 +31,8 @@ function inferCombo(name: string) {
   return { qty_pizzas, size };
 }
 
-export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalProps) {
-  const { addItem } = useCart();
+export function PizzaModal({ isOpen, onClose, product, tenantId, editItem }: PizzaModalProps) {
+  const { addItem, updateItem } = useCart();
   const [selectedSize, setSelectedSize] = useState<'M' | 'G' | 'GG'>('G');
   const [isHalfAndHalf, setIsHalfAndHalf] = useState(false);
   const [firstFlavorId, setFirstFlavorId] = useState<string>("");
@@ -43,7 +44,7 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
   const [edgeOptions, setEdgeOptions] = useState<PizzaOption[]>([]);
   const [showToast, setShowToast] = useState(false);
   const [imgError, setImgError] = useState(false);
-  const [comboPizzas, setComboPizzas] = useState<{ firstFlavorId: string; isHalf: boolean; secondFlavorId: string | null; }[]>([]);
+  const [comboPizzas, setComboPizzas] = useState<{ firstFlavorId: string; isHalf: boolean; secondFlavorId: string | null; edgeId: string | null; }[]>([]);
   const [comboBeverage, setComboBeverage] = useState<{ id: string; name: string; quantity: number } | null>(null);
 
   const supabase = createClient();
@@ -51,7 +52,32 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
   useEffect(() => {
     if (isOpen && tenantId) {
       setImgError(false);
-      if (product) {
+
+      if (editItem) {
+        setObservations(editItem.observations || "");
+        setQuantity(editItem.quantity || 1);
+
+        if (product?.type === 'pizza') {
+          // It's a pizza
+          const halfHalfFlavorName = editItem.half_half;
+          if (halfHalfFlavorName) {
+            setIsHalfAndHalf(true);
+            // The secondFlavorId will be set once flavors are fetched below
+          } else {
+            setIsHalfAndHalf(false);
+          }
+          // The firstFlavorId and selectedEdgeId will be set after fetchFlavors and fetchEdges
+        } else if (product?.type === 'combo') {
+          if (editItem.combo_pizzas) {
+             setComboPizzas(editItem.combo_pizzas.map(cp => ({
+               firstFlavorId: cp.firstFlavorId,
+               isHalf: cp.isHalf,
+               secondFlavorId: cp.secondFlavorId,
+               edgeId: cp.edgeId || null
+             })));
+          }
+        }
+      } else if (product) {
         setFirstFlavorId(product.id);
         setObservations("");
         setQuantity(1);
@@ -61,6 +87,7 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
         setComboBeverage(null);
       }
 
+
       const fetchFlavors = async () => {
         const { data } = await supabase
           .from('products')
@@ -69,7 +96,18 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
           .eq('type', 'pizza')
           .eq('is_available', true)
           .order('name', { ascending: true });
-        if (data) setFlavors(data as Product[]);
+        if (data) {
+          const fetchedFlavors = data as Product[];
+          setFlavors(fetchedFlavors);
+          if (editItem && product?.type === 'pizza') {
+            const first = fetchedFlavors.find(f => f.name === editItem.name);
+            if (first) setFirstFlavorId(first.id);
+            if (editItem.half_half) {
+              const second = fetchedFlavors.find(f => f.name === editItem.half_half);
+              if (second) setSecondFlavorId(second.id);
+            }
+          }
+        }
       };
 
       const fetchEdges = async () => {
@@ -81,8 +119,18 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
         if (data) {
           const options = data as PizzaOption[];
           setEdgeOptions(options);
-          const trad = options.find(o => o.name.toLowerCase().includes('tradicional'));
-          if (trad) setSelectedEdgeId(trad.id);
+          if (editItem && product?.type === 'pizza' && editItem.border) {
+            const selected = options.find(o => o.name === editItem.border);
+            if (selected) {
+              setSelectedEdgeId(selected.id);
+            } else {
+              const trad = options.find(o => o.name.toLowerCase().includes('tradicional'));
+              if (trad) setSelectedEdgeId(trad.id);
+            }
+          } else {
+            const trad = options.find(o => o.name.toLowerCase().includes('tradicional'));
+            if (trad) setSelectedEdgeId(trad.id);
+          }
         }
       };
 
@@ -111,7 +159,7 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
       fetchEdges();
       fetchComboItems();
     }
-  }, [isOpen, tenantId, product, supabase]);
+  }, [isOpen, tenantId, product, supabase, editItem]);
 
   const firstFlavor = useMemo(() =>
     flavors.find(f => f.id === firstFlavorId) || product,
@@ -136,13 +184,14 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
       const initialComboPizzas = Array.from({ length: comboInfo.qty_pizzas }).map(() => ({
         firstFlavorId: "",
         isHalf: false,
-        secondFlavorId: ""
+        secondFlavorId: "",
+        edgeId: null
       }));
       setComboPizzas(initialComboPizzas);
     }
   }, [isCombo, comboInfo, comboPizzas.length]);
 
-  const updateComboPizza = (index: number, updates: Partial<{firstFlavorId: string, isHalf: boolean, secondFlavorId: string}>) => {
+  const updateComboPizza = (index: number, updates: Partial<{firstFlavorId: string, isHalf: boolean, secondFlavorId: string, edgeId: string | null}>) => {
     setComboPizzas(prev => {
       const newPizzas = [...prev];
       newPizzas[index] = { ...newPizzas[index], ...updates };
@@ -150,11 +199,25 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
     });
   };
 
+
   const unitPrice = useMemo(() => {
     if (!product) return 0;
 
     if (isCombo) {
-      return product.price_single || 0;
+      const comboBasePrice = product.price_single || 0;
+
+      // Calculate extra edge costs for combos
+      let extraEdgePrice = 0;
+      comboPizzas.forEach(p => {
+        if (p.edgeId) {
+          const edge = edgeOptions.find(e => e.id === p.edgeId);
+          if (edge && edge.extra_price) {
+            extraEdgePrice += edge.extra_price;
+          }
+        }
+      });
+
+      return comboBasePrice + extraEdgePrice;
     }
 
     if (!isPizza) {
@@ -179,7 +242,7 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
     const edgePrice = edge?.extra_price || 0;
 
     return basePrice + edgePrice;
-  }, [isPizza, isCombo, product, firstFlavor, secondFlavor, selectedSize, isHalfAndHalf, edgeOptions, selectedEdgeId]);
+  }, [isPizza, isCombo, product, firstFlavor, secondFlavor, selectedSize, isHalfAndHalf, edgeOptions, selectedEdgeId, comboPizzas]);
 
   const totalPrice = unitPrice * quantity;
 
@@ -200,7 +263,11 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
       observations
     };
 
-    addItem(cartItem);
+    if (editItem) {
+      updateItem(editItem.id, cartItem);
+    } else {
+      addItem(cartItem);
+    }
     setShowToast(true);
     setTimeout(() => {
       setShowToast(false);
@@ -222,7 +289,7 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
         return `Configure mais ${remaining} pizza${remaining > 1 ? 's' : ''}`;
       }
     }
-    return 'Adicionar ao carrinho';
+    return editItem ? 'Salvar alterações' : 'Adicionar ao carrinho';
   };
 
   if (!product) return null;
@@ -496,6 +563,25 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
                                 </div>
                               </motion.div>
                             )}
+
+                            <div className="space-y-2 mt-4">
+                              <label className="text-xs font-bold text-[#8A8480] uppercase ml-1">
+                                Borda
+                              </label>
+                              <div className="relative">
+                                <select
+                                  value={pizzaInfo.edgeId || ""}
+                                  onChange={(e) => updateComboPizza(index, { edgeId: e.target.value })}
+                                  className="w-full bg-[#141414] border border-white/10 rounded-xl p-3 text-[#F5F0E8] appearance-none focus:outline-none focus:border-[#D4941A] text-sm"
+                                >
+                                  <option value="">Selecione a borda (Opcional)</option>
+                                  {edgeOptions.map(edge => (
+                                    <option key={edge.id} value={edge.id}>{edge.name}</option>
+                                  ))}
+                                </select>
+                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8A8480] pointer-events-none" size={16} />
+                              </div>
+                            </div>
                           </div>
                         </div>
                       );

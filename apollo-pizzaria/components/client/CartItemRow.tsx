@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from 'react';
-import { Minus, Plus, Trash2 } from "lucide-react";
+import { Minus, Plus, Trash2, Pencil } from "lucide-react";
 import { CartItem } from "@/contexts/CartContext";
 import { createClient } from "@/lib/supabase/client";
 
@@ -9,42 +9,64 @@ interface CartItemRowProps {
   item: CartItem;
   onIncrement: () => void;
   onDecrement: () => void;
+  onEdit: () => void;
 }
 
 export function CartItemRow({
   item,
   onIncrement,
-  onDecrement
+  onDecrement,
+  onEdit
 }: CartItemRowProps) {
   const [flavorNames, setFlavorNames] = useState<Record<string, string>>({});
+  const [edgeNames, setEdgeNames] = useState<Record<string, string>>({});
+
 
   useEffect(() => {
     async function resolveFlavorNames() {
       if (!item.combo_pizzas || item.combo_pizzas.length === 0) return;
 
-      const idsToFetch = new Set<string>();
+      const flavorIdsToFetch = new Set<string>();
+      const edgeIdsToFetch = new Set<string>();
+
       item.combo_pizzas.forEach(p => {
-        if (p.firstFlavorId) idsToFetch.add(p.firstFlavorId);
-        if (p.secondFlavorId) idsToFetch.add(p.secondFlavorId);
+        if (p.firstFlavorId) flavorIdsToFetch.add(p.firstFlavorId);
+        if (p.secondFlavorId) flavorIdsToFetch.add(p.secondFlavorId);
+        if (p.edgeId) edgeIdsToFetch.add(p.edgeId);
       });
 
-      if (idsToFetch.size === 0) return;
-
       const supabase = createClient();
-      const { data } = await supabase
-        .from('products')
-        .select('id, name')
-        .in('id', Array.from(idsToFetch));
 
-      if (data) {
-        const map: Record<string, string> = {};
-        data.forEach((p: any) => { map[p.id] = p.name; });
-        setFlavorNames(map);
+      if (flavorIdsToFetch.size > 0) {
+        const { data } = await supabase
+          .from('products')
+          .select('id, name')
+          .in('id', Array.from(flavorIdsToFetch));
+
+        if (data) {
+          const map: Record<string, string> = {};
+          data.forEach((p: any) => { map[p.id] = p.name; });
+          setFlavorNames(map);
+        }
+      }
+
+      if (edgeIdsToFetch.size > 0) {
+         const { data } = await supabase
+          .from('pizza_options')
+          .select('id, name')
+          .in('id', Array.from(edgeIdsToFetch));
+
+        if (data) {
+          const map: Record<string, string> = {};
+          data.forEach((p: any) => { map[p.id] = p.name; });
+          setEdgeNames(map);
+        }
       }
     }
 
     resolveFlavorNames();
   }, [item.combo_pizzas]);
+
 
   return (
     <div className="flex flex-col gap-3 p-4 bg-[#141414] rounded-2xl border border-white/5 transition-all hover:bg-[#1C1C1C]">
@@ -61,11 +83,13 @@ export function CartItemRow({
               <ul className="text-[#8A8480] font-medium block text-sm mt-3 space-y-1.5 whitespace-normal break-words pl-1 border-l-2 border-[#E85D24]/30 ml-1">
                 {item.combo_pizzas?.map((p, idx) => {
                   const n1 = flavorNames[p.firstFlavorId] || 'Carregando...';
+                  const edgeText = p.edgeId && edgeNames[p.edgeId] && !edgeNames[p.edgeId].toLowerCase().includes('tradicional')
+                    ? ` (Borda ${edgeNames[p.edgeId]})` : '';
                   if (p.isHalf && p.secondFlavorId) {
                     const n2 = flavorNames[p.secondFlavorId] || 'Carregando...';
-                    return <li key={`pizza-${idx}`} className="ml-2 leading-tight">½ {n1} + ½ {n2}</li>;
+                    return <li key={`pizza-${idx}`} className="ml-2 leading-tight">½ {n1} + ½ {n2}{edgeText}</li>;
                   }
-                  return <li key={`pizza-${idx}`} className="ml-2 leading-tight">{n1}</li>;
+                  return <li key={`pizza-${idx}`} className="ml-2 leading-tight">{n1}{edgeText}</li>;
                 })}
                 {item.combo_beverages?.map((b, idx) => (
                   <li key={`bev-${idx}`} className="ml-2 leading-tight">{b.name}</li>
@@ -104,6 +128,14 @@ export function CartItemRow({
 
       <div className="flex items-center justify-between pt-2 border-t border-white/5">
         <div className="flex items-center gap-4 bg-black/20 rounded-full p-1 border border-white/5">
+          <button
+            onClick={onEdit}
+            className="w-8 h-8 flex items-center justify-center text-[#8A8480] hover:text-[#D4941A] hover:bg-[#D4941A]/10 rounded-full transition-colors mr-1"
+            title="Editar item"
+          >
+            <Pencil size={14} />
+          </button>
+          <div className="w-[1px] h-4 bg-white/10 mr-1"></div>
           <button
             onClick={onDecrement}
             className="w-8 h-8 flex items-center justify-center text-[#8A8480] hover:text-white hover:bg-white/10 rounded-full transition-colors"

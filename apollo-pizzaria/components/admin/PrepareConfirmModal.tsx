@@ -39,12 +39,19 @@ export function PrepareConfirmModal({
     // Ignorar bebidas e outros tipos (só queremos pizzas)
     if (product?.type !== 'pizza') return;
 
+
     let pizzaName = product?.name || 'Pizza';
     if (item.is_half && halfProduct?.name) {
       pizzaName = `½ ${pizzaName} / ½ ${halfProduct.name}`;
     }
 
+    const edgeName = item['edge:pizza_options!order_items_edge_option_id_fkey']?.name || item.edge?.name;
+    if (edgeName && !edgeName.toLowerCase().includes('tradicional')) {
+      pizzaName += ` (Borda ${edgeName})`;
+    }
+
     const size = item.size ? ` ${item.size}` : '';
+
 
     pizzasToPrepare.push({
       name: pizzaName,

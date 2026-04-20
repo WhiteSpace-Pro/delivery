@@ -7,6 +7,8 @@ import { useCart, CartItem } from "@/contexts/CartContext";
 import { useUser } from "@/hooks/useUser";
 import { CartItemRow } from "./CartItemRow";
 import { LoginModal } from "./LoginModal";
+import { PizzaModal } from "./PizzaModal";
+import { Product } from "@/types";
 import { motion, AnimatePresence } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 
@@ -21,6 +23,8 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
   const { user } = useUser();
   const [loginOpen, setLoginOpen] = useState(false);
   const [isStoreOpen, setIsStoreOpen] = useState(true);
+  const [editItem, setEditItem] = useState<CartItem | null>(null);
+  const [productToEdit, setProductToEdit] = useState<Product | null>(null);
   const supabase = createClient();
 
   useEffect(() => {
@@ -33,6 +37,24 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
   }, [supabase]);
 
   const subtotal = items.reduce((sum, item) => sum + item.total_price, 0);
+
+
+
+  const handleEdit = async (item: CartItem) => {
+    // We close the CartDrawer to show PizzaModal correctly
+    onClose();
+    // Wait for the exit animation before opening the modal
+    await new Promise(resolve => setTimeout(resolve, 300));
+
+    // Fetch product details based on item.id to pass to PizzaModal
+    const { data } = await supabase.from('products').select('*').eq('id', item.id).single();
+    if (data) {
+      setProductToEdit(data as Product);
+      setEditItem(item);
+    }
+  };
+
+
 
   const handleGoToCheckout = async () => {
     if (!isStoreOpen) {
@@ -121,6 +143,7 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
                         item={item}
                         onIncrement={() => handleIncrement(item)}
                         onDecrement={() => handleDecrement(item)}
+                        onEdit={() => handleEdit(item)}
                       />
                     ))}
                   </div>
@@ -165,8 +188,15 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
             </motion.div>
           </>
         )}
-      </AnimatePresence>
 
+      </AnimatePresence>
+      <PizzaModal
+        isOpen={!!editItem}
+        onClose={() => { setEditItem(null); setProductToEdit(null); }}
+        product={productToEdit}
+        tenantId={process.env.NEXT_PUBLIC_TENANT_ID_APOLLO || '496c5a35-6843-4061-b3ab-159d15a0cbc6'}
+        editItem={editItem}
+      />
       <LoginModal
         isOpen={loginOpen}
         onClose={() => setLoginOpen(false)}
