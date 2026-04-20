@@ -185,7 +185,7 @@ export async function placeOrder(params: PlaceOrderParams) {
           is_half: cp.isHalf,
           half_product_id: cp.secondFlavorId || null,
           size: item.size || null,
-          edge_option_id: item.border_id || null,
+          edge_option_id: cp.edgeId || null,
         });
       }
 
