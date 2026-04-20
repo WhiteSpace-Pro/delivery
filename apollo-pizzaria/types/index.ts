@@ -32,6 +32,16 @@ export interface CartItem {
   quantity: number;
   unitPrice: number;
   observations: string;
+  comboPizzas?: {
+    firstFlavorId: string;
+    isHalf: boolean;
+    secondFlavorId: string | null;
+  }[];
+  comboBeverages?: {
+    id: string;
+    name: string;
+    quantity: number;
+  }[];
 }
 
 export type TrackingPoint = Database['public']['Tables']['delivery_current_location']['Row'];

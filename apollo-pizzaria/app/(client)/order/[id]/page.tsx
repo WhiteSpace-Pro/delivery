@@ -19,7 +19,7 @@ export default function OrderSuccessPage() {
 
   useEffect(() => {
     clearCart()
-  }, [])
+  }, [clearCart])
 
   const [uploading, setUploading] = useState(false)
   const [pixReceipt, setPixReceipt] = useState<File | null>(null)

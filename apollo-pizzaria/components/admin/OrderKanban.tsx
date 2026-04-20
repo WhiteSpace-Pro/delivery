@@ -7,6 +7,7 @@ import { OrderWithItems } from '@/types'
 import { OrderStatus } from '@/types/enums'
 import { OrderDetailModal } from './OrderDetailModal'
 import { DriverAssignModal } from './DriverAssignModal'
+import { PrepareConfirmModal } from './PrepareConfirmModal'
 import { playNotificationSound } from '@/lib/audio'
 import { updateOrderStatus, getKanbanOrders, getOrderDetails } from '@/app/(admin)/actions/order-actions'
 import {
@@ -37,6 +38,7 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
   const [pendingReceipts, setPendingReceipts] = useState<Set<string>>(new Set())
   const [selectedOrder, setSelectedOrder] = useState<OrderWithItems | null>(null)
   const [assignModalOrder, setAssignModalOrder] = useState<OrderWithItems | null>(null)
+  const [prepareConfirmOrder, setPrepareConfirmOrder] = useState<OrderWithItems | null>(null)
 
   const supabase = supabaseModule
 
@@ -121,6 +123,10 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
       setAssignModalOrder(order)
       return
     }
+    if (newStatus === 'preparing') {
+      setPrepareConfirmOrder(order)
+      return
+    }
 
     const oldStatus = order.status
     setOrders(prev => prev.map(o => o.id === orderId ? { ...o, status: newStatus } : o))
@@ -160,6 +166,8 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
                    const nextStatus = COLUMNS[nextStatusIdx].key;
                    if (nextStatus === 'out_for_delivery') {
                      setAssignModalOrder(orderToMove);
+                   } else if (nextStatus === 'preparing') {
+                     setPrepareConfirmOrder(orderToMove);
                    } else {
                      void updateOrderStatus(orderToMove.id, nextStatus);
                    }
@@ -190,6 +198,18 @@ export function OrderKanban({ tenantId }: { tenantId: string }) {
           order={assignModalOrder}
           tenantId={tenantId}
           onClose={() => setAssignModalOrder(null)}
+        />
+      )}
+
+      {prepareConfirmOrder && (
+        <PrepareConfirmModal
+          isOpen={!!prepareConfirmOrder}
+          order={prepareConfirmOrder}
+          onClose={() => setPrepareConfirmOrder(null)}
+          onConfirm={() => {
+            void updateOrderStatus(prepareConfirmOrder.id, 'preparing')
+            setPrepareConfirmOrder(null)
+          }}
         />
       )}
     </div>

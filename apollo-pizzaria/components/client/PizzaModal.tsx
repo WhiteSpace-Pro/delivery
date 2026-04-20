@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { Product, PizzaOption } from "@/types";
 import { createClient } from "@/lib/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
-import { X, ChevronDown, Check } from "lucide-react";
+import { X, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useCart, CartItem } from "@/contexts/CartContext";
 
@@ -43,7 +43,8 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
   const [edgeOptions, setEdgeOptions] = useState<PizzaOption[]>([]);
   const [showToast, setShowToast] = useState(false);
   const [imgError, setImgError] = useState(false);
-  const [selectedComboFlavors, setSelectedComboFlavors] = useState<string[]>([]);
+  const [comboPizzas, setComboPizzas] = useState<{ firstFlavorId: string; isHalf: boolean; secondFlavorId: string | null; }[]>([]);
+  const [comboBeverage, setComboBeverage] = useState<{ id: string; name: string; quantity: number } | null>(null);
 
   const supabase = createClient();
 
@@ -56,7 +57,8 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
         setQuantity(1);
         setIsHalfAndHalf(false);
         setSecondFlavorId("");
-        setSelectedComboFlavors([]);
+        setComboPizzas([]);
+        setComboBeverage(null);
       }
 
       const fetchFlavors = async () => {
@@ -84,8 +86,30 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
         }
       };
 
+      const fetchComboItems = async () => {
+        if (product && product.type === 'combo') {
+          const { data } = await supabase
+            .from('combo_items' as any)
+            .select('product_id, quantity, products!combo_items_product_id_fkey(name, type)')
+            .eq('combo_id', product.id)
+            .eq('tenant_id', tenantId);
+
+          if (data) {
+            const beverageItem = data.find((ci: any) => ci.products?.type === 'beverage');
+            if (beverageItem) {
+              setComboBeverage({
+                id: (beverageItem as any).product_id,
+                name: (beverageItem as any).products.name,
+                quantity: (beverageItem as any).quantity
+              });
+            }
+          }
+        }
+      };
+
       fetchFlavors();
       fetchEdges();
+      fetchComboItems();
     }
   }, [isOpen, tenantId, product, supabase]);
 
@@ -106,6 +130,25 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
     if (!product || !isCombo) return null;
     return inferCombo(product.name);
   }, [product, isCombo]);
+
+  useEffect(() => {
+    if (isCombo && comboInfo && comboPizzas.length === 0) {
+      const initialComboPizzas = Array.from({ length: comboInfo.qty_pizzas }).map(() => ({
+        firstFlavorId: "",
+        isHalf: false,
+        secondFlavorId: ""
+      }));
+      setComboPizzas(initialComboPizzas);
+    }
+  }, [isCombo, comboInfo, comboPizzas.length]);
+
+  const updateComboPizza = (index: number, updates: Partial<{firstFlavorId: string, isHalf: boolean, secondFlavorId: string}>) => {
+    setComboPizzas(prev => {
+      const newPizzas = [...prev];
+      newPizzas[index] = { ...newPizzas[index], ...updates };
+      return newPizzas;
+    });
+  };
 
   const unitPrice = useMemo(() => {
     if (!product) return 0;
@@ -149,7 +192,8 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
       size: isPizza ? selectedSize : (isCombo && comboInfo ? comboInfo.size : null),
       border: isPizza ? (edgeOptions.find(e => e.id === selectedEdgeId)?.name || null) : null,
       half_half: isPizza && isHalfAndHalf ? (secondFlavor?.name || null) : null,
-      combo_flavors: isCombo ? selectedComboFlavors : undefined,
+      combo_pizzas: isCombo ? comboPizzas : undefined,
+      combo_beverages: isCombo && comboBeverage ? [comboBeverage] : undefined,
       quantity,
       unit_price: unitPrice,
       total_price: totalPrice,
@@ -164,30 +208,18 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
     }, 800);
   };
 
-  const toggleComboFlavor = (flavorName: string) => {
-    if (!comboInfo) return;
-    setSelectedComboFlavors(prev => {
-      if (prev.includes(flavorName)) {
-        return prev.filter(f => f !== flavorName);
-      }
-      if (prev.length < comboInfo.qty_pizzas) {
-        return [...prev, flavorName];
-      }
-      return prev;
-    });
-  };
-
-  const isComboComplete = comboInfo ? selectedComboFlavors.length === comboInfo.qty_pizzas : true;
+  const isComboComplete = comboInfo ? comboPizzas.every(p => p.firstFlavorId !== "" && (!p.isHalf || p.secondFlavorId !== "")) : true;
   const isHalfHalfComplete = isHalfAndHalf ? (!!firstFlavorId && !!secondFlavorId) : true;
 
   const getButtonText = () => {
     if (showToast) return 'Adicionado!';
     if (isCombo && comboInfo) {
-      const remaining = comboInfo.qty_pizzas - selectedComboFlavors.length;
+      const completeCount = comboPizzas.filter(p => p.firstFlavorId !== "" && (!p.isHalf || p.secondFlavorId !== "")).length;
+      const remaining = comboInfo.qty_pizzas - completeCount;
       if (remaining > 0) {
         if (comboInfo.qty_pizzas === 1) return "Escolha 1 sabor";
-        if (selectedComboFlavors.length === 0) return `Escolha ${comboInfo.qty_pizzas} sabores`;
-        return `Escolha mais ${remaining} sabor${remaining > 1 ? 'es' : ''}`;
+        if (completeCount === 0) return `Escolha as ${comboInfo.qty_pizzas} pizzas`;
+        return `Configure mais ${remaining} pizza${remaining > 1 ? 's' : ''}`;
       }
     }
     return 'Adicionar ao carrinho';
@@ -396,40 +428,76 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
                 <section className="space-y-4">
                   <div className="flex flex-col">
                     <h3 className="text-sm font-bold uppercase tracking-wider text-[#8A8480]">Escolha os Sabores</h3>
-                    <p className="text-xs text-[#E85D24] font-medium mt-1">Escolha {comboInfo.qty_pizzas} sabor(es)</p>
+                    <p className="text-xs text-[#E85D24] font-medium mt-1">Configure {comboInfo.qty_pizzas} pizza(s)</p>
                   </div>
 
                   <div className="grid grid-cols-1 gap-2">
-                    {flavors.map((flavor) => {
-                      const isSelected = selectedComboFlavors.includes(flavor.name);
-                      const price = comboInfo.size === 'G' ? flavor.price_g : (comboInfo.size === 'GG' ? flavor.price_gg : null);
-
+                    {comboPizzas.map((pizzaInfo, index) => {
                       return (
-                        <button
-                          key={flavor.id}
-                          onClick={() => toggleComboFlavor(flavor.name)}
-                          className={cn(
-                            "flex items-center justify-between p-4 rounded-xl border transition-all text-left",
-                            isSelected
-                              ? "bg-[#E85D24]/10 border-[#E85D24]"
-                              : "bg-[#1C1C1C] border-white/5 hover:border-white/20"
-                          )}
-                        >
-                          <div className="flex items-center gap-3">
-                            <div className={cn(
-                              "w-5 h-5 rounded border flex items-center justify-center transition-all",
-                              isSelected ? "bg-[#E85D24] border-[#E85D24]" : "border-white/20"
-                            )}>
-                              {isSelected && <Check size={14} className="text-white" />}
-                            </div>
-                            <span className={cn("text-sm font-medium", isSelected ? "text-[#F5F0E8]" : "text-[#8A8480]")}>
-                              {flavor.name}
-                            </span>
+                        <div key={index} className="p-4 rounded-xl border bg-[#1C1C1C] border-white/5 space-y-4">
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-bold text-[#F5F0E8]">Pizza {index + 1}</h4>
+                            <button
+                              onClick={() => updateComboPizza(index, { isHalf: !pizzaInfo.isHalf })}
+                              className="flex items-center gap-2"
+                            >
+                              <span className="text-xs text-[#8A8480]">Meia a meia?</span>
+                              <div className={cn(
+                                "w-10 h-6 rounded-full p-1 transition-colors relative",
+                                pizzaInfo.isHalf ? "bg-[#E85D24]" : "bg-black/40 border border-white/10"
+                              )}>
+                                <div className={cn(
+                                  "w-4 h-4 rounded-full bg-white transition-transform",
+                                  pizzaInfo.isHalf ? "translate-x-4" : "translate-x-0"
+                                )} />
+                              </div>
+                            </button>
                           </div>
-                          <span className="text-xs font-bold text-[#D4941A]">
-                            {price ? `R$ ${price.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : "incluso"}
-                          </span>
-                        </button>
+
+                          <div className="space-y-4">
+                            <div className="space-y-2">
+                              <label className="text-xs font-bold text-[#8A8480] uppercase ml-1">
+                                {pizzaInfo.isHalf ? '1ª Metade' : 'Sabor'}
+                              </label>
+                              <div className="relative">
+                                <select
+                                  value={pizzaInfo.firstFlavorId}
+                                  onChange={(e) => updateComboPizza(index, { firstFlavorId: e.target.value })}
+                                  className="w-full bg-[#141414] border border-white/10 rounded-xl p-3 text-[#F5F0E8] appearance-none focus:outline-none focus:border-[#E85D24] text-sm"
+                                >
+                                  <option value="">Escolha o sabor</option>
+                                  {flavors.map(flavor => (
+                                    <option key={flavor.id} value={flavor.id}>{flavor.name}</option>
+                                  ))}
+                                </select>
+                                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8A8480] pointer-events-none" size={16} />
+                              </div>
+                            </div>
+
+                            {pizzaInfo.isHalf && (
+                              <motion.div
+                                initial={{ height: 0, opacity: 0 }}
+                                animate={{ height: "auto", opacity: 1 }}
+                                className="space-y-2 overflow-hidden"
+                              >
+                                <label className="text-xs font-bold text-[#8A8480] uppercase ml-1">2ª Metade</label>
+                                <div className="relative">
+                                  <select
+                                    value={pizzaInfo.secondFlavorId || ""}
+                                    onChange={(e) => updateComboPizza(index, { secondFlavorId: e.target.value })}
+                                    className="w-full bg-[#141414] border border-white/10 rounded-xl p-3 text-[#F5F0E8] appearance-none focus:outline-none focus:border-[#E85D24] text-sm"
+                                  >
+                                    <option value="">Escolha o 2º sabor</option>
+                                    {flavors.filter(f => f.id !== pizzaInfo.firstFlavorId).map(flavor => (
+                                      <option key={flavor.id} value={flavor.id}>{flavor.name}</option>
+                                    ))}
+                                  </select>
+                                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-[#8A8480] pointer-events-none" size={16} />
+                                </div>
+                              </motion.div>
+                            )}
+                          </div>
+                        </div>
                       );
                     })}
                   </div>

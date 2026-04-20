@@ -1,8 +1,9 @@
 "use client";
 
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Minus, Plus, Trash2 } from "lucide-react";
 import { CartItem } from "@/contexts/CartContext";
+import { createClient } from "@/lib/supabase/client";
 
 interface CartItemRowProps {
   item: CartItem;
@@ -15,6 +16,36 @@ export function CartItemRow({
   onIncrement,
   onDecrement
 }: CartItemRowProps) {
+  const [flavorNames, setFlavorNames] = useState<Record<string, string>>({});
+
+  useEffect(() => {
+    async function resolveFlavorNames() {
+      if (!item.combo_pizzas || item.combo_pizzas.length === 0) return;
+
+      const idsToFetch = new Set<string>();
+      item.combo_pizzas.forEach(p => {
+        if (p.firstFlavorId) idsToFetch.add(p.firstFlavorId);
+        if (p.secondFlavorId) idsToFetch.add(p.secondFlavorId);
+      });
+
+      if (idsToFetch.size === 0) return;
+
+      const supabase = createClient();
+      const { data } = await supabase
+        .from('products')
+        .select('id, name')
+        .in('id', Array.from(idsToFetch));
+
+      if (data) {
+        const map: Record<string, string> = {};
+        data.forEach((p: any) => { map[p.id] = p.name; });
+        setFlavorNames(map);
+      }
+    }
+
+    resolveFlavorNames();
+  }, [item.combo_pizzas]);
+
   return (
     <div className="flex flex-col gap-3 p-4 bg-[#141414] rounded-2xl border border-white/5 transition-all hover:bg-[#1C1C1C]">
       <div className="flex items-start justify-between gap-4">
@@ -26,11 +57,21 @@ export function CartItemRow({
                 + {item.half_half}
               </span>
             )}
-            {item.combo_flavors && item.combo_flavors.length > 0 && (
-              <span className="text-[#8A8480] font-normal block text-xs mt-0.5">
-                Sabores: {item.combo_flavors.join(", ")}
-              </span>
-            )}
+            {(item.combo_pizzas && item.combo_pizzas.length > 0) || (item.combo_beverages && item.combo_beverages.length > 0) ? (
+              <ul className="text-[#8A8480] font-medium block text-sm mt-3 space-y-1.5 whitespace-normal break-words pl-1 border-l-2 border-[#E85D24]/30 ml-1">
+                {item.combo_pizzas?.map((p, idx) => {
+                  const n1 = flavorNames[p.firstFlavorId] || 'Carregando...';
+                  if (p.isHalf && p.secondFlavorId) {
+                    const n2 = flavorNames[p.secondFlavorId] || 'Carregando...';
+                    return <li key={`pizza-${idx}`} className="ml-2 leading-tight">½ {n1} + ½ {n2}</li>;
+                  }
+                  return <li key={`pizza-${idx}`} className="ml-2 leading-tight">{n1}</li>;
+                })}
+                {item.combo_beverages?.map((b, idx) => (
+                  <li key={`bev-${idx}`} className="ml-2 leading-tight">{b.name}</li>
+                ))}
+              </ul>
+            ) : null}
           </h4>
 
           <div className="flex flex-wrap gap-2 mt-1.5">

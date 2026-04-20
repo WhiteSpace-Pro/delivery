@@ -202,10 +202,12 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
               <section className="space-y-4">
                  <h3 className="font-bold">Itens</h3>
                  <div className="space-y-3">
-                    {details?.order_items?.map((item: any) => {
+                    {details?.order_items?.filter((item: any) => !item.combo_order_item_id).map((item: any) => {
                       const product = item['products!order_items_product_id_fkey'] || item.products
                       const halfProduct = item['products!order_items_half_product_id_fkey'] || item.half_product
                       const edge = item['pizza_options!order_items_edge_option_id_fkey'] || item.edge
+
+                      const comboChildren = details?.order_items?.filter((child: any) => child.combo_order_item_id === item.id) || [];
 
                       return (
                         <div key={item.id} className="flex justify-between items-start text-sm">
@@ -216,24 +218,43 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
                                   {item.is_half && halfProduct?.name ? `½ ${product?.name ?? ""} / ½ ${halfProduct.name}` : (product?.name ?? "")}
                                 </p>
                                 <p className="text-[10px] text-[#666] font-bold uppercase">{item.size} {edge ? `• Borda ${edge.name}` : ''}</p>
-                                {(() => {
+
+                                {comboChildren.length > 0 ? (
+                                  <div className="mt-1 flex flex-col gap-0.5">
+                                    {comboChildren.map((child: any) => {
+                                      const childProduct = child['products!order_items_product_id_fkey'] || child.products;
+                                      const childHalfProduct = child['products!order_items_half_product_id_fkey'] || child.half_product;
+                                      let childName = childProduct?.name || 'Item';
+                                      if (child.is_half && childHalfProduct?.name) {
+                                        childName = `½ ${childName} / ½ ${childHalfProduct.name}`;
+                                      }
+                                      return (
+                                        <p key={child.id} className="text-xs text-[#666]">
+                                          + {child.quantity}x {childName}
+                                        </p>
+                                      );
+                                    })}
+                                  </div>
+                                ) : (() => {
+                                  // Legacy combo items fallback
                                   const comboItemsArray = product?.["combo_items!combo_items_combo_id_fkey"] || product?.combo_items;
                                   if (product?.type === 'combo' && comboItemsArray && comboItemsArray.length > 0) {
                                     return (
                                       <div className="mt-1 flex flex-col gap-0.5">
                                         {comboItemsArray.map((ci: any, idx: number) => {
-                                      const ciProduct = ci['products!combo_items_product_id_fkey'] || ci.products
-                                      return (
-                                        <p key={idx} className="text-xs text-[#666]">
-                                          + {ci.quantity}x {ciProduct?.name || 'Item'}
-                                        </p>
-                                      )
-                                    })}
-                                  </div>
+                                          const ciProduct = ci['products!combo_items_product_id_fkey'] || ci.products
+                                          return (
+                                            <p key={idx} className="text-xs text-[#666]">
+                                              + {ci.quantity}x {ciProduct?.name || 'Item'}
+                                            </p>
+                                          )
+                                        })}
+                                      </div>
                                     );
                                   }
                                   return null;
                                 })()}
+
                                 {item.observations && <p className="text-xs text-apollo-orange italic mt-1 font-medium">{item.observations}</p>}
                              </div>
                           </div>

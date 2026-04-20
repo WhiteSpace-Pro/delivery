@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { placeOrder } from './actions/checkout-actions'
-import { calculateDeliveryFee } from '@/lib/maps/distance'
+import { calculateDeliveryFee, getRouteDistance } from '@/lib/maps/distance'
 import Image from 'next/image'
 
 
@@ -247,20 +247,38 @@ export default function CheckoutPage() {
     setCalculatingFee(false)
   }
 
-    useEffect(() => {
+  useEffect(() => {
     if (deliveryType === 'delivery' && selectedAddressId && selectedAddressId !== 'new') {
-            const activeAddress = savedAddresses.find(a => a.id === selectedAddressId)
+      const activeAddress = savedAddresses.find(a => a.id === selectedAddressId)
       if (activeAddress) {
         if (!activeAddress.lat || !activeAddress.lng || (activeAddress.lat === 0 && activeAddress.lng === 0)) {
           setShowAddressAlert(true)
         } else {
           setShowAddressAlert(false)
+
+          // Se o endereço tem coordenadas mas a taxa está zerada, recalcula automaticamente
+          if (!activeAddress.delivery_fee || Number(activeAddress.delivery_fee) === 0) {
+            setCalculatingFee(true)
+
+            getRouteDistance({ lat: Number(activeAddress.lat), lng: Number(activeAddress.lng) })
+              .then(async (distance) => {
+                const fee = Math.max(Math.ceil(distance) * 1.0, 3.00); // R$ 1/km com mínimo de R$ 3,00
+                if (fee > 0) {
+                  // Atualiza estado local
+                  setSavedAddresses(prev => prev.map(a => a.id === activeAddress.id ? { ...a, delivery_fee: fee } : a))
+                  // Persiste no banco para não recalcular na próxima vez
+                  await supabase.from('addresses').update({ delivery_fee: fee }).eq('id', activeAddress.id)
+                }
+              })
+              .catch(console.error)
+              .finally(() => setCalculatingFee(false))
+          }
         }
       }
     } else {
       setShowAddressAlert(false)
     }
-  }, [deliveryType, selectedAddressId, savedAddresses])
+  }, [deliveryType, selectedAddressId, savedAddresses, supabase])
 
   const handleInlineCepBlur = async () => {
     const cep = inlineCorrection.zipcode.replace(/\D/g, '')
@@ -366,15 +384,19 @@ export default function CheckoutPage() {
       const activeAddress = getActiveAddress()
       const isNewAddress = selectedAddressId === 'new'
 
+      const isInvalidCoordsSubmit = activeAddress && (!activeAddress.lat || !activeAddress.lng || (activeAddress.lat === 0 && activeAddress.lng === 0));
+      const actualDeliveryFee = deliveryType === 'pickup' ? 0 : (isNewAddress ? Number(addressForm.fee) : (isInvalidCoordsSubmit ? 10 : Number(activeAddress?.delivery_fee || 0)));
+      const actualFinalTotal = subtotal + actualDeliveryFee;
+
       const generatedOrderId = await placeOrder({
         customer_id: user.id,
         customer_name: customerName || null,
         customer_phone: customerPhone || null,
         delivery_type: deliveryType,
         delivery_address_id: activeAddress?.id ?? null,
-        delivery_fee: deliveryFee,
+        delivery_fee: actualDeliveryFee,
         subtotal,
-        total_amount: finalTotal,
+        total_amount: actualFinalTotal,
         payment_method: paymentMethod,
         change_for: paymentMethod === 'cash' ? Number(changeFor) : null,
         delivery_instructions: isNewAddress ? addressForm.instructions : null,

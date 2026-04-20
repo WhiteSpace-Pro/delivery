@@ -57,7 +57,7 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
     if (item.quantity > 1) {
       addItem({ ...item, quantity: -1, total_price: -item.unit_price });
     } else {
-      removeItem(item.id, item.size, item.border, item.half_half, item.combo_flavors);
+      removeItem(item.id, item.size, item.border, item.half_half, item.combo_pizzas, item.combo_beverages);
     }
   };
 
