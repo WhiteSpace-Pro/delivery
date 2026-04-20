@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { placeOrder } from './actions/checkout-actions'
-import { calculateDeliveryFee } from '@/lib/maps/distance'
+import { calculateDeliveryFee, getRouteDistance } from '@/lib/maps/distance'
 import Image from 'next/image'
 
 
@@ -257,17 +257,17 @@ export default function CheckoutPage() {
           setShowAddressAlert(false)
 
           // Se o endereço tem coordenadas mas a taxa está zerada, recalcula automaticamente
-          if (!activeAddress.delivery_fee || activeAddress.delivery_fee === 0) {
+          if (!activeAddress.delivery_fee || Number(activeAddress.delivery_fee) === 0) {
             setCalculatingFee(true)
-            const fullAddress = `${activeAddress.street}, ${activeAddress.number}, ${activeAddress.neighborhood}, ${(activeAddress as any).city || 'Belo Horizonte'}, ${(activeAddress as any).state || 'MG'}`
 
-            calculateDeliveryFee(fullAddress)
-              .then(async (result) => {
-                if (result.coords && result.fee > 0) {
+            getRouteDistance({ lat: Number(activeAddress.lat), lng: Number(activeAddress.lng) })
+              .then(async (distance) => {
+                const fee = Math.max(Math.ceil(distance) * 1.0, 3.00); // R$ 1/km com mínimo de R$ 3,00
+                if (fee > 0) {
                   // Atualiza estado local
-                  setSavedAddresses(prev => prev.map(a => a.id === activeAddress.id ? { ...a, delivery_fee: result.fee } : a))
+                  setSavedAddresses(prev => prev.map(a => a.id === activeAddress.id ? { ...a, delivery_fee: fee } : a))
                   // Persiste no banco para não recalcular na próxima vez
-                  await supabase.from('addresses').update({ delivery_fee: result.fee }).eq('id', activeAddress.id)
+                  await supabase.from('addresses').update({ delivery_fee: fee }).eq('id', activeAddress.id)
                 }
               })
               .catch(console.error)
