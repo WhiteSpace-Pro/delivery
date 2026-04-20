@@ -39,7 +39,13 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
   const subtotal = items.reduce((sum, item) => sum + item.total_price, 0);
 
 
+
   const handleEdit = async (item: CartItem) => {
+    // We close the CartDrawer to show PizzaModal correctly
+    onClose();
+    // Wait for the exit animation before opening the modal
+    await new Promise(resolve => setTimeout(resolve, 300));
+
     // Fetch product details based on item.id to pass to PizzaModal
     const { data } = await supabase.from('products').select('*').eq('id', item.id).single();
     if (data) {
@@ -47,6 +53,7 @@ export function CartDrawer({ isOpen, onClose }: CartDrawerProps) {
       setEditItem(item);
     }
   };
+
 
 
   const handleGoToCheckout = async () => {

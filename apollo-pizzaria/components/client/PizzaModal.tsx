@@ -199,11 +199,25 @@ export function PizzaModal({ isOpen, onClose, product, tenantId, editItem }: Piz
     });
   };
 
+
   const unitPrice = useMemo(() => {
     if (!product) return 0;
 
     if (isCombo) {
-      return product.price_single || 0;
+      const comboBasePrice = product.price_single || 0;
+
+      // Calculate extra edge costs for combos
+      let extraEdgePrice = 0;
+      comboPizzas.forEach(p => {
+        if (p.edgeId) {
+          const edge = edgeOptions.find(e => e.id === p.edgeId);
+          if (edge && edge.extra_price) {
+            extraEdgePrice += edge.extra_price;
+          }
+        }
+      });
+
+      return comboBasePrice + extraEdgePrice;
     }
 
     if (!isPizza) {
@@ -228,7 +242,7 @@ export function PizzaModal({ isOpen, onClose, product, tenantId, editItem }: Piz
     const edgePrice = edge?.extra_price || 0;
 
     return basePrice + edgePrice;
-  }, [isPizza, isCombo, product, firstFlavor, secondFlavor, selectedSize, isHalfAndHalf, edgeOptions, selectedEdgeId]);
+  }, [isPizza, isCombo, product, firstFlavor, secondFlavor, selectedSize, isHalfAndHalf, edgeOptions, selectedEdgeId, comboPizzas]);
 
   const totalPrice = unitPrice * quantity;
 
