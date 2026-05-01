@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { CheckCircle2, Loader2, Receipt, Camera, Check } from 'lucide-react'
 import Link from 'next/link'
@@ -17,8 +17,13 @@ export default function OrderSuccessPage() {
   const [order, setOrder] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
+  const cartCleared = useRef(false)
+
   useEffect(() => {
-    clearCart()
+    if (!cartCleared.current) {
+      cartCleared.current = true
+      clearCart()
+    }
   }, [clearCart])
 
   const [uploading, setUploading] = useState(false)
