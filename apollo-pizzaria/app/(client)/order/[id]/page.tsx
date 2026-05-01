@@ -224,7 +224,7 @@ export default function OrderSuccessPage() {
              <Link href="/meus-pedidos" className="w-full bg-white/5 hover:bg-white/10 h-14 rounded-2xl flex items-center justify-center font-bold transition-all">
                 Meus Pedidos
              </Link>
-             <Link href="/cardapio" className="w-full text-center py-4 text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest">
+             <Link href="/cardapio" className="block w-full text-center py-4 text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest">
                 Voltar ao Cardápio
              </Link>
           </div>
