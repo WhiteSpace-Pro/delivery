@@ -70,14 +70,20 @@ export default function OrderSuccessPage() {
     if (!id) return
 
     async function fetchOrder() {
-      const { data } = await supabase
-        .from('orders')
-        .select('*, display_id, pix_receipt_requested, addresses(*)')
-        .eq('id', id)
-        .single()
+      try {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*, display_id, pix_receipt_requested, addresses(*)')
+          .eq('id', id)
+          .single()
 
-      if (data) setOrder(data)
-      setLoading(false)
+        if (error) throw error
+        if (data) setOrder(data)
+      } catch (err) {
+        console.error('[order page] fetch error:', err)
+      } finally {
+        setLoading(false)
+      }
     }
 
     void fetchOrder()
@@ -224,9 +230,9 @@ export default function OrderSuccessPage() {
              <Link href="/meus-pedidos" className="w-full bg-white/5 hover:bg-white/10 h-14 rounded-2xl flex items-center justify-center font-bold transition-all">
                 Meus Pedidos
              </Link>
-             <a href="/cardapio" className="block w-full text-center py-4 text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest">
+             <Link href="/cardapio" className="w-full text-center py-4 text-white/40 hover:text-white text-xs font-bold uppercase tracking-widest">
                 Voltar ao Cardápio
-             </a>
+             </Link>
           </div>
         </div>
       </div>
