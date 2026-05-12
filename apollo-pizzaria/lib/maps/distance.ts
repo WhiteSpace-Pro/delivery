@@ -7,7 +7,6 @@
 const TOMTOM_API_KEY = process.env.NEXT_PUBLIC_TOMTOM_API_KEY || "rPEJoG15dtntubxA7insGisIOA7wwJ9Q";
 // Coords da pizzaria: lat -19.9077, lng -43.8948 (conforme prompt)
 const PIZZARIA_COORDS = { lat: -19.9077, lng: -43.8948 };
-const FEE_PER_KM = 1.0;
 
 interface Coords {
   lat: number;
@@ -15,27 +14,11 @@ interface Coords {
 }
 
 /**
- * Busca coordenadas para um endereço ou CEP usando a API de Search (Geocoding) do TomTom
+ * [DEPRECATED] Busca coordenadas chamando a API direto do client.
+ * Usar /api/geocode em vez disso para não expor a chave desnecessariamente e garantir os parâmetros corretos.
  */
-export async function getCoordsFromAddress(address: string): Promise<Coords | null> {
-  try {
-    const encodedAddress = encodeURIComponent(address);
-    const response = await fetch(
-      `https://api.tomtom.com/search/2/geocode/${encodedAddress}.json?key=${TOMTOM_API_KEY}&limit=1&countrySet=BR`
-    );
-    const data = await response.json();
-
-    if (data.results && data.results.length > 0) {
-      return {
-        lat: data.results[0].position.lat,
-        lng: data.results[0].position.lon
-      };
-    }
-    return null;
-  } catch (error) {
-    console.error("Erro ao buscar coordenadas no TomTom:", error);
-    return null;
-  }
+export async function getCoordsFromAddress(): Promise<Coords | null> {
+  return null;
 }
 
 /**
@@ -61,27 +44,12 @@ export async function getRouteDistance(clientCoords: Coords): Promise<number> {
 }
 
 /**
- * Calcula o frete baseado no endereço do cliente usando a API do TomTom
+ * [DEPRECATED]
  */
-export async function calculateDeliveryFee(clientAddress: string): Promise<{
+export async function calculateDeliveryFee(_address?: string): Promise<{
   distance: number;
   fee: number;
   coords: Coords | null;
 }> {
-  const coords = await getCoordsFromAddress(clientAddress);
-  if (!coords) {
-    return { distance: 0, fee: 0, coords: null };
-  }
-
-  // Usando a distância real de rota em vez de Haversine para maior precisão
-  const distance = await getRouteDistance(coords);
-  
-  // Taxa = Math.ceil(distanceKm) × 1.00 (arredondamento sempre para cima conforme prompt)
-  const fee = Math.max(Math.ceil(distance) * FEE_PER_KM, 3.00);
-
-  return {
-    distance,
-    fee,
-    coords
-  };
+  return { distance: 0, fee: 0, coords: null };
 }

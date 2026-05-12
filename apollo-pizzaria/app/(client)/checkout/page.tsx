@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { placeOrder } from './actions/checkout-actions'
-import { calculateDeliveryFee, getRouteDistance } from '@/lib/maps/distance'
+import { getRouteDistance } from '@/lib/maps/distance'
 import Image from 'next/image'
 
 
@@ -65,6 +65,8 @@ export default function CheckoutPage() {
   const [orderId, setOrderId] = useState<string | null>(null)
   const [pixData, setPixData] = useState({ qrCode: '', brCode: '', amount: 0, pixKey: '+5531985375524' })
   const [copiedBrCode, setCopiedBrCode] = useState(false)
+
+  const [addressError, setAddressError] = useState<string | null>(null)
 
   const [addressForm, setAddressForm] = useState({
     label: '',
@@ -224,27 +226,47 @@ export default function CheckoutPage() {
   }
 
   const handleCalculateFee = async () => {
+    setAddressError(null)
     if (!addressForm.street || !addressForm.number || !addressForm.neighborhood) {
-      alert('Preencha rua, número e bairro para calcular o frete.')
+      setAddressError('Preencha rua, número e bairro para calcular o frete.')
       return
     }
 
     setCalculatingFee(true)
-    const fullAddress = `${addressForm.street}, ${addressForm.number}, ${addressForm.neighborhood}, Belo Horizonte, MG`
-    const result = await calculateDeliveryFee(fullAddress)
 
-    if (result.coords) {
-      setAddressForm(prev => ({
-        ...prev,
-        fee: result.fee,
-        lat: result.coords!.lat,
-        lng: result.coords!.lng,
-        regionNotFound: result.fee === 0
-      }))
-    } else {
-      setAddressForm(prev => ({ ...prev, regionNotFound: true, fee: 0 }))
+    try {
+      const queryParams = new URLSearchParams({
+        street: addressForm.street,
+        number: addressForm.number,
+        neighborhood: addressForm.neighborhood,
+        city: 'Belo Horizonte',
+        state: 'MG'
+      })
+
+      const geoRes = await fetch(`/api/geocode?${queryParams.toString()}`)
+      const geoData = await geoRes.json()
+
+      if (geoData && geoData.lat !== null && geoData.lng !== null) {
+        const distance = await getRouteDistance({ lat: geoData.lat, lng: geoData.lng })
+        const fee = Math.max(Math.ceil(distance) * 1.0, 3.00)
+
+        setAddressForm(prev => ({
+          ...prev,
+          fee: fee,
+          lat: geoData.lat,
+          lng: geoData.lng,
+          regionNotFound: fee === 0
+        }))
+      } else {
+        setAddressError('Não conseguimos localizar seu endereço. Verifique o número e tente novamente.')
+        setAddressForm(prev => ({ ...prev, regionNotFound: true, fee: 0, lat: 0, lng: 0 }))
+      }
+    } catch (error) {
+      setAddressError('Não conseguimos localizar seu endereço. Verifique o número e tente novamente.')
+      setAddressForm(prev => ({ ...prev, regionNotFound: true, fee: 0, lat: 0, lng: 0 }))
+    } finally {
+      setCalculatingFee(false)
     }
-    setCalculatingFee(false)
   }
 
   useEffect(() => {
@@ -253,20 +275,54 @@ export default function CheckoutPage() {
       if (activeAddress) {
         if (!activeAddress.lat || !activeAddress.lng || (activeAddress.lat === 0 && activeAddress.lng === 0)) {
           setShowAddressAlert(true)
+          setAddressError(null)
+
+          const tryFixGeocode = async () => {
+            try {
+              setCalculatingFee(true)
+              const queryParams = new URLSearchParams({
+                street: activeAddress.street || '',
+                number: activeAddress.number || '',
+                neighborhood: activeAddress.neighborhood || '',
+                city: 'Belo Horizonte',
+                state: 'MG'
+              })
+
+              const geoRes = await fetch(`/api/geocode?${queryParams.toString()}`)
+              const geoData = await geoRes.json()
+
+              if (geoData && geoData.lat !== null && geoData.lng !== null) {
+                const distance = await getRouteDistance({ lat: geoData.lat, lng: geoData.lng })
+                const fee = Math.max(Math.ceil(distance) * 1.0, 3.00)
+
+                await supabase.from('addresses').update({
+                  lat: geoData.lat,
+                  lng: geoData.lng,
+                  delivery_fee: fee
+                }).eq('id', activeAddress.id)
+
+                setSavedAddresses(prev => prev.map(a => a.id === activeAddress.id ? { ...a, lat: geoData.lat, lng: geoData.lng, delivery_fee: fee } : a))
+                setShowAddressAlert(false)
+              }
+            } catch (err) {
+              console.error('Failed to auto-fix geocode', err)
+            } finally {
+              setCalculatingFee(false)
+            }
+          }
+
+          tryFixGeocode()
         } else {
           setShowAddressAlert(false)
+          setAddressError(null)
 
-          // Se o endereço tem coordenadas mas a taxa está zerada, recalcula automaticamente
           if (!activeAddress.delivery_fee || Number(activeAddress.delivery_fee) === 0) {
             setCalculatingFee(true)
-
             getRouteDistance({ lat: Number(activeAddress.lat), lng: Number(activeAddress.lng) })
               .then(async (distance) => {
-                const fee = Math.max(Math.ceil(distance) * 1.0, 3.00); // R$ 1/km com mínimo de R$ 3,00
+                const fee = Math.max(Math.ceil(distance) * 1.0, 3.00);
                 if (fee > 0) {
-                  // Atualiza estado local
                   setSavedAddresses(prev => prev.map(a => a.id === activeAddress.id ? { ...a, delivery_fee: fee } : a))
-                  // Persiste no banco para não recalcular na próxima vez
                   await supabase.from('addresses').update({ delivery_fee: fee }).eq('id', activeAddress.id)
                 }
               })
@@ -305,29 +361,42 @@ export default function CheckoutPage() {
   }
 
   const handleUpdateAddress = async () => {
+    setAddressError(null)
     if (!inlineCorrection.street || !inlineCorrection.number || !inlineCorrection.neighborhood) {
-      alert('Preencha os campos para atualizar.')
+      setAddressError('Preencha os campos para atualizar.')
       return
     }
 
     setCalculatingFee(true)
-    const fullAddress = `${inlineCorrection.street}, ${inlineCorrection.number}, ${inlineCorrection.neighborhood}, Belo Horizonte, MG`
-    const result = await calculateDeliveryFee(fullAddress)
 
-    if (result.coords) {
-      try {
+    try {
+      const queryParams = new URLSearchParams({
+        street: inlineCorrection.street,
+        number: inlineCorrection.number,
+        neighborhood: inlineCorrection.neighborhood,
+        city: 'Belo Horizonte',
+        state: 'MG'
+      })
+
+      const geoRes = await fetch(`/api/geocode?${queryParams.toString()}`)
+      const geoData = await geoRes.json()
+
+      if (geoData && geoData.lat !== null && geoData.lng !== null) {
+        const distance = await getRouteDistance({ lat: geoData.lat, lng: geoData.lng })
+        const fee = Math.max(Math.ceil(distance) * 1.0, 3.00)
+
         const { data, error } = await supabase.from('addresses').update({
           zipcode: inlineCorrection.zipcode,
           number: inlineCorrection.number,
           street: inlineCorrection.street,
           neighborhood: inlineCorrection.neighborhood,
-          lat: result.coords.lat,
-          lng: result.coords.lng,
-          delivery_fee: result.fee
+          lat: geoData.lat,
+          lng: geoData.lng,
+          delivery_fee: fee
         } as any).eq('id', selectedAddressId).select()
 
         if (error) throw error
-        if (!data || data.length === 0) throw new Error('Não foi possível atualizar o endereço no banco de dados. Tente adicionar um novo endereço.')
+        if (!data || data.length === 0) throw new Error('Não foi possível atualizar o endereço no banco de dados.')
 
         // Update local state to reflect the fix
         setSavedAddresses(prev => prev.map(a =>
@@ -337,21 +406,23 @@ export default function CheckoutPage() {
             number: inlineCorrection.number,
             street: inlineCorrection.street,
             neighborhood: inlineCorrection.neighborhood,
-            lat: result.coords!.lat,
-            lng: result.coords!.lng,
-            delivery_fee: result.fee
+            lat: geoData.lat,
+            lng: geoData.lng,
+            delivery_fee: fee
           } : a
         ))
 
         setShowAddressAlert(false)
         setInlineCorrection(prev => ({ ...prev, active: false }))
-      } catch (err: unknown) {
-        const msg = err instanceof Error ? err.message : 'Erro'; alert('Erro ao atualizar endereço: ' + msg)
+      } else {
+        setAddressError('Não conseguimos localizar seu endereço. Verifique o número e tente novamente.')
       }
-    } else {
-      alert('Não foi possível localizar o endereço. Tente outro CEP.')
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Erro';
+      setAddressError('Erro ao atualizar endereço: ' + msg)
+    } finally {
+      setCalculatingFee(false)
     }
-    setCalculatingFee(false)
   }
 
   const getActiveAddress = () => {
@@ -430,7 +501,7 @@ export default function CheckoutPage() {
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'Erro'
-      alert(msg)
+      setAddressError(msg)
     } finally {
       setLoading(false)
     }
@@ -671,6 +742,15 @@ export default function CheckoutPage() {
                         <label className="text-[10px] uppercase font-bold text-white/40 ml-1">Bairro</label>
                         <input className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="Bairro" value={addressForm.neighborhood} readOnly={!addressForm.regionNotFound} onChange={e => setAddressForm(prev => ({...prev, neighborhood: e.target.value}))} />
                      </div>
+                     {addressError && (
+                       <Alert variant="destructive" className="bg-red-500/10 border-red-500/20 mt-3 mb-2">
+                         <AlertTriangle className="h-4 w-4" />
+                         <AlertDescription className="text-xs font-medium ml-2">
+                           {addressError}
+                         </AlertDescription>
+                       </Alert>
+                     )}
+
 
 
                      {calculatingFee && <div className="text-center text-xs text-apollo-orange animate-pulse">Calculando distância real...</div>}
@@ -763,10 +843,20 @@ export default function CheckoutPage() {
                          </div>
                        </div>
                      )}
-                     <div className="flex gap-2 mt-2">
+
+                     {addressError && (
+                       <Alert variant="destructive" className="bg-red-500/10 border-red-500/20 mt-3 mb-2">
+                         <AlertTriangle className="h-4 w-4" />
+                         <AlertDescription className="text-xs font-medium ml-2">
+                           {addressError}
+                         </AlertDescription>
+                       </Alert>
+                     )}
+
+<div className="flex gap-2 mt-2">
                        <button
                          type="button"
-                         onClick={() => setInlineCorrection(prev => ({ ...prev, active: false }))}
+                         onClick={() => { setAddressError(null); setInlineCorrection(prev => ({ ...prev, active: false })) }}
                          className="flex-1 py-2 rounded-xl text-xs font-bold text-white/40 hover:text-white transition-colors"
                        >
                          Cancelar
