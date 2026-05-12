@@ -263,16 +263,20 @@ export default function CheckoutPage() {
           regionNotFound: fee === 0
         }))
 
+        // Preencher CEP se ainda não foi preenchido
         if (addressForm.zipcode.replace(/\D/g, '').length < 8) {
           try {
-            const cepRes = await fetch(`https://viacep.com.br/ws/MG/Belo+Horizonte/${encodeURIComponent(addressForm.street)}/json/`)
+            const streetEncoded = encodeURIComponent(addressForm.street)
+            const cepRes = await fetch(
+              `https://viacep.com.br/ws/MG/BeloHorizonte/${streetEncoded}/json/`
+            )
             const cepData = await cepRes.json()
             if (Array.isArray(cepData) && cepData.length > 0 && cepData[0].cep) {
               const digits = cepData[0].cep.replace(/\D/g, '')
               const masked = `${digits.slice(0, 5)}-${digits.slice(5)}`
               setAddressForm(prev => ({ ...prev, zipcode: masked }))
             }
-          } catch { /* ignorar erro de CEP */ }
+          } catch { /* ignorar */ }
         }
       } else {
         setAddressError('Não conseguimos localizar seu endereço. Verifique o número e tente novamente.')
