@@ -129,7 +129,7 @@ export default function CheckoutPage() {
       ...prev,
       street: s.address.streetName || s.address.freeformAddress,
       neighborhood: s.address.municipalitySubdivision || prev.neighborhood,
-      ...(s.address.postalCode && { zipcode: s.address.postalCode })
+      ...(s.address.postalCode && { zipcode: (() => { const digits = s.address.postalCode.replace(/\D/g, '').slice(0, 8); return digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits; })() })
     }))
     setStreetSuggestions([])
     setIsStreetSelected(true)
@@ -197,7 +197,7 @@ export default function CheckoutPage() {
   }, [fetchData])
 
   const searchZipcode = async () => {
-    const cep = addressForm.zipcode.replace(/\D/g, '')
+    const digits = addressForm.zipcode.replace(/\D/g, ''); const cep = digits
     if (cep.length !== 8) return
     try {
       const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`)
@@ -220,7 +220,7 @@ export default function CheckoutPage() {
   }
 
   const handleCEPBlur = async () => {
-    if (addressForm.zipcode.replace(/\D/g, '').length === 8) {
+    const digits = addressForm.zipcode.replace(/\D/g, ''); if (digits.length === 8) {
       await searchZipcode()
     }
   }
@@ -337,7 +337,7 @@ export default function CheckoutPage() {
   }, [deliveryType, selectedAddressId, savedAddresses, supabase])
 
   const handleInlineCepBlur = async () => {
-    const cep = inlineCorrection.zipcode.replace(/\D/g, '')
+    const digits = inlineCorrection.zipcode.replace(/\D/g, ''); const cep = digits
     if (cep.length !== 8) return
 
     setInlineCorrection(prev => ({ ...prev, searching: true }))
@@ -685,8 +685,8 @@ export default function CheckoutPage() {
                      <div className="space-y-1">
                         <label className="text-[10px] uppercase font-bold text-white/40 ml-1">CEP</label>
                         <input value={addressForm.zipcode} onChange={e => {
-                          const val = e.target.value.replace(/\D/g, '').slice(0, 8);
-                          const masked = val.length > 5 ? `${val.slice(0, 5)}-${val.slice(5)}` : val;
+                          const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+                          const masked = digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
                           setAddressForm(prev => ({
                             ...prev,
                             zipcode: masked,
@@ -813,8 +813,8 @@ export default function CheckoutPage() {
                           <input
                             value={inlineCorrection.zipcode}
                             onChange={e => {
-                              const val = e.target.value.replace(/\D/g, '').slice(0, 8);
-                              const masked = val.length > 5 ? `${val.slice(0, 5)}-${val.slice(5)}` : val;
+                              const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+                              const masked = digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
                               setInlineCorrection(prev => ({ ...prev, zipcode: masked, street: '', neighborhood: '' }))
                             }}
                             onBlur={handleInlineCepBlur}
