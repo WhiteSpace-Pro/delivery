@@ -125,11 +125,16 @@ export default function CheckoutPage() {
   }, [addressForm.street, isStreetSelected])
 
   const handleSelectStreetSuggestion = (s: TomTomSuggestion) => {
+    const postalDigits = s.address.postalCode?.replace(/\D/g, '') ?? ''
+    const maskedZip = postalDigits.length === 8
+      ? `${postalDigits.slice(0, 5)}-${postalDigits.slice(5)}`
+      : undefined
+
     setAddressForm(prev => ({
       ...prev,
       street: s.address.streetName || s.address.freeformAddress,
       neighborhood: s.address.municipalitySubdivision || prev.neighborhood,
-      ...(s.address.postalCode && { zipcode: (() => { const digits = s.address.postalCode.replace(/\D/g, '').slice(0, 8); return digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits; })() })
+      ...(maskedZip !== undefined && { zipcode: maskedZip })
     }))
     setStreetSuggestions([])
     setIsStreetSelected(true)
