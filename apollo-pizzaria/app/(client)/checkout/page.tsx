@@ -697,7 +697,7 @@ export default function CheckoutPage() {
                             lat: 0,
                             lng: 0
                           }));
-                        }} onBlur={handleCEPBlur} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="00000-000" />
+                        }} onBlur={handleCEPBlur} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="00000-000" maxLength={9} />
                         {addressForm.regionNotFound && <p className="text-[10px] text-apollo-orange font-bold mt-1">CEP não encontrado. Preencha o endereço manualmente.</p>}
                      </div>
                      <div className="grid grid-cols-4 gap-2">
@@ -819,7 +819,7 @@ export default function CheckoutPage() {
                             }}
                             onBlur={handleInlineCepBlur}
                             className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-2 text-sm focus:border-apollo-orange outline-none"
-                            placeholder="00000-000"
+                            placeholder="00000-000" maxLength={9}
                           />
                        </div>
                        <div className="col-span-1 space-y-1">
