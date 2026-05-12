@@ -264,7 +264,8 @@ export default function CheckoutPage() {
         }))
 
         // Preencher CEP via reverse geocoding TomTom
-        if (addressForm.zipcode.replace(/\D/g, '').length < 8) {
+        const currentZipcode = addressForm.zipcode;
+        if (currentZipcode.replace(/\D/g, '').length < 8) {
           try {
             const reverseRes = await fetch(
               `https://api.tomtom.com/search/2/reverseGeocode/${geoData.lat},${geoData.lng}.json?key=${TOMTOM_KEY}&returnSpeedLimit=false&returnRoadUse=false`
