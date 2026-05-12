@@ -271,6 +271,9 @@ export default function CheckoutPage() {
               `https://api.tomtom.com/search/2/reverseGeocode/${geoData.lat},${geoData.lng}.json?key=${TOMTOM_KEY}&returnSpeedLimit=false&returnRoadUse=false`
             )
             const reverseData = await reverseRes.json()
+            console.log('[reverse] raw response:', JSON.stringify(reverseData));
+            console.log('[reverse] postalCode:', reverseData?.addresses?.[0]?.address?.postalCode);
+            console.log('[reverse] currentZipcode:', currentZipcode);
             const postalCode = reverseData?.addresses?.[0]?.address?.postalCode?.replace(/\D/g, '')
             if (postalCode && postalCode.length === 8) {
               const masked = `${postalCode.slice(0, 5)}-${postalCode.slice(5)}`
