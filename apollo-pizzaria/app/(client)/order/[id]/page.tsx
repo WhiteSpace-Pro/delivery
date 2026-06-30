@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useParams } from 'next/navigation'
 import { CheckCircle2, Loader2, Receipt, Camera, Check } from 'lucide-react'
 import Link from 'next/link'
@@ -17,8 +17,13 @@ export default function OrderSuccessPage() {
   const [order, setOrder] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
+  const cartCleared = useRef(false)
+
   useEffect(() => {
-    clearCart()
+    if (!cartCleared.current) {
+      cartCleared.current = true
+      clearCart()
+    }
   }, [clearCart])
 
   const [uploading, setUploading] = useState(false)
@@ -70,14 +75,20 @@ export default function OrderSuccessPage() {
     if (!id) return
 
     async function fetchOrder() {
-      const { data } = await supabase
-        .from('orders')
-        .select('*, display_id, pix_receipt_requested, addresses(*)')
-        .eq('id', id)
-        .single()
+      try {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('*, display_id, pix_receipt_requested, addresses(*)')
+          .eq('id', id)
+          .single()
 
-      if (data) setOrder(data)
-      setLoading(false)
+        if (error) throw error
+        if (data) setOrder(data)
+      } catch (err) {
+        console.error('[order page] fetch error:', err)
+      } finally {
+        setLoading(false)
+      }
     }
 
     void fetchOrder()
