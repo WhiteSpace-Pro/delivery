@@ -125,11 +125,16 @@ export default function CheckoutPage() {
   }, [addressForm.street, isStreetSelected])
 
   const handleSelectStreetSuggestion = (s: TomTomSuggestion) => {
+    const postalDigits = s.address.postalCode?.replace(/\D/g, '') ?? ''
+    const maskedZip = postalDigits.length === 8
+      ? `${postalDigits.slice(0, 5)}-${postalDigits.slice(5)}`
+      : undefined
+
     setAddressForm(prev => ({
       ...prev,
       street: s.address.streetName || s.address.freeformAddress,
       neighborhood: s.address.municipalitySubdivision || prev.neighborhood,
-      ...(s.address.postalCode && { zipcode: s.address.postalCode })
+      ...(maskedZip !== undefined && { zipcode: maskedZip })
     }))
     setStreetSuggestions([])
     setIsStreetSelected(true)
@@ -197,7 +202,7 @@ export default function CheckoutPage() {
   }, [fetchData])
 
   const searchZipcode = async () => {
-    const cep = addressForm.zipcode.replace(/\D/g, '')
+    const digits = addressForm.zipcode.replace(/\D/g, ''); const cep = digits
     if (cep.length !== 8) return
     try {
       const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`)
@@ -220,7 +225,7 @@ export default function CheckoutPage() {
   }
 
   const handleCEPBlur = async () => {
-    if (addressForm.zipcode.replace(/\D/g, '').length === 8) {
+    const digits = addressForm.zipcode.replace(/\D/g, ''); if (digits.length === 8) {
       await searchZipcode()
     }
   }
@@ -257,6 +262,21 @@ export default function CheckoutPage() {
           lng: geoData.lng,
           regionNotFound: fee === 0
         }))
+
+        // Preencher CEP via reverse geocoding TomTom
+        if (addressForm.zipcode.replace(/\D/g, '').length < 8) {
+          try {
+            const reverseRes = await fetch(
+              `https://api.tomtom.com/search/2/reverseGeocode/${geoData.lat},${geoData.lng}.json?key=${TOMTOM_KEY}&returnSpeedLimit=false&returnRoadUse=false`
+            )
+            const reverseData = await reverseRes.json()
+            const postalCode = reverseData?.addresses?.[0]?.address?.postalCode?.replace(/\D/g, '')
+            if (postalCode && postalCode.length === 8) {
+              const masked = `${postalCode.slice(0, 5)}-${postalCode.slice(5)}`
+              setAddressForm(prev => ({ ...prev, zipcode: masked }))
+            }
+          } catch { /* ignorar */ }
+        }
       } else {
         setAddressError('Não conseguimos localizar seu endereço. Verifique o número e tente novamente.')
         setAddressForm(prev => ({ ...prev, regionNotFound: true, fee: 0, lat: 0, lng: 0 }))
@@ -337,7 +357,7 @@ export default function CheckoutPage() {
   }, [deliveryType, selectedAddressId, savedAddresses, supabase])
 
   const handleInlineCepBlur = async () => {
-    const cep = inlineCorrection.zipcode.replace(/\D/g, '')
+    const digits = inlineCorrection.zipcode.replace(/\D/g, ''); const cep = digits
     if (cep.length !== 8) return
 
     setInlineCorrection(prev => ({ ...prev, searching: true }))
@@ -685,8 +705,8 @@ export default function CheckoutPage() {
                      <div className="space-y-1">
                         <label className="text-[10px] uppercase font-bold text-white/40 ml-1">CEP</label>
                         <input value={addressForm.zipcode} onChange={e => {
-                          const val = e.target.value.replace(/\D/g, '').slice(0, 8);
-                          const masked = val.length > 5 ? `${val.slice(0, 5)}-${val.slice(5)}` : val;
+                          const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+                          const masked = digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
                           setAddressForm(prev => ({
                             ...prev,
                             zipcode: masked,
@@ -697,7 +717,7 @@ export default function CheckoutPage() {
                             lat: 0,
                             lng: 0
                           }));
-                        }} onBlur={handleCEPBlur} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="00000-000" />
+                        }} onBlur={handleCEPBlur} className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 text-sm" placeholder="00000-000" maxLength={9} />
                         {addressForm.regionNotFound && <p className="text-[10px] text-apollo-orange font-bold mt-1">CEP não encontrado. Preencha o endereço manualmente.</p>}
                      </div>
                      <div className="grid grid-cols-4 gap-2">
@@ -813,13 +833,13 @@ export default function CheckoutPage() {
                           <input
                             value={inlineCorrection.zipcode}
                             onChange={e => {
-                              const val = e.target.value.replace(/\D/g, '').slice(0, 8);
-                              const masked = val.length > 5 ? `${val.slice(0, 5)}-${val.slice(5)}` : val;
+                              const digits = e.target.value.replace(/\D/g, '').slice(0, 8);
+                              const masked = digits.length > 5 ? `${digits.slice(0, 5)}-${digits.slice(5)}` : digits;
                               setInlineCorrection(prev => ({ ...prev, zipcode: masked, street: '', neighborhood: '' }))
                             }}
                             onBlur={handleInlineCepBlur}
                             className="w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-2 text-sm focus:border-apollo-orange outline-none"
-                            placeholder="00000-000"
+                            placeholder="00000-000" maxLength={9}
                           />
                        </div>
                        <div className="col-span-1 space-y-1">
