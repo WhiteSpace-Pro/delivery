@@ -7,6 +7,8 @@ import { useUser } from '@/hooks/useUser'
 import { Menu, X, LogOut, LayoutDashboard, Utensils, Truck, BarChart3, Settings } from 'lucide-react'
 import Link from 'next/link'
 
+const supabase = createClient()
+
 export default function AdminLayout({
   children,
 }: {
@@ -15,7 +17,7 @@ export default function AdminLayout({
   const [isSidebarOpen, setIsSidebarOpen] = useState(false)
   const { profile, isLoading } = useUser()
   const router = useRouter()
-  const supabase = createClient()
+
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
@@ -41,7 +43,7 @@ export default function AdminLayout({
   return (
     <div className="min-h-screen bg-[#F8F7F5] flex font-dm text-[#0D0D0D]">
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex w-60 flex-col fixed inset-y-0 border-r border-[#0D0D0D]/10 bg-white">
+      <aside className="hidden lg:flex w-60 flex-col fixed inset-y-0 border-r border-[#0D0D0D]/10 bg-white z-50">
         <div className="p-6">
           <Link href="/admin">
             <h1 className="font-playfair text-3xl text-apollo-orange font-bold">

@@ -178,6 +178,7 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
   };
 
   const isComboComplete = comboInfo ? selectedComboFlavors.length === comboInfo.qty_pizzas : true;
+  const isHalfHalfComplete = isHalfAndHalf ? (!!firstFlavorId && !!secondFlavorId) : true;
 
   const getButtonText = () => {
     if (showToast) return 'Adicionado!';
@@ -481,7 +482,7 @@ export function PizzaModal({ isOpen, onClose, product, tenantId }: PizzaModalPro
               </div>
               <button
                 onClick={handleAddToCart}
-                disabled={showToast || !isComboComplete}
+                disabled={showToast || !isComboComplete || !isHalfHalfComplete}
                 className="w-full sm:w-auto px-8 h-14 bg-[#E85D24] hover:bg-[#D15420] disabled:bg-zinc-700 disabled:opacity-50 text-white font-bold rounded-xl transition-all shadow-lg shadow-[#E85D24]/10"
               >
                 {getButtonText()}

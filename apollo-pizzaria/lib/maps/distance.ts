@@ -77,7 +77,7 @@ export async function calculateDeliveryFee(clientAddress: string): Promise<{
   const distance = await getRouteDistance(coords);
   
   // Taxa = Math.ceil(distanceKm) × 1.00 (arredondamento sempre para cima conforme prompt)
-  const fee = Math.ceil(distance) * FEE_PER_KM;
+  const fee = Math.max(Math.ceil(distance) * FEE_PER_KM, 3.00);
 
   return {
     distance,

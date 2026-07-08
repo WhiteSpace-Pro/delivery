@@ -88,6 +88,8 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
     setIsUpdating(false)
   }
 
+
+
   const handleConfirmPix = async () => {
     setIsUpdating(true)
     const { error } = await supabase
@@ -99,6 +101,19 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
       setDetails((prev: any) => ({ ...prev, payment_status: ('paid' as any), status: 'confirmed' }))
       if (onReceiptVerified) onReceiptVerified(order.id)
       onClose()
+    }
+    setIsUpdating(false)
+  }
+
+  const handleRequestResend = async () => {
+    setIsUpdating(true)
+    const { error } = await supabase
+      .from('orders')
+      .update({ pix_receipt_requested: true } as any)
+      .eq('id', order.id)
+
+    if (!error) {
+      setDetails((prev: any) => ({ ...prev, pix_receipt_requested: true }))
     }
     setIsUpdating(false)
   }
@@ -240,6 +255,18 @@ export function OrderDetailModal({ order, onClose, onReceiptVerified }: OrderDet
                           <button onClick={handleConfirmPix} disabled={isUpdating} className="w-full py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg transition-all flex items-center justify-center gap-2">
                              {isUpdating ? <Loader2 className="animate-spin" /> : <><Check size={20} /> Confirmar Pagamento</>}
                           </button>
+                        )}
+                        {details.payment_status === 'pending' && details.pix_receipt_note && (
+                          <button
+                            onClick={handleRequestResend}
+                            disabled={isUpdating || details.pix_receipt_requested}
+                            className="w-full py-3 border-2 border-dashed border-apollo-orange text-apollo-orange font-bold rounded-xl hover:bg-orange-50 transition-all flex items-center justify-center gap-2"
+                          >
+                             {isUpdating ? <Loader2 className="animate-spin" /> : (details.pix_receipt_requested ? 'Reenvio solicitado' : 'Solicitar Reenvio')}
+                          </button>
+                        )}
+                        {details.pix_receipt_requested && (
+                          <p className="text-[10px] text-apollo-orange font-bold text-center uppercase tracking-widest mt-2 animate-pulse">Aguardando novo comprovante do cliente</p>
                         )}
                      </div>
                    ) : (
