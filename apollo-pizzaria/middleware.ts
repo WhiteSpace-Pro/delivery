@@ -9,6 +9,29 @@ export async function middleware(request: NextRequest) {
     },
   })
 
+  const { pathname } = request.nextUrl
+
+  // Handle favicon and static assets before any auth logic
+  if (
+    pathname === '/favicon.ico' ||
+    pathname.startsWith('/_next') ||
+    pathname.startsWith('/icon-') ||
+    pathname === '/manifest.json'
+  ) {
+    return response
+  }
+
+  // Public routes (no auth required)
+  const isPublicRoute =
+    pathname === '/' ||
+    pathname === '/login' ||
+    pathname === '/cardapio' ||
+    pathname.startsWith('/api/webhooks')
+
+  if (isPublicRoute) {
+    return response
+  }
+
   const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
@@ -18,7 +41,7 @@ export async function middleware(request: NextRequest) {
           return request.cookies.getAll()
         },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
+          cookiesToSet.forEach(({ name, value }) =>
             request.cookies.set(name, value)
           )
           response = NextResponse.next({
@@ -37,22 +60,6 @@ export async function middleware(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
-  const { pathname } = request.nextUrl
-
-  // Public routes (no auth required)
-  const isPublicRoute =
-    pathname === '/' ||
-    pathname === '/login' ||
-    pathname.startsWith('/api/webhooks') ||
-    pathname === '/manifest.json' ||
-    pathname === '/favicon.ico' ||
-    pathname.startsWith('/icon-') ||
-    pathname.startsWith('/_next')
-
-  if (isPublicRoute) {
-    return response
-  }
 
   // If not authenticated, redirect to /login
   if (!user) {
