@@ -1,12 +1,17 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { X, ArrowRight, ArrowLeft, Mail, Phone, Lock, User, Loader2,   } from 'lucide-react'
+import { X, ArrowRight, ArrowLeft, Mail, Phone, Lock, User, Loader2 } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 import { Dialog, DialogContent } from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Controller, useForm } from 'react-hook-form'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { z } from 'zod'
 
 interface LoginModalProps {
   isOpen: boolean
@@ -17,6 +22,65 @@ interface LoginModalProps {
 
 type Step = 'identify' | 'found' | 'notFound'
 
+type IdentifyFormValues = {
+  identifier: string
+}
+
+type SignInFormValues = {
+  password: string
+}
+
+type RegisterFormValues = {
+  full_name: string
+  email: string
+  phone: string
+  password: string
+  confirm_password: string
+}
+
+const identifierSchema = z.object({
+  identifier: z
+    .string()
+    .trim()
+    .min(1, 'Informe e-mail ou telefone')
+    .refine(value => {
+      const trimmed = value.trim()
+      const isEmail = /\S+@\S+\.\S+/.test(trimmed)
+      const digits = trimmed.replace(/\D/g, '')
+      const isPhone = digits.length === 10 || digits.length === 11
+      return isEmail || isPhone
+    }, 'Use um e-mail ou telefone válido'),
+})
+
+const signInSchema = z.object({
+  password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
+})
+
+const registerSchema = z
+  .object({
+    full_name: z.string().trim().min(3, 'Informe seu nome completo'),
+    email: z.string().trim().email('E-mail inválido').optional(),
+    phone: z.string().trim().optional(),
+    password: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
+    confirm_password: z.string().min(6, 'Confirmação obrigatória'),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.email && !data.phone) {
+      ctx.addIssue({
+        path: ['email'],
+        code: 'custom',
+        message: 'Informe e-mail ou telefone',
+      })
+    }
+    if (data.password !== data.confirm_password) {
+      ctx.addIssue({
+        path: ['confirm_password'],
+        code: 'custom',
+        message: 'As senhas devem ser iguais',
+      })
+    }
+  })
+
 export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: LoginModalProps) {
   const router = useRouter()
   const supabase = createClient()
@@ -26,24 +90,37 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Identify state
-  const [identifier, setIdentifier] = useState('')
-  const isEmail = identifier.includes('@')
-  const isPhone = !isEmail && identifier.replace(/\D/g, '').length >= 10
-
-  // Sign in state
-  const [password, setPassword] = useState('')
   const [foundName, setFoundName] = useState('')
   const [foundPhone, setFoundPhone] = useState('')
   const [foundInitial, setFoundInitial] = useState('')
   const [loginEmail, setLoginEmail] = useState('')
 
-  // Register state
-  const [regFullName, setRegFullName] = useState('')
-  const [regEmail, setRegEmail] = useState('')
-  const [regPhone, setRegPhone] = useState('')
-  const [regPassword, setRegPassword] = useState('')
-  const [regConfirm, setRegConfirm] = useState('')
+  const identifyForm = useForm<IdentifyFormValues>({
+    resolver: zodResolver(identifierSchema),
+    defaultValues: { identifier: '' },
+  })
+
+  const signInForm = useForm<SignInFormValues>({
+    resolver: zodResolver(signInSchema),
+    defaultValues: { password: '' },
+  })
+
+  const registerForm = useForm<RegisterFormValues>({
+    resolver: zodResolver(registerSchema),
+    defaultValues: {
+      full_name: '',
+      email: '',
+      phone: '',
+      password: '',
+      confirm_password: '',
+    },
+  })
+
+  const identifierValue = identifyForm.watch('identifier')
+  const cleanedIdentifier = identifierValue.trim()
+  const isEmail = cleanedIdentifier.includes('@')
+  const isPhone = !isEmail && cleanedIdentifier.replace(/\D/g, '').length >= 10
+  const signInPassword = signInForm.watch('password')
 
   const maskPhone = (v: string) => {
     const digits = v.replace(/\D/g, '').slice(0, 11)
@@ -83,53 +160,64 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
     }
   }
 
-  const resetAll = () => {
+  const resetAll = useCallback(() => {
     setStep('identify')
     setDirection(1)
-    setIdentifier('')
-    setPassword('')
     setFoundName('')
     setFoundPhone('')
     setFoundInitial('')
     setLoginEmail('')
-    setRegFullName('')
-    setRegEmail('')
-    setRegPhone('')
-    setRegPassword('')
-    setRegConfirm('')
     setError(null)
-  }
+    identifyForm.reset()
+    signInForm.reset()
+    registerForm.reset()
+  }, [identifyForm, registerForm, signInForm])
 
   useEffect(() => {
     if (!isOpen) {
       setTimeout(resetAll, 300)
     }
-  }, [isOpen])
+  }, [isOpen, resetAll])
 
-  // Step 1: identify
-  const handleIdentify = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!identifier.trim()) return
+  const handleIdentify = async (values: IdentifyFormValues) => {
     setLoading(true)
     setError(null)
+
     try {
       const res = await fetch('/api/auth/identify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ identifier: identifier.trim() }),
+        body: JSON.stringify({ identifier: values.identifier.trim() }),
       })
+
+      if (!res.ok) {
+        throw new Error('Erro ao verificar. Tente novamente.')
+      }
+
       const data = await res.json()
+
       if (data.found) {
         setFoundName(data.name)
         setFoundPhone(data.phone || '')
         setFoundInitial(data.avatar_initial)
         setLoginEmail(data.loginEmail)
-        if (isPhone) setRegPhone(identifier)
-        if (isEmail) setRegEmail(identifier)
+
+        if (isPhone) {
+          registerForm.reset({ ...registerForm.getValues(), phone: maskPhone(values.identifier) })
+        }
+
+        if (isEmail) {
+          registerForm.reset({ ...registerForm.getValues(), email: values.identifier })
+        }
+
         goTo('found', 1)
       } else {
-        if (isEmail) setRegEmail(identifier)
-        if (isPhone) setRegPhone(identifier)
+        if (isEmail) {
+          registerForm.reset({ ...registerForm.getValues(), email: values.identifier })
+        }
+        if (isPhone) {
+          registerForm.reset({ ...registerForm.getValues(), phone: maskPhone(values.identifier) })
+        }
         goTo('notFound', 1)
       }
     } catch {
@@ -139,15 +227,14 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
     }
   }
 
-  // Step 2a: sign in (found)
-  const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleSignIn = async (values: SignInFormValues) => {
     setLoading(true)
     setError(null)
+
     try {
       const { error: signInError } = await supabase.auth.signInWithPassword({
         email: loginEmail,
-        password,
+        password: values.password,
       })
       if (signInError) throw signInError
       handleSuccess()
@@ -155,50 +242,53 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
       setError(
         err.message === 'Invalid login credentials'
           ? 'Senha incorreta. Tente novamente.'
-          : err.message
+          : err.message,
       )
     } finally {
       setLoading(false)
     }
   }
 
-  // Step 2b: register (not found)
-  const handleRegister = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (regPassword !== regConfirm) { setError('As senhas não coincidem.'); return }
-    if (regPassword.length < 6) { setError('Senha deve ter pelo menos 6 caracteres.'); return }
+  const handleRegister = async (values: RegisterFormValues) => {
     setLoading(true)
     setError(null)
 
     try {
+      const emailToUse = values.email || `${values.phone.replace(/\D/g, '')}@apollo.pizzaria.com`
       const { data, error: signUpError } = await supabase.auth.signUp({
-        email: regEmail || `${regPhone.replace(/\D/g, '')}@apollo.pizzaria.com`,
-        password: regPassword,
+        email: emailToUse,
+        password: values.password,
         options: {
           data: {
-            full_name: regFullName,
-            phone: regPhone,
+            full_name: values.full_name,
+            phone: values.phone,
             role: 'customer',
-            tenant_id: '496c5a35-6843-4061-b3ab-159d15a0cbc6'
-          }
-        }
+            tenant_id: process.env.NEXT_PUBLIC_TENANT_ID_APOLLO || '496c5a35-6843-4061-b3ab-159d15a0cbc6',
+          },
+        },
       })
 
       if (signUpError) throw signUpError
 
       if (data.user) {
-         // Create profile explicitly
-         await fetch('/api/auth/create-profile', {
-           method: 'POST',
-           headers: { 'Content-Type': 'application/json' },
-           body: JSON.stringify({
-             id: data.user.id,
-             full_name: regFullName,
-             phone: regPhone,
-             tenant_id: '496c5a35-6843-4061-b3ab-159d15a0cbc6'
-           })
-         })
-         handleSuccess()
+        const profileRes = await fetch('/api/auth/create-profile', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id: data.user.id,
+            full_name: values.full_name,
+            phone: values.phone,
+            tenant_id: process.env.NEXT_PUBLIC_TENANT_ID_APOLLO || '496c5a35-6843-4061-b3ab-159d15a0cbc6',
+          }),
+        })
+
+        const profileData = await profileRes.json()
+
+        if (!profileRes.ok || !profileData.success) {
+          throw new Error(profileData?.error || 'Erro ao criar perfil')
+        }
+
+        handleSuccess()
       }
     } catch (err: any) {
       setError(err.message)
@@ -210,21 +300,21 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
   const slideVariants = {
     enter: (direction: number) => ({
       x: direction > 0 ? 100 : -100,
-      opacity: 0
+      opacity: 0,
     }),
     center: {
       zIndex: 1,
       x: 0,
-      opacity: 1
+      opacity: 1,
     },
     exit: (direction: number) => ({
       zIndex: 0,
       x: direction < 0 ? 100 : -100,
-      opacity: 0
-    })
+      opacity: 0,
+    }),
   }
 
-  const inputCls = "w-full bg-[#0D0D0D] border border-[#2A2A2A] rounded-xl px-4 py-3.5 pl-12 text-sm focus:outline-none focus:border-apollo-orange transition-all placeholder:text-white/20"
+  const inputCls = 'pl-12 placeholder:text-white/20'
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -255,34 +345,44 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
                 transition={{ duration: 0.25, ease: 'easeInOut' }}
                 className="px-6 pb-6 pt-4"
               >
-                <p className="text-sm text-white/50 mb-5">
-                  Qual seu e-mail ou telefone?
-                </p>
-                <form onSubmit={handleIdentify} className="space-y-4">
+                <p className="text-sm text-white/50 mb-5">Qual seu e-mail ou telefone?</p>
+                <form onSubmit={identifyForm.handleSubmit(handleIdentify)} className="space-y-4">
                   <div className="relative">
-                    {isPhone
-                      ? <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
-                      : <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
-                    }
-                    <input
-                      autoFocus
-                      required
-                      value={identifier}
-                      onChange={e => {
-                        const v = e.target.value
-                        if (!v.includes('@') && v.replace(/\D/g, '').length === v.replace(/[() -]/g, '').length) {
-                          const digits = v.replace(/\D/g, '')
-                          if (digits.length > 0 && !v.includes('@')) {
-                            setIdentifier(maskPhone(v))
-                            return
-                          }
-                        }
-                        setIdentifier(v)
-                      }}
-                      className={inputCls}
-                      placeholder="nome@email.com ou (11) 99999-9999"
+                    {isPhone ? (
+                      <Phone
+                        className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20"
+                        size={18}
+                      />
+                    ) : (
+                      <Mail
+                        className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20"
+                        size={18}
+                      />
+                    )}
+                    <Controller
+                      control={identifyForm.control}
+                      name="identifier"
+                      render={({ field }) => (
+                        <Input
+                          autoFocus
+                          value={field.value}
+                          onChange={e => {
+                            const nextValue = e.target.value
+                            const shouldMask = !nextValue.includes('@')
+                            field.onChange(shouldMask ? maskPhone(nextValue) : nextValue)
+                          }}
+                          placeholder="nome@email.com ou (11) 99999-9999"
+                          className={inputCls}
+                        />
+                      )}
                     />
                   </div>
+
+                  {identifyForm.formState.errors.identifier?.message && (
+                    <p className="text-xs text-red-500 font-bold bg-red-500/10 p-3 rounded-lg border border-red-500/20">
+                      {identifyForm.formState.errors.identifier.message}
+                    </p>
+                  )}
 
                   {error && (
                     <p className="text-xs text-red-500 font-bold bg-red-500/10 p-3 rounded-lg border border-red-500/20">
@@ -290,15 +390,16 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
                     </p>
                   )}
 
-                  <button
-                    disabled={loading || !identifier.trim()}
-                    className="w-full bg-apollo-orange hover:bg-apollo-orange/90 text-white font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    {loading
-                      ? <Loader2 className="animate-spin" size={18} />
-                      : <><span>Continuar</span><ArrowRight size={18} /></>
-                    }
-                  </button>
+                  <Button type="submit" className="w-full" disabled={loading || !cleanedIdentifier}>
+                    {loading ? (
+                      <Loader2 className="animate-spin" size={18} />
+                    ) : (
+                      <>
+                        <span>Continuar</span>
+                        <ArrowRight size={18} />
+                      </>
+                    )}
+                  </Button>
                 </form>
               </motion.div>
             )}
@@ -327,19 +428,26 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
                   </div>
                 </div>
 
-                <form onSubmit={handleSignIn} className="space-y-4">
+                <form onSubmit={signInForm.handleSubmit(handleSignIn)} className="space-y-4">
                   <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
-                    <input
+                    <Lock
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20"
+                      size={18}
+                    />
+                    <Input
                       autoFocus
-                      required
                       type="password"
-                      value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      className={inputCls}
+                      {...signInForm.register('password')}
                       placeholder="Sua senha"
+                      className={inputCls}
                     />
                   </div>
+
+                  {signInForm.formState.errors.password?.message && (
+                    <p className="text-xs text-red-500 font-bold bg-red-500/10 p-3 rounded-lg border border-red-500/20">
+                      {signInForm.formState.errors.password.message}
+                    </p>
+                  )}
 
                   {error && (
                     <p className="text-xs text-red-500 font-bold bg-red-500/10 p-3 rounded-lg border border-red-500/20">
@@ -347,15 +455,20 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
                     </p>
                   )}
 
-                  <button
-                    disabled={loading || !password}
-                    className="w-full bg-apollo-orange hover:bg-apollo-orange/90 text-white font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
+                  <Button
+                    type="submit"
+                    className="w-full"
+                    disabled={loading || !signInPassword}
                   >
-                    {loading
-                      ? <Loader2 className="animate-spin" size={18} />
-                      : <><span>Continuar como {foundName.split(' ')[0]}</span><ArrowRight size={18} /></>
-                    }
-                  </button>
+                    {loading ? (
+                      <Loader2 className="animate-spin" size={18} />
+                    ) : (
+                      <>
+                        <span>Continuar como {foundName.split(' ')[0]}</span>
+                        <ArrowRight size={18} />
+                      </>
+                    )}
+                  </Button>
 
                   <button
                     type="button"
@@ -379,71 +492,107 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
                 transition={{ duration: 0.25, ease: 'easeInOut' }}
                 className="px-6 pb-6 pt-4"
               >
-                <p className="text-sm text-white/50 mb-5">
-                  Vamos criar seu cadastro.
-                </p>
-                <form onSubmit={handleRegister} className="space-y-3">
+                <p className="text-sm text-white/50 mb-5">Vamos criar seu cadastro.</p>
+                <form onSubmit={registerForm.handleSubmit(handleRegister)} className="space-y-3">
                   <div className="relative">
-                    <User className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
-                    <input
+                    <User
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20"
+                      size={18}
+                    />
+                    <Input
                       autoFocus
-                      required
-                      value={regFullName}
-                      onChange={e => setRegFullName(e.target.value)}
-                      className={inputCls}
+                      {...registerForm.register('full_name')}
                       placeholder="Nome completo"
+                      className={inputCls}
                     />
                   </div>
 
-                  {isPhone && (
+                  {registerForm.formState.errors.full_name?.message && (
+                    <p className="text-xs text-red-500 font-bold bg-red-500/10 p-3 rounded-lg border border-red-500/20">
+                      {registerForm.formState.errors.full_name.message}
+                    </p>
+                  )}
+
+                  {isPhone ? (
                     <div className="relative">
-                      <Mail className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
-                      <input
-                        required
+                      <Mail
+                        className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20"
+                        size={18}
+                      />
+                      <Input
                         type="email"
-                        value={regEmail}
-                        onChange={e => setRegEmail(e.target.value)}
-                        className={inputCls}
+                        {...registerForm.register('email')}
                         placeholder="Seu e-mail"
-                      />
-                    </div>
-                  )}
-
-                  {isEmail && (
-                    <div className="relative">
-                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
-                      <input
-                        value={regPhone}
-                        onChange={e => setRegPhone(maskPhone(e.target.value))}
                         className={inputCls}
-                        placeholder="Telefone (opcional)"
+                      />
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <Phone
+                        className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20"
+                        size={18}
+                      />
+                      <Controller
+                        control={registerForm.control}
+                        name="phone"
+                        render={({ field }) => (
+                          <Input
+                            {...field}
+                            placeholder="Telefone (opcional)"
+                            className={inputCls}
+                            onChange={e => field.onChange(maskPhone(e.target.value))}
+                          />
+                        )}
                       />
                     </div>
                   )}
 
-                  <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
-                    <input
-                      required
-                      type="password"
-                      value={regPassword}
-                      onChange={e => setRegPassword(e.target.value)}
-                      className={inputCls}
-                      placeholder="Senha (mín. 6 caracteres)"
-                    />
-                  </div>
+                  {registerForm.formState.errors.email?.message && (
+                    <p className="text-xs text-red-500 font-bold bg-red-500/10 p-3 rounded-lg border border-red-500/20">
+                      {registerForm.formState.errors.email.message}
+                    </p>
+                  )}
+                  {registerForm.formState.errors.phone?.message && (
+                    <p className="text-xs text-red-500 font-bold bg-red-500/10 p-3 rounded-lg border border-red-500/20">
+                      {registerForm.formState.errors.phone.message}
+                    </p>
+                  )}
 
                   <div className="relative">
-                    <Lock className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20" size={18} />
-                    <input
-                      required
+                    <Lock
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20"
+                      size={18}
+                    />
+                    <Input
                       type="password"
-                      value={regConfirm}
-                      onChange={e => setRegConfirm(e.target.value)}
+                      {...registerForm.register('password')}
+                      placeholder="Senha (mín. 6 caracteres)"
                       className={inputCls}
-                      placeholder="Confirmar senha"
                     />
                   </div>
+                  {registerForm.formState.errors.password?.message && (
+                    <p className="text-xs text-red-500 font-bold bg-red-500/10 p-3 rounded-lg border border-red-500/20">
+                      {registerForm.formState.errors.password.message}
+                    </p>
+                  )}
+
+                  <div className="relative">
+                    <Lock
+                      className="absolute left-4 top-1/2 -translate-y-1/2 text-white/20"
+                      size={18}
+                    />
+                    <Input
+                      type="password"
+                      {...registerForm.register('confirm_password')}
+                      placeholder="Confirmar senha"
+                      className={inputCls}
+                    />
+                  </div>
+                  {registerForm.formState.errors.confirm_password?.message && (
+                    <p className="text-xs text-red-500 font-bold bg-red-500/10 p-3 rounded-lg border border-red-500/20">
+                      {registerForm.formState.errors.confirm_password.message}
+                    </p>
+                  )}
 
                   {error && (
                     <p className="text-xs text-red-500 font-bold bg-red-500/10 p-3 rounded-lg border border-red-500/20">
@@ -451,15 +600,16 @@ export function LoginModal({ isOpen, onClose, onSuccess, redirectToCheckout }: L
                     </p>
                   )}
 
-                  <button
-                    disabled={loading}
-                    className="w-full bg-apollo-orange hover:bg-apollo-orange/90 text-white font-bold py-3.5 rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50"
-                  >
-                    {loading
-                      ? <Loader2 className="animate-spin" size={18} />
-                      : <><span>Criar conta e continuar</span><ArrowRight size={18} /></>
-                    }
-                  </button>
+                  <Button type="submit" className="w-full" disabled={loading}>
+                    {loading ? (
+                      <Loader2 className="animate-spin" size={18} />
+                    ) : (
+                      <>
+                        <span>Criar conta e continuar</span>
+                        <ArrowRight size={18} />
+                      </>
+                    )}
+                  </Button>
 
                   <button
                     type="button"
