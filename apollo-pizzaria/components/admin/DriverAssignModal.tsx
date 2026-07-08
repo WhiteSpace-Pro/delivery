@@ -27,6 +27,7 @@ interface TomTomSuggestion {
     municipalitySubdivision?: string
     municipality?: string
     postalCode?: string
+    streetNumber?: string
     freeformAddress: string
   }
   position: { lat: number; lon: number }
@@ -203,10 +204,13 @@ export function DriverAssignModal({ order, onClose }: DriverAssignModalProps) {
   }
 
   const handleSelectSuggestion = (s: TomTomSuggestion) => {
+    const selectedStreetNumber = s.address.streetNumber?.trim() || ''
+
     setSearchQuery(s.address.freeformAddress)
     setSelectedStreet(s.address.streetName || s.address.freeformAddress)
     setSelectedNeighborhood(s.address.municipalitySubdivision || '')
     setPinCoords({ lat: s.position.lat, lng: s.position.lon })
+    setNumber(selectedStreetNumber)
     setSuggestions([])
     setIsAddressSelected(true)
     setFeeInfo(null)
